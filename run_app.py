@@ -2,10 +2,10 @@ import json
 
 import pandas as pd
 
-from app.data.converters import convert_to_mock_data_entity, convert_to_mock_data_schema
+from app.data.converters import convert_to_mock_data_schema
 from app.data.graph_builder import DependencyGraphBuilder
-from app.dto.mock_data import MockDataSchema
 from app.enums import DataType, DataBaseType
+from app.interfaces.ddl_query_service import IQueryBuilderService
 from app.mocks.factories.mock_factory import MockFactory
 from app.mocks.generators.boolean_mock import BooleanGeneratorMock
 from app.mocks.generators.date_mock import DateGeneratorMock
@@ -17,13 +17,26 @@ from app.services.ddl_query_builder.postgres_query_service import PostgresQueryB
 from app.services.mock_service import MockDataService
 from app.services.storage_service import StorageService
 
+
+# def get_query_builder_service(db_type: DataBaseType) -> IQueryBuilderService:
+#     if db_type == DataBaseType.POSTGRES:
+#         ddl_query_service = PostgresQueryBuilderService()
+#     elif db_type == DataBaseType.ORACLE:
+#         ddl_query_service = OracleQueryBuilderService()
+#     else:
+#         raise ValueError("")
+#
+#     return ddl_query_service
+
 if __name__ == "__main__":
-    with open("./params/entity_schema.json") as f:
+    with open("params/data_schema.json") as f:
         data = json.load(f)
         print(data)
 
     mock_data_schema = convert_to_mock_data_schema(data)
     entities = mock_data_schema.entities
+    db_type = mock_data_schema.db_type
+
 
     mock_factory = MockFactory()
     mock_factory.register(data_type=DataType.STRING, mock_generator=StringGeneratorMock())
@@ -37,7 +50,6 @@ if __name__ == "__main__":
     graph_order_builder = DependencyGraphBuilder()
     mock_service = MockDataService(mock_factory=mock_factory, dependency_order_builder=graph_order_builder)
     mock_results = mock_service.generate_entity_values(entities)
-
 
     ddl_query_service = PostgresQueryBuilderService()
     storage_service = StorageService()
