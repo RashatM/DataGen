@@ -46,5 +46,6 @@ if __name__ == "__main__":
         storage_service.create_table(ddl_query=ddl_query)
         storage_service.save_to_source(mock_data=mock_result)
 
+    print("s" * 255)
 
 
