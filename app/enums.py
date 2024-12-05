@@ -13,3 +13,8 @@ class DataType(Enum):
     DATE: str = "DATE"
     TIMESTAMP: str = "TIMESTAMP"
     BOOLEAN: str = "BOOLEAN"
+
+
+class DataBaseType(Enum):
+    POSTGRES: str = "POSTGRES"
+    ORACLE: str = "ORACLE"

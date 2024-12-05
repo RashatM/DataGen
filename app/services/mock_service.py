@@ -2,7 +2,7 @@ import random
 from typing import Any, List
 
 
-from app.dto.entities import MockEntity, MockColumn, MockEntityResult
+from app.dto.mock_data import MockDataEntity, MockDataColumn, MockDataEntityResult
 from app.enums import RelationType
 from app.interfaces.graph_builder import IDependencyGraphBuilder
 from app.interfaces.mock_service import IMockDataService
@@ -16,7 +16,7 @@ class MockDataService(IMockDataService):
         self.dependency_order_builder = dependency_order_builder
         self.mock_factory = mock_factory
 
-    def generate_column_values(self, total_rows: int, entity_column: MockColumn) -> List[Any]:
+    def generate_column_values(self, total_rows: int, entity_column: MockDataColumn) -> List[Any]:
         total_nulls = int(total_rows * (entity_column.constraints.null_ratio / 100))
         total_non_nulls = total_rows - total_nulls
 
@@ -30,7 +30,7 @@ class MockDataService(IMockDataService):
 
         return values
 
-    def generate_entity_values(self, entities: List[MockEntity]) -> List[MockEntityResult]:
+    def generate_entity_values(self, entities: List[MockDataEntity]) -> List[MockDataEntityResult]:
         entity_order_list = self.dependency_order_builder.build_graph(entities) if len(entities) > 1 else entities
 
         generated_entity_data = {}
@@ -55,7 +55,7 @@ class MockDataService(IMockDataService):
                     )
 
             generated_entity_data[entity.table_name] = generated_column_data
-            mock_entity_result = MockEntityResult(
+            mock_entity_result = MockDataEntityResult(
                 table_name=entity.table_name,
                 entity=entity,
                 generated_data=generated_column_data

@@ -4,11 +4,12 @@ from dateutil.parser import parse
 
 from app.dto.constraints import DateConstraints, StringConstraints, IntConstraints, FloatConstraints, \
     TimestampConstraints, BooleanConstraints
-from app.dto.entities import MockEntity, MockColumn, MockForeignKey
-from app.enums import DataType, RelationType
+from app.dto.mock_data import MockDataEntity, MockDataColumn, MockDataForeignKey, MockDataSchema
+from app.enums import DataType, RelationType, DataBaseType
 
 
-def convert_to_entity(table_name: str, entity_data: Dict) -> MockEntity:
+def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
+    table_name = entity_data["name"]
     total_rows = entity_data["total_rows"]
     entity_columns = []
 
@@ -19,7 +20,7 @@ def convert_to_entity(table_name: str, entity_data: Dict) -> MockEntity:
         constraints_data = column_data.get("constraints", {})
 
         fk_info = column_data.get("foreign_key")
-        foreign_key = MockForeignKey(
+        foreign_key = MockDataForeignKey(
             table_name=fk_info["table_name"],
             column_name=fk_info["column_name"],
             relation_type=getattr(RelationType, fk_info["relation_type"].upper())) if fk_info else None
@@ -98,7 +99,7 @@ def convert_to_entity(table_name: str, entity_data: Dict) -> MockEntity:
         else:
             constraints = None
 
-        entity_column = MockColumn(
+        entity_column = MockDataColumn(
             name=col_name,
             data_type=col_type,
             is_primary_key=is_primary_key,
@@ -108,9 +109,12 @@ def convert_to_entity(table_name: str, entity_data: Dict) -> MockEntity:
         entity_columns.append(entity_column)
 
 
-    return MockEntity(table_name=table_name, columns=entity_columns, total_rows=total_rows)
+    return MockDataEntity(table_name=table_name, columns=entity_columns, total_rows=total_rows)
 
 
 
+def convert_to_mock_data_schema(entity_schema: Dict):
+    entities = [convert_to_mock_data_entity(entity_data) for entity_data in entity_schema["entities"]]
+    return MockDataSchema(db_type=getattr(DataBaseType, entity_schema["db_type"].upper()), entities=entities)
 
 

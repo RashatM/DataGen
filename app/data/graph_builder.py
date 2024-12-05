@@ -2,14 +2,14 @@ from typing import List, Dict
 import networkx as nx
 
 
-from app.dto.entities import MockEntity
+from app.dto.mock_data import MockDataEntity
 from app.interfaces.graph_builder import IDependencyGraphBuilder
 
 
 class DependencyGraphBuilder(IDependencyGraphBuilder):
 
-    def build_graph(self, entities: List[MockEntity]) -> List[MockEntity]:
-        entity_dict: Dict[str, MockEntity] = {entity.table_name: entity for entity in entities}
+    def build_graph(self, entities: List[MockDataEntity]) -> List[MockDataEntity]:
+        entity_dict: Dict[str, MockDataEntity] = {entity.table_name: entity for entity in entities}
         graph = nx.DiGraph()
 
         for entity in entities:

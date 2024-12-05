@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Any, List
 
-from app.dto.entities import MockEntity, MockColumn, MockEntityResult
+from app.dto.mock_data import MockDataEntity, MockDataColumn, MockDataEntityResult
 
 
 class IMockDataService(ABC):
     @abstractmethod
-    def generate_column_values(self, total_rows: int, entity_column: MockColumn) -> List[Any]: pass
+    def generate_column_values(self, total_rows: int, entity_column: MockDataColumn) -> List[Any]: pass
     @abstractmethod
-    def generate_entity_values(self, entities: List[MockEntity]) -> List[MockEntityResult]: pass
+    def generate_entity_values(self, entities: List[MockDataEntity]) -> List[MockDataEntityResult]: pass
