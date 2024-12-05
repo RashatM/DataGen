@@ -4,9 +4,8 @@ import pandas as pd
 
 from app.data.converters import convert_to_mock_data_schema
 from app.data.graph_builder import DependencyGraphBuilder
-from app.enums import DataType, DataBaseType
-from app.interfaces.ddl_query_service import IQueryBuilderService
-from app.mocks.factories.mock_factory import MockFactory
+from app.enums import DataType
+from app.mocks.mock_factory import MockFactory
 from app.mocks.generators.boolean_mock import BooleanGeneratorMock
 from app.mocks.generators.date_mock import DateGeneratorMock
 from app.mocks.generators.float_mock import FloatGeneratorMock
@@ -37,7 +36,6 @@ if __name__ == "__main__":
     entities = mock_data_schema.entities
     db_type = mock_data_schema.db_type
 
-
     mock_factory = MockFactory()
     mock_factory.register(data_type=DataType.STRING, mock_generator=StringGeneratorMock())
     mock_factory.register(data_type=DataType.INT, mock_generator=IntGeneratorMock())
@@ -45,7 +43,6 @@ if __name__ == "__main__":
     mock_factory.register(data_type=DataType.DATE, mock_generator=DateGeneratorMock())
     mock_factory.register(data_type=DataType.TIMESTAMP, mock_generator=TimestampGeneratorMock())
     mock_factory.register(data_type=DataType.BOOLEAN, mock_generator=BooleanGeneratorMock())
-
 
     graph_order_builder = DependencyGraphBuilder()
     mock_service = MockDataService(mock_factory=mock_factory, dependency_order_builder=graph_order_builder)
