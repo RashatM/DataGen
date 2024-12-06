@@ -15,7 +15,15 @@ def convert_to_mock_data_entity(schema_name: str, entity_data: Dict) -> MockData
 
     for column_data in entity_data["columns"]:
         col_name = column_data["name"]
-        col_type = getattr(DataType, column_data["data_type"].upper())
+        constraints_data = column_data.get("constraints", {})
+
+        if "date_format" in constraints_data:
+            col_type = DataType.DATE_IN_STRING
+        elif "timestamp_format" in constraints_data:
+            col_type = DataType.TIMESTAMP_IN_STRING
+        else:
+            col_type = getattr(DataType, column_data["data_type"].upper())
+
         is_primary_key = column_data.get("is_primary_key", False)
         constraints_data = column_data.get("constraints", {})
 
@@ -60,7 +68,7 @@ def convert_to_mock_data_entity(schema_name: str, entity_data: Dict) -> MockData
                 less_than=constraints_data.get("less_than", 1000),
                 precision=constraints_data.get("precision", 2)
             )
-        elif col_type == DataType.DATE:
+        elif col_type in (DataType.DATE, DataType.DATE_IN_STRING):
             min_date = constraints_data.get("min_value")
             max_date = constraints_data.get("max_value")
             greater_than = constraints_data.get("min_value")
@@ -76,7 +84,7 @@ def convert_to_mock_data_entity(schema_name: str, entity_data: Dict) -> MockData
                 less_than=parse(less_than).date() if less_than else date(date.today().year, 12, 31),
                 date_format=constraints_data.get("date_format", "%Y-%m-%d")
             )
-        elif col_type == DataType.TIMESTAMP:
+        elif col_type in (DataType.TIMESTAMP, DataType.TIMESTAMP_IN_STRING):
             min_timestamp = constraints_data.get("min_timestamp")
             max_timestamp = constraints_data.get("max_timestamp")
             greater_than = constraints_data.get("min_value")

@@ -7,13 +7,15 @@ from app.data.converters import convert_to_mock_data_schema
 from app.data.graph_builder import DependencyGraphBuilder
 from app.data.repository import MockRepository
 from app.enums import DataType
+from app.mocks.generators.date.date_in_string_mock import DateInStringGeneratorMock
+from app.mocks.generators.date.date_mock import DateGeneratorMock
+from app.mocks.generators.timestamp.timestamp_in_string_mock import TimestampInStringGeneratorMock
+from app.mocks.generators.timestamp.timestamp_mock import TimestampGeneratorMock
 from app.mocks.mock_factory import MockFactory
 from app.mocks.generators.boolean_mock import BooleanGeneratorMock
-from app.mocks.generators.date_mock import DateGeneratorMock
 from app.mocks.generators.float_mock import FloatGeneratorMock
 from app.mocks.generators.int_mock import IntGeneratorMock
 from app.mocks.generators.string_mock import StringGeneratorMock
-from app.mocks.generators.timestamp_mock import TimestampGeneratorMock
 from app.services.ddl_query_builder.postgres_query_service import PostgresQueryBuilderService
 from app.services.mock_service import MockDataService
 from app.services.storage_service import MockStorageService
@@ -43,7 +45,9 @@ if __name__ == "__main__":
     mock_factory.register(data_type=DataType.INT, mock_generator=IntGeneratorMock())
     mock_factory.register(data_type=DataType.FLOAT, mock_generator=FloatGeneratorMock())
     mock_factory.register(data_type=DataType.DATE, mock_generator=DateGeneratorMock())
+    mock_factory.register(data_type=DataType.DATE_IN_STRING, mock_generator=DateInStringGeneratorMock())
     mock_factory.register(data_type=DataType.TIMESTAMP, mock_generator=TimestampGeneratorMock())
+    mock_factory.register(data_type=DataType.TIMESTAMP_IN_STRING, mock_generator=TimestampInStringGeneratorMock())
     mock_factory.register(data_type=DataType.BOOLEAN, mock_generator=BooleanGeneratorMock())
 
     graph_order_builder = DependencyGraphBuilder()

@@ -10,7 +10,9 @@ class PostgresQueryBuilderService(IQueryBuilderService):
         DataType.STRING: "varchar",
         DataType.BOOLEAN: "boolean",
         DataType.DATE: "date",
+        DataType.DATE_IN_STRING: "varchar",
         DataType.TIMESTAMP: "timestamp",
+        DataType.TIMESTAMP_IN_STRING: "varchar",
         DataType.INT: "bigint",
         DataType.FLOAT: "double precision"
     }

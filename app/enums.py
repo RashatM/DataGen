@@ -13,6 +13,8 @@ class DataType(Enum):
     DATE: str = "DATE"
     TIMESTAMP: str = "TIMESTAMP"
     BOOLEAN: str = "BOOLEAN"
+    DATE_IN_STRING: str = "DATE_STRING"
+    TIMESTAMP_IN_STRING: str = "TIMESTAMP_STRING"
 
 
 class SourceType(Enum):

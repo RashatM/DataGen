@@ -1,17 +1,22 @@
 import random
-from datetime import timedelta, date
-from typing import List
-
+from abc import abstractmethod
+from datetime import date
+from typing import List, TypeVar, Generic
 
 from app.dto.constraints import DateConstraints
 from app.interfaces.mock_generator import IMockDataGenerator
 from app.utils import random_choices_from_constants
 
+T = TypeVar('T', str, date)
 
-class DateGeneratorMock(IMockDataGenerator):
 
+class BaseDateGeneratorMock(IMockDataGenerator, Generic[T]):
+    @staticmethod
+    @abstractmethod
+    def calculate_offset_date(start_date: date, offset_days: int, date_format: str = None) -> str:
+        pass
 
-    def generate_values(self, total_rows: int, constraints: DateConstraints) -> List[date]:
+    def generate_values(self, total_rows: int, constraints: DateConstraints) -> List[T]:
         start_date = max(constraints.min_date, constraints.greater_than)
         end_date = min(constraints.max_date, constraints.less_than)
         delta_days = (end_date - start_date).days
@@ -21,9 +26,7 @@ class DateGeneratorMock(IMockDataGenerator):
                 raise ValueError("Недостаточно уникальных дат в указанном диапазоне.")
 
             all_possible_dates = [
-
-                (start_date + timedelta(days=i)).strftime(constraints.date_format)
-                for i in range(delta_days + 1)
+                self.calculate_offset_date(start_date, i, constraints.date_format) for i in range(delta_days)
             ]
             return random.sample(all_possible_dates, total_rows)
 
@@ -31,8 +34,11 @@ class DateGeneratorMock(IMockDataGenerator):
             values = random_choices_from_constants(constraints.allowed_values, total_rows)
         else:
             values = [
-                (start_date + timedelta(days=random.randint(0, delta_days))).strftime(constraints.date_format)
-                for _ in range(total_rows)
+                self.calculate_offset_date(
+                    start_date=start_date,
+                    offset_days=random.randint(0, delta_days),
+                    date_format=constraints.date_format
+                ) for _ in range(total_rows)
             ]
 
         return values
