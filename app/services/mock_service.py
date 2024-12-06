@@ -3,7 +3,7 @@ from typing import Any, List
 
 
 from app.dto.mock_data import MockDataEntity, MockDataColumn, MockDataEntityResult
-from app.enums import RelationType, DataType
+from app.enums import RelationType
 from app.interfaces.graph_builder import IDependencyGraphBuilder
 from app.interfaces.mock_service import IMockDataService
 from app.interfaces.mock_factory import IMockFactory
