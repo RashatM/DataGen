@@ -21,25 +21,7 @@ from app.services.mock_service import MockDataService
 from app.services.storage_service import MockStorageService
 
 
-# def get_query_builder_service(db_type: DataBaseType) -> IQueryBuilderService:
-#     if db_type == DataBaseType.POSTGRES:
-#         ddl_query_service = PostgresQueryBuilderService()
-#     elif db_type == DataBaseType.ORACLE:
-#         ddl_query_service = OracleQueryBuilderService()
-#     else:
-#         raise ValueError("")
-#
-#     return ddl_query_service
-
-if __name__ == "__main__":
-    with open("params/data_schema.json") as f:
-        data = json.load(f)
-        print(data)
-
-    mock_data_schema = convert_to_mock_data_schema(data)
-    entities = mock_data_schema.entities
-    db_type = mock_data_schema.source_type
-
+def provide_mock_factory():
     mock_factory = MockFactory()
     mock_factory.register(data_type=DataType.STRING, mock_generator=StringGeneratorMock())
     mock_factory.register(data_type=DataType.INT, mock_generator=IntGeneratorMock())
@@ -50,11 +32,30 @@ if __name__ == "__main__":
     mock_factory.register(data_type=DataType.TIMESTAMP_IN_STRING, mock_generator=TimestampInStringGeneratorMock())
     mock_factory.register(data_type=DataType.BOOLEAN, mock_generator=BooleanGeneratorMock())
 
-    graph_order_builder = DependencyGraphBuilder()
-    mock_service = MockDataService(mock_factory=mock_factory, dependency_order_builder=graph_order_builder)
-    mock_results = mock_service.generate_entity_values(entities)
+    return mock_factory
 
-    ddl_query_service = PostgresQueryBuilderService()
+def provide_mock_service(mock_factory):
+    graph_order_builder = DependencyGraphBuilder()
+    return MockDataService(mock_factory=mock_factory, dependency_order_builder=graph_order_builder)
+
+def provide_ddl_query_service():
+    return PostgresQueryBuilderService()
+
+
+def run():
+    with open("params/data_schema.json") as f:
+        data = json.load(f)
+        print(data)
+
+    mock_data_schema = convert_to_mock_data_schema(data)
+    entities = mock_data_schema.entities
+    db_type = mock_data_schema.source_type
+
+    mock_factory = provide_mock_factory()
+    mock_service = provide_mock_service(mock_factory)
+    ddl_query_service = provide_ddl_query_service()
+
+    mock_results = mock_service.generate_entity_values(entities)
 
     mock_repository = MockRepository()
 
@@ -77,6 +78,7 @@ if __name__ == "__main__":
 
 
 
-
+if __name__ == "__main__":
+    run()
 
 
