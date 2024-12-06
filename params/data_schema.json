@@ -1,7 +1,7 @@
 {
     "source_type": "postgres",
     "source_name": "pg_db",
-    "schema_name": "",
+    "schema_name": "test",
     "entities": [
         {
             "name": "client",
@@ -25,7 +25,7 @@
                         "length": 10,
                         "lowercase": false,
                         "uppercase": false,
-                        "regular_expr": null
+                        "regular_expr": "[A-Z]{3}-\\d{4}-[a-z]{2}"
                     }
                 },
                 {
@@ -59,7 +59,7 @@
                         "null_ratio": 5,
                         "min_date": "2024-03-01",
                         "max_date": "2024-12-01",
-                        "date_format": "%Y.%m.%d"
+                        "date_format": "%Y-%m-%d"
                     }
                 }
             ],

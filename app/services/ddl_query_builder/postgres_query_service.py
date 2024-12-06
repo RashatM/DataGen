@@ -28,4 +28,4 @@ class PostgresQueryBuilderService(IQueryBuilderService):
             columns_sql.append(f"{column.name} {column_type} NULL")
 
         columns_definition = ",\n  ".join(columns_sql)
-        return f"CREATE TABLE {entity.table_name} (\n  {columns_definition}\n);"
+        return f"CREATE TABLE {entity.full_table_name} (\n  {columns_definition}\n);"

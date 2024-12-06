@@ -21,6 +21,7 @@ class DateGeneratorMock(IMockDataGenerator):
                 raise ValueError("Недостаточно уникальных дат в указанном диапазоне.")
 
             all_possible_dates = [
+
                 (start_date + timedelta(days=i)).strftime(constraints.date_format)
                 for i in range(delta_days + 1)
             ]

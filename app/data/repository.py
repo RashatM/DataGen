@@ -1,6 +1,7 @@
 from datetime import datetime
 from io import StringIO
 from typing import Dict, List, Any
+from sqlalchemy.sql import text
 
 import pandas as pd
 from sqlalchemy import create_engine
@@ -12,7 +13,7 @@ from app.interfaces.repository import IMockRepository
 
 class MockRepository(IMockRepository):
     def __init__(self):
-        self.database_url = "database_url"
+        self.database_url = "postgresql+psycopg2://admin:admin@localhost:5433/mocks"
         self._engine = None
         self.session_pool = None
 
@@ -30,13 +31,14 @@ class MockRepository(IMockRepository):
 
     def create_db_schema(self, schema_name: str):
         with self.session_pool() as session:
-            session.execute(f"CREATE SCHEMA {schema_name} IF NOT EXISTS schema_name")
+            session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
             session.commit()
             logger.info(f"Schema {schema_name} created successfully")
 
 
     def create_and_save(self, ddl_query: str, full_table_name: str , generated_data: Dict[str, List[Any]]):
         df = pd.DataFrame(generated_data)
+        df = df.where(pd.notnull(df), 'NULL')
         # df["created_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         buffer = StringIO()
         df.to_csv(buffer, index=False, header=False, sep=";")
@@ -44,12 +46,14 @@ class MockRepository(IMockRepository):
 
         query = f"COPY {full_table_name} FROM STDIN WITH CSV DELIMITER ';' NULL 'NULL'"
         with self.session_pool() as session:
-            session.execute(ddl_query)
+            session.execute(text(f"drop table if exists {full_table_name}"))
+            session.execute(text(ddl_query))
+
             cursor = session.connection().connection.cursor()
             cursor.copy_expert(sql=query, file=buffer)
             session.commit()
-
-        logger.info(f"Loading into the table {full_table_name} completed successfully")
+            logger.info(f"Table {full_table_name} created successfully")
+            logger.info(f"Loading into the table {full_table_name} completed successfully")
 
     def disconnect(self):
         try:

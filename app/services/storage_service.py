@@ -19,3 +19,6 @@ class MockStorageService(IStorageService):
             full_table_name=mock_data.entity.full_table_name,
             generated_data=mock_data.generated_data
         )
+
+    def create_db_schema(self, schema_name: str):
+        self.mock_repository.create_db_schema(schema_name)

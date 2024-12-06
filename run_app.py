@@ -2,9 +2,10 @@ import json
 
 import pandas as pd
 
+from app.config.logger import logger
 from app.data.converters import convert_to_mock_data_schema
-from app.data.db import Database
 from app.data.graph_builder import DependencyGraphBuilder
+from app.data.repository import MockRepository
 from app.enums import DataType
 from app.mocks.mock_factory import MockFactory
 from app.mocks.generators.boolean_mock import BooleanGeneratorMock
@@ -50,15 +51,25 @@ if __name__ == "__main__":
     mock_results = mock_service.generate_entity_values(entities)
 
     ddl_query_service = PostgresQueryBuilderService()
-    storage_service = MockStorageService()
 
-    for mock_result in mock_results:
-        df = pd.DataFrame(mock_result.generated_data)
-        print(f"Таблица: {mock_result.entity.table_name}")
-        print(df.head(1000), "\n")
+    mock_repository = MockRepository()
 
-        ddl_query = ddl_query_service.create_ddl(entity=mock_result.entity)
-        print(ddl_query)
+    with mock_repository:
+        storage_service = MockStorageService(mock_repository=mock_repository)
+
+        storage_service.create_db_schema(mock_data_schema.schema_name)
+
+        for mock_result in mock_results:
+            df = pd.DataFrame(mock_result.generated_data)
+            # print(f"Таблица: {mock_result.entity.table_name}")
+            # print(df.head(1000), "\n")
+
+            ddl_query = ddl_query_service.create_ddl(entity=mock_result.entity)
+            logger.info(f"DDL was successfully built: {ddl_query}")
+
+            storage_service.create_and_save_to_source(ddl_query=ddl_query, mock_data=mock_result)
+
+
 
 
 
