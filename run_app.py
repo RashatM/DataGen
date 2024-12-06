@@ -3,6 +3,7 @@ import json
 import pandas as pd
 
 from app.data.converters import convert_to_mock_data_schema
+from app.data.db import Database
 from app.data.graph_builder import DependencyGraphBuilder
 from app.enums import DataType
 from app.mocks.mock_factory import MockFactory
@@ -14,7 +15,7 @@ from app.mocks.generators.string_mock import StringGeneratorMock
 from app.mocks.generators.timestamp_mock import TimestampGeneratorMock
 from app.services.ddl_query_builder.postgres_query_service import PostgresQueryBuilderService
 from app.services.mock_service import MockDataService
-from app.services.storage_service import StorageService
+from app.services.storage_service import MockStorageService
 
 
 # def get_query_builder_service(db_type: DataBaseType) -> IQueryBuilderService:
@@ -34,7 +35,7 @@ if __name__ == "__main__":
 
     mock_data_schema = convert_to_mock_data_schema(data)
     entities = mock_data_schema.entities
-    db_type = mock_data_schema.db_type
+    db_type = mock_data_schema.source_type
 
     mock_factory = MockFactory()
     mock_factory.register(data_type=DataType.STRING, mock_generator=StringGeneratorMock())
@@ -49,17 +50,18 @@ if __name__ == "__main__":
     mock_results = mock_service.generate_entity_values(entities)
 
     ddl_query_service = PostgresQueryBuilderService()
-    storage_service = StorageService()
+    storage_service = MockStorageService()
 
     for mock_result in mock_results:
         df = pd.DataFrame(mock_result.generated_data)
-        print(f"Таблица: {mock_result.table_name}")
+        print(f"Таблица: {mock_result.entity.table_name}")
         print(df.head(1000), "\n")
 
         ddl_query = ddl_query_service.create_ddl(entity=mock_result.entity)
         print(ddl_query)
 
-        storage_service.create_table(ddl_query=ddl_query)
-        storage_service.save_to_source(mock_data=mock_result)
+
+
+
 
 

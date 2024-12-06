@@ -5,10 +5,10 @@ from dateutil.parser import parse
 from app.dto.constraints import DateConstraints, StringConstraints, IntConstraints, FloatConstraints, \
     TimestampConstraints, BooleanConstraints
 from app.dto.mock_data import MockDataEntity, MockDataColumn, MockDataForeignKey, MockDataSchema
-from app.enums import DataType, RelationType, DataBaseType
+from app.enums import DataType, RelationType, SourceType
 
 
-def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
+def convert_to_mock_data_entity(schema_name: str, entity_data: Dict) -> MockDataEntity:
     table_name = entity_data["name"]
     total_rows = entity_data["total_rows"]
     entity_columns = []
@@ -109,12 +109,22 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
         entity_columns.append(entity_column)
 
 
-    return MockDataEntity(table_name=table_name, columns=entity_columns, total_rows=total_rows)
+    return MockDataEntity(
+        schema_name=schema_name,
+        table_name=table_name,
+        columns=entity_columns,
+        total_rows=total_rows
+    )
 
 
 
 def convert_to_mock_data_schema(entity_schema: Dict):
-    entities = [convert_to_mock_data_entity(entity_data) for entity_data in entity_schema["entities"]]
-    return MockDataSchema(db_type=getattr(DataBaseType, entity_schema["db_type"].upper()), entities=entities)
+    schema_name = entity_schema["schema"]
+    entities = [convert_to_mock_data_entity(schema_name, entity_data) for entity_data in entity_schema["entities"]]
+    return MockDataSchema(
+        source_type=getattr(SourceType, entity_schema["source_type"].upper()),
+        schema_name=schema_name,
+        entities=entities
+    )
 
 

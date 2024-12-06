@@ -44,7 +44,7 @@ class MockDataService(IMockDataService):
                 if fk_info:
                     fk_data = generated_entity_data[fk_info.table_name][fk_info.column_name]
 
-                    if fk_info.relation_type == RelationType.MANY_TO_ONE:
+                    if fk_info.relation_type == RelationType.ONE_TO_MANY:
                         generated_column_data[entity_column.name] = random.choices(fk_data, k=entity.total_rows)
                     elif fk_info.relation_type == RelationType.ONE_TO_ONE:
                         generated_column_data[entity_column.name] = random.sample(fk_data, entity.total_rows)
@@ -56,7 +56,6 @@ class MockDataService(IMockDataService):
 
             generated_entity_data[entity.table_name] = generated_column_data
             mock_entity_result = MockDataEntityResult(
-                table_name=entity.table_name,
                 entity=entity,
                 generated_data=generated_column_data
             )

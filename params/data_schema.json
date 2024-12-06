@@ -1,8 +1,10 @@
 {
-    "db_type": "postgres",
+    "source_type": "postgres",
+    "source_name": "pg_db",
+    "schema_name": "",
     "entities": [
         {
-            "name": "Client",
+            "name": "client",
             "columns": [
                 {
                     "name": "id",
@@ -34,7 +36,7 @@
             "total_rows": 100
         },
         {
-            "name": "Orders",
+            "name": "orders",
             "columns": [
                 {
                     "name": "id",
@@ -45,7 +47,7 @@
                     "name": "client_id",
                     "data_type": "int",
                     "foreign_key": {
-                        "table_name": "Client",
+                        "table_name": "client",
                         "column_name": "id",
                         "relation_type": "one_to_one"
                     }
@@ -64,7 +66,7 @@
             "total_rows": 30
         },
         {
-            "name": "Products",
+            "name": "products",
             "columns": [
                 {
                     "name": "id",
@@ -75,9 +77,9 @@
                     "name": "order_id",
                     "data_type": "int",
                     "foreign_key": {
-                        "table_name": "Orders",
+                        "table_name": "orders",
                         "column_name": "id",
-                        "relation_type": "many_to_one"
+                        "relation_type": "one_to_many"
                     }
                 },
                 {

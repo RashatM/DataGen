@@ -3,7 +3,7 @@ from enum import Enum
 
 class RelationType(Enum):
     ONE_TO_ONE: str = "ONE_TO_ONE"
-    MANY_TO_ONE: str = "MANY_TO_ONE"
+    ONE_TO_MANY: str = "ONE_TO_MANY"
 
 
 class DataType(Enum):
@@ -15,6 +15,6 @@ class DataType(Enum):
     BOOLEAN: str = "BOOLEAN"
 
 
-class DataBaseType(Enum):
+class SourceType(Enum):
     POSTGRES: str = "POSTGRES"
     ORACLE: str = "ORACLE"
