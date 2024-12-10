@@ -1,10 +1,10 @@
 {
     "source_type": "postgres",
     "source_name": "pg_db",
-    "schema_name": "test",
     "entities": [
         {
-            "name": "client",
+            "schema_name": "test",
+            "table_name": "client",
             "columns": [
                 {
                     "name": "id",
@@ -36,7 +36,8 @@
             "total_rows": 100
         },
         {
-            "name": "orders",
+            "schema_name": "test",
+            "table_name": "orders",
             "columns": [
                 {
                     "name": "id",
@@ -66,7 +67,8 @@
             "total_rows": 30
         },
         {
-            "name": "products",
+            "schema_name": "test",
+            "table_name": "products",
             "columns": [
                 {
                     "name": "id",

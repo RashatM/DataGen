@@ -8,8 +8,9 @@ from app.dto.mock_data import MockDataEntity, MockDataColumn, MockDataForeignKey
 from app.enums import DataType, RelationType, SourceType
 
 
-def convert_to_mock_data_entity(schema_name: str, entity_data: Dict) -> MockDataEntity:
-    table_name = entity_data["name"]
+def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
+    schema_name = entity_data["schema_name"]
+    table_name = entity_data["table_name"]
     total_rows = entity_data["total_rows"]
     entity_columns = []
 
@@ -127,11 +128,9 @@ def convert_to_mock_data_entity(schema_name: str, entity_data: Dict) -> MockData
 
 
 def convert_to_mock_data_schema(entity_schema: Dict):
-    schema_name = entity_schema["schema_name"]
-    entities = [convert_to_mock_data_entity(schema_name, entity_data) for entity_data in entity_schema["entities"]]
+    entities = [convert_to_mock_data_entity(entity_data) for entity_data in entity_schema["entities"]]
     return MockDataSchema(
         source_type=getattr(SourceType, entity_schema["source_type"].upper()),
-        schema_name=schema_name,
         entities=entities
     )
 

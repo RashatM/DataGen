@@ -41,7 +41,6 @@ class MockDataEntity:
 @dataclass
 class MockDataSchema:
     source_type: SourceType
-    schema_name: str
     entities: List[MockDataEntity]
 
 

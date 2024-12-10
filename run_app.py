@@ -62,9 +62,8 @@ def run():
     with mock_repository:
         storage_service = MockStorageService(mock_repository=mock_repository)
 
-        storage_service.create_db_schema(mock_data_schema.schema_name)
-
         for mock_result in mock_results:
+            storage_service.create_db_schema(mock_result.entity.schema_name)
             df = pd.DataFrame(mock_result.generated_data)
             # print(f"Таблица: {mock_result.entity.table_name}")
             # print(df.head(1000), "\n")
