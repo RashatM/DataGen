@@ -1,12 +1,12 @@
 import json
-
 import pandas as pd
 
 from app.config.logger import logger
-from app.data.converters import convert_to_mock_data_schema
+from app.data.converters.converters import convert_to_mock_data_schema
+from app.data.converters.excel_converter import convert_excel_to_json
 from app.data.graph_builder import DependencyGraphBuilder
 from app.data.repository import MockRepository
-from app.enums import DataType
+from app.enums import DataType, SourceType
 from app.mocks.generators.date.date_in_string_mock import DateInStringGeneratorMock
 from app.mocks.generators.date.date_mock import DateGeneratorMock
 from app.mocks.generators.timestamp.timestamp_in_string_mock import TimestampInStringGeneratorMock
@@ -38,14 +38,16 @@ def provide_mock_service(mock_factory):
     graph_order_builder = DependencyGraphBuilder()
     return MockDataService(mock_factory=mock_factory, dependency_order_builder=graph_order_builder)
 
-def provide_ddl_query_service():
+def provide_ddl_query_service(db_type: SourceType):
     return PostgresQueryBuilderService()
 
 
 def run():
-    with open("params/data_schema.json") as f:
-        data = json.load(f)
-        print(data)
+    data = convert_excel_to_json("params/data_gen.xlsx")
+
+    # with open("params/data_schema.json") as f:
+    #     data = json.load(f)
+    #     print(data)
 
     mock_data_schema = convert_to_mock_data_schema(data)
     entities = mock_data_schema.entities
@@ -53,7 +55,7 @@ def run():
 
     mock_factory = provide_mock_factory()
     mock_service = provide_mock_service(mock_factory)
-    ddl_query_service = provide_ddl_query_service()
+    ddl_query_service = provide_ddl_query_service(db_type)
 
     mock_results = mock_service.generate_entity_values(entities)
 
@@ -62,9 +64,12 @@ def run():
     with mock_repository:
         storage_service = MockStorageService(mock_repository=mock_repository)
 
+        db_schemas = set()
         for mock_result in mock_results:
-            storage_service.create_db_schema(mock_result.entity.schema_name)
-            df = pd.DataFrame(mock_result.generated_data)
+            if mock_result.entity.schema_name not in db_schemas:
+                storage_service.create_db_schema(mock_result.entity.schema_name)
+                db_schemas.add(mock_result.entity.schema_name)
+            # df = pd.DataFrame(mock_result.generated_data)
             # print(f"Таблица: {mock_result.entity.table_name}")
             # print(df.head(1000), "\n")
 
