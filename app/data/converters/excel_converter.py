@@ -81,5 +81,4 @@ def convert_excel_to_json(file_path: str) -> Dict:
                     "total_rows": total_rows
                 }
             output_json["entities"].append(entity)
-    print(output_json)
     return output_json

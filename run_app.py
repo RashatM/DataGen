@@ -43,11 +43,7 @@ def provide_ddl_query_service(db_type: SourceType):
 
 
 def run():
-    data = convert_excel_to_json("params/data_gen.xlsx")
-
-    # with open("params/data_schema.json") as f:
-    #     data = json.load(f)
-    #     print(data)
+    data = convert_excel_to_json("params/data_gen_v2.xlsx")
 
     mock_data_schema = convert_to_mock_data_schema(data)
     entities = mock_data_schema.entities
