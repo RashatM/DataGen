@@ -45,8 +45,6 @@ class FloatConstraints(ValueConstraints):
 class DateConstraints(ValueConstraints):
     min_date: date
     max_date: date
-    greater_than: date
-    less_than: date
     date_format: str
 
 

@@ -72,17 +72,33 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
         elif col_type in (DataType.DATE, DataType.DATE_IN_STRING):
             min_date = constraints_data.get("min_value")
             max_date = constraints_data.get("max_value")
-            greater_than = constraints_data.get("min_value")
+            greater_than = constraints_data.get("greater_than")
             less_than = constraints_data.get("less_than")
+
+            if min_date and greater_than:
+                t1 = max(min_date, greater_than)
+            elif min_date:
+                t1 = parse(min_date).date()
+            elif greater_than:
+                t1 = parse(greater_than).date()
+            else:
+                t1 = date(date.today().year, 1, 1)
+
+            if max_date and less_than:
+                t2 = min(max_date, greater_than)
+            elif max_date:
+                t2 = parse(max_date).date()
+            elif less_than:
+                t2 = parse(less_than).date()
+            else:
+                t2 = date(date.today().year, 12, 31)
 
             constraints = DateConstraints(
                 null_ratio=null_ratio,
                 is_unique=is_unique,
                 allowed_values=allowed_values,
-                min_date=parse(min_date).date() if min_date else date(date.today().year, 1, 1),
-                max_date=parse(max_date).date() if max_date else date(date.today().year, 12, 31),
-                greater_than=parse(greater_than).date() if greater_than else date(date.today().year, 1, 1),
-                less_than=parse(less_than).date() if less_than else date(date.today().year, 12, 31),
+                min_date=t1,
+                max_date=t2,
                 date_format=constraints_data.get("date_format", "%Y-%m-%d")
             )
         elif col_type in (DataType.TIMESTAMP, DataType.TIMESTAMP_IN_STRING):

@@ -17,8 +17,8 @@ class BaseDateGeneratorMock(IMockDataGenerator, Generic[T]):
         pass
 
     def generate_values(self, total_rows: int, constraints: DateConstraints) -> List[T]:
-        start_date = max(constraints.min_date, constraints.greater_than)
-        end_date = min(constraints.max_date, constraints.less_than)
+        start_date =constraints.min_date
+        end_date = constraints.max_date
         delta_days = (end_date - start_date).days
 
         if constraints.is_unique:
