@@ -1,14 +1,12 @@
-from datetime import datetime
 from io import StringIO
 from typing import Dict, List, Any
 from sqlalchemy.sql import text
 
-import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
-from app.config.logger import logger
+from app.shared.logger import logger
 from app.interfaces.repository import IMockRepository
 
 class MockRepository(IMockRepository):
@@ -37,23 +35,41 @@ class MockRepository(IMockRepository):
 
 
     def create_and_save(self, ddl_query: str, full_table_name: str , generated_data: Dict[str, List[Any]]):
-        df = pd.DataFrame(generated_data)
-        df = df.where(pd.notnull(df), 'NULL')
-        # df["created_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         buffer = StringIO()
-        df.to_csv(buffer, index=False, header=False, sep=";")
+        columns = list(generated_data.keys())
+        total_rows = len(next(iter(generated_data.values())))
+
+        for i in range(total_rows):
+            row = []
+            for col in columns:
+                val = generated_data[col][i]
+                if val is None:
+                    row.append("")  # пустое значение → NULL в Postgres
+                else:
+                    row.append(str(val))
+            buffer.write(";".join(row) + "\n")
+
         buffer.seek(0)
 
-        query = f"COPY {full_table_name} FROM STDIN WITH CSV DELIMITER ';' NULL 'NULL'"
+        copy_sql = f"""
+               COPY {full_table_name}
+               FROM STDIN
+               WITH (
+                   FORMAT CSV,
+                   DELIMITER ';',
+                   NULL ''
+               )
+           """
+
         with self.session_pool() as session:
-            session.execute(text(f"drop table if exists {full_table_name}"))
+            session.execute(text(f"DROP TABLE IF EXISTS {full_table_name}"))
             session.execute(text(ddl_query))
 
             cursor = session.connection().connection.cursor()
-            cursor.copy_expert(sql=query, file=buffer)
+            cursor.copy_expert(sql=copy_sql, file=buffer)
+
             session.commit()
-            logger.info(f"Table {full_table_name} created successfully")
-            logger.info(f"Loading into the table {full_table_name} completed successfully")
+            logger.info(f"Table {full_table_name} created and loaded successfully")
 
     def disconnect(self):
         try:

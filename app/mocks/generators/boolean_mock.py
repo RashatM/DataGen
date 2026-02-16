@@ -1,9 +1,9 @@
 import random
 from typing import List
 
-from app.dto.constraints import IntConstraints, BooleanConstraints
+from app.dto.constraints import BooleanConstraints
 from app.interfaces.mock_generator import IMockDataGenerator
-from app.utils import random_choices_from_constants
+from app.shared.utils import random_choices_from_constants
 
 
 class BooleanGeneratorMock(IMockDataGenerator):

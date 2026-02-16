@@ -5,7 +5,7 @@ from typing import List, TypeVar, Generic
 
 from app.dto.constraints import DateConstraints
 from app.interfaces.mock_generator import IMockDataGenerator
-from app.utils import random_choices_from_constants
+from app.shared.utils import random_choices_from_constants
 
 T = TypeVar('T', str, date)
 
@@ -17,7 +17,7 @@ class BaseDateGeneratorMock(IMockDataGenerator, Generic[T]):
         pass
 
     def generate_values(self, total_rows: int, constraints: DateConstraints) -> List[T]:
-        start_date =constraints.min_date
+        start_date = constraints.min_date
         end_date = constraints.max_date
         delta_days = (end_date - start_date).days
 

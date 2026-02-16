@@ -1,9 +1,7 @@
-import json
 import pandas as pd
 
-from app.config.logger import logger
+from app.shared.logger import logger
 from app.data.converters.converters import convert_to_mock_data_schema
-from app.data.converters.excel_converter import convert_excel_to_json
 from app.data.graph_builder import DependencyGraphBuilder
 from app.data.repository import MockRepository
 from app.enums import DataType, SourceType
@@ -43,7 +41,158 @@ def provide_ddl_query_service(db_type: SourceType):
 
 
 def run():
-    data = convert_excel_to_json("params/data_gen_v2.xlsx")
+    # data = convert_excel_to_json("params/data_gen_v2.xlsx")
+    data = {
+        "entities": [
+            {
+                "schema_name": "analytics",
+                "table_name": "company_groups",
+                "total_rows": 5000,
+                "columns": [
+                    {
+                        "name": "INN",
+                        "data_type": "int",
+                        "is_primary_key": True,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": True,
+                            "min_value": 1000000000,
+                            "max_value": 9999999999
+                        }
+                    },
+                    {
+                        "name": "GROUP_ID_DM",
+                        "data_type": "int",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False,
+                            "min_value": 1,
+                            "max_value": 6000000
+                        }
+                    },
+                    {
+                        "name": "MAIN_COMPANY_FLG_DM",
+                        "data_type": "int",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False,
+                            "allowed_values": [0, 1]
+                        }
+                    },
+                    {
+                        "name": "VALUE_DAY",
+                        "data_type": "timestamp",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False,
+                            "allowed_values": ["2024-04-15 03:00:00"],
+                            "timestamp_format": "%Y-%m-%d %H:%M:%S"
+                        }
+                    }
+                ]
+            },
+            {
+                "schema_name": "analytics",
+                "table_name": "subjects",
+                "total_rows": 10000,
+                "columns": [
+                    {
+                        "name": "STYPE",
+                        "data_type": "string",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False,
+                            "allowed_values": ["c", "cpr"]
+                        }
+                    },
+                    {
+                        "name": "SINN",
+                        "data_type": "int",
+                        "is_primary_key": False,
+                        "foreign_key": {
+                            "table_name": "company_groups",
+                            "column_name": "INN",
+                            "relation_type": "one_to_many"
+                        },
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False
+                        }
+                    },
+                    {
+                        "name": "SOGRN",
+                        "data_type": "int",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 10,
+                            "is_unique": False,
+                            "min_value": 10 ** 12,
+                            "max_value": 10 ** 15
+                        }
+                    },
+                    {
+                        "name": "SPIN",
+                        "data_type": "string",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 10,
+                            "is_unique": False,
+                            "length": 6,
+                            "uppercase": True,
+                            "regular_expr": "^[A-Z0-9]{6}$"
+                        }
+                    },
+                    {
+                        "name": "SABSCODE",
+                        "data_type": "string",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False,
+                            "allowed_values": ["SFAProd"]
+                        }
+                    },
+                    {
+                        "name": "SPINSFA",
+                        "data_type": "string",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False,
+                            "regular_expr": "^ABR-FW-SCRMFW-WORK-ACCOUNT ACB-\\d+$"
+                        }
+                    },
+                    {
+                        "name": "IDSUBJECT",
+                        "data_type": "int",
+                        "is_primary_key": False,
+                        "foreign_key": None,
+                        "constraints": {
+                            "null_ratio": 0,
+                            "is_unique": False,
+                            "min_value": 1,
+                            "max_value": 20000000
+                        }
+                    }
+                ]
+            }
+        ],
+        "source_name": "example_source",
+        "source_type": "postgres"
+    }
 
     mock_data_schema = convert_to_mock_data_schema(data)
     entities = mock_data_schema.entities
@@ -61,18 +210,32 @@ def run():
         storage_service = MockStorageService(mock_repository=mock_repository)
 
         db_schemas = set()
-        for mock_result in mock_results:
-            if mock_result.entity.schema_name not in db_schemas:
-                storage_service.create_db_schema(mock_result.entity.schema_name)
-                db_schemas.add(mock_result.entity.schema_name)
-            # df = pd.DataFrame(mock_result.generated_data)
-            # print(f"Таблица: {mock_result.entity.table_name}")
-            # print(df.head(1000), "\n")
 
-            ddl_query = ddl_query_service.create_ddl(entity=mock_result.entity)
-            logger.info(f"DDL was successfully built: {ddl_query}")
+        with pd.ExcelWriter("results.xlsx", engine="openpyxl") as writer:
+            for i, mock_result in enumerate(mock_results):
 
-            storage_service.create_and_save_to_source(ddl_query=ddl_query, mock_data=mock_result)
+                if mock_result.entity.schema_name not in db_schemas:
+                    storage_service.create_db_schema(mock_result.entity.schema_name)
+                    db_schemas.add(mock_result.entity.schema_name)
+
+                df = pd.DataFrame(mock_result.generated_data)
+
+                sheet_name = f"{mock_result.entity.schema_name}_{mock_result.entity.table_name}"
+
+                df.to_excel(
+                    writer,
+                    sheet_name=sheet_name,
+                    index=False,
+                    na_rep=""
+                )
+
+                ddl_query = ddl_query_service.create_ddl(entity=mock_result.entity)
+                logger.info(f"DDL was successfully built: {ddl_query}")
+
+                storage_service.create_and_save_to_source(
+                    ddl_query=ddl_query,
+                    mock_data=mock_result
+                )
 
 
 
@@ -80,5 +243,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
-

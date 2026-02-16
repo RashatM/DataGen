@@ -7,7 +7,7 @@ from app.enums import RelationType
 from app.interfaces.graph_builder import IDependencyGraphBuilder
 from app.interfaces.mock_service import IMockDataService
 from app.interfaces.mock_factory import IMockFactory
-from app.utils import shuffle_values_with_nulls
+from app.shared.utils import shuffle_values_with_nulls
 
 
 class MockDataService(IMockDataService):

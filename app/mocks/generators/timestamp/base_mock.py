@@ -1,11 +1,11 @@
 import random
 from abc import abstractmethod
-from datetime import timedelta, datetime
+from datetime import datetime
 from typing import List, TypeVar, Generic
 
 from app.dto.constraints import TimestampConstraints
 from app.interfaces.mock_generator import IMockDataGenerator
-from app.utils import random_choices_from_constants
+from app.shared.utils import random_choices_from_constants
 
 T = TypeVar('T', str, datetime)
 
@@ -17,8 +17,8 @@ class BaseTimestampGeneratorMock(IMockDataGenerator, Generic[T]):
 
 
     def generate_values(self, total_rows: int, constraints: TimestampConstraints) -> List[T]:
-        start_ts = max(constraints.min_timestamp, constraints.greater_than)
-        end_ts = min(constraints.max_timestamp, constraints.less_than)
+        start_ts = constraints.min_timestamp
+        end_ts = constraints.max_timestamp
         delta_seconds = int((end_ts - start_ts).total_seconds())
 
         if constraints.is_unique:

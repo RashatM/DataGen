@@ -20,3 +20,14 @@ class DataType(Enum):
 class SourceType(Enum):
     POSTGRES: str = "POSTGRES"
     ORACLE: str = "ORACLE"
+
+
+class CharacterSet(Enum):
+    DIGITS = "digits"
+    LETTERS = "letters"
+    ALPHANUMERIC = "alphanumeric"
+
+class CaseMode(Enum):
+    LOWER = "lower"
+    UPPER = "upper"
+    MIXED = "mixed"

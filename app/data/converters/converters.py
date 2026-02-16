@@ -5,7 +5,7 @@ from dateutil.parser import parse
 from app.dto.constraints import DateConstraints, StringConstraints, IntConstraints, FloatConstraints, \
     TimestampConstraints, BooleanConstraints
 from app.dto.mock_data import MockDataEntity, MockDataColumn, MockDataForeignKey, MockDataSchema
-from app.enums import DataType, RelationType, SourceType
+from app.enums import DataType, RelationType, SourceType, CharacterSet, CaseMode
 
 
 def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
@@ -44,8 +44,8 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
                 is_unique=is_unique,
                 allowed_values=allowed_values,
                 length=constraints_data.get("length", 10),
-                uppercase=constraints_data.get("uppercase", False),
-                lowercase=constraints_data.get("lowercase", False),
+                character_set=CharacterSet(constraints_data.get("character_set", "letters").lower()),
+                case_mode=CaseMode(constraints_data.get("case_mode", "mixed").lower()),
                 regular_expr=constraints_data.get("regular_expr", None)
             )
         elif col_type == DataType.INT:
@@ -54,9 +54,7 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
                 is_unique=is_unique,
                 allowed_values=allowed_values,
                 min_value=constraints_data.get("min_value", 0),
-                max_value=constraints_data.get("max_value", 1000),
-                greater_than=constraints_data.get("min_value", 0),
-                less_than=constraints_data.get("less_than", 1000)
+                max_value=constraints_data.get("max_value", 1000)
             )
         elif col_type == DataType.FLOAT:
             constraints = FloatConstraints(
@@ -65,55 +63,30 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
                 allowed_values=allowed_values,
                 min_value=constraints_data.get("min_value", 0),
                 max_value=constraints_data.get("max_value", 1000),
-                greater_than=constraints_data.get("min_value", 0),
-                less_than=constraints_data.get("less_than", 1000),
                 precision=constraints_data.get("precision", 2)
             )
         elif col_type in (DataType.DATE, DataType.DATE_IN_STRING):
             min_date = constraints_data.get("min_value")
             max_date = constraints_data.get("max_value")
-            greater_than = constraints_data.get("greater_than")
-            less_than = constraints_data.get("less_than")
-
-            if min_date and greater_than:
-                t1 = max(min_date, greater_than)
-            elif min_date:
-                t1 = parse(min_date).date()
-            elif greater_than:
-                t1 = parse(greater_than).date()
-            else:
-                t1 = date(date.today().year, 1, 1)
-
-            if max_date and less_than:
-                t2 = min(max_date, greater_than)
-            elif max_date:
-                t2 = parse(max_date).date()
-            elif less_than:
-                t2 = parse(less_than).date()
-            else:
-                t2 = date(date.today().year, 12, 31)
 
             constraints = DateConstraints(
                 null_ratio=null_ratio,
                 is_unique=is_unique,
                 allowed_values=allowed_values,
-                min_date=t1,
-                max_date=t2,
+                min_date=parse(min_date) if min_date else date(date.today().year, 1, 1),
+                max_date=parse(max_date) if max_date else date(date.today().year, 12, 31),
                 date_format=constraints_data.get("date_format", "%Y-%m-%d")
             )
         elif col_type in (DataType.TIMESTAMP, DataType.TIMESTAMP_IN_STRING):
             min_timestamp = constraints_data.get("min_timestamp")
             max_timestamp = constraints_data.get("max_timestamp")
-            greater_than = constraints_data.get("min_value")
-            less_than = constraints_data.get("less_than")
+
             constraints = TimestampConstraints(
                 null_ratio=null_ratio,
                 is_unique=is_unique,
                 allowed_values=allowed_values,
                 min_timestamp=parse(max_timestamp) if min_timestamp else datetime(datetime.now().year, 1, 1, 0, 0, 0),
                 max_timestamp=parse(max_timestamp) if max_timestamp else datetime(datetime.now().year, 12, 31, 0, 0, 0),
-                greater_than=parse(greater_than) if greater_than else datetime(datetime.now().year, 1, 1, 0, 0, 0),
-                less_than=parse(less_than) if less_than else datetime(datetime.now().year, 12, 31, 0, 0, 0),
                 timestamp_format=constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S")
             )
         elif col_type == DataType.BOOLEAN:
@@ -132,7 +105,6 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
             foreign_key=foreign_key
         )
         entity_columns.append(entity_column)
-
 
     return MockDataEntity(
         schema_name=schema_name,

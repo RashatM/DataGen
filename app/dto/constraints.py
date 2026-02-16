@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import List, Any, Optional, Union
+from typing import List, Any
+from enum import Enum
 
-
+from app.enums import CharacterSet, CaseMode
 
 
 @dataclass
@@ -20,24 +21,20 @@ class ValueConstraints(Constraints):
 @dataclass
 class StringConstraints(ValueConstraints):
     length: int
-    lowercase: bool
-    uppercase: bool
     regular_expr: str
+    character_set: CharacterSet = CharacterSet.LETTERS
+    case_mode: CaseMode = CaseMode.MIXED
 
 
 @dataclass
 class IntConstraints(ValueConstraints):
     min_value: int
     max_value: int
-    greater_than: int
-    less_than: int
 
 @dataclass
 class FloatConstraints(ValueConstraints):
     min_value: float
     max_value: float
-    greater_than: float
-    less_than: float
     precision: int
 
 
@@ -52,8 +49,6 @@ class DateConstraints(ValueConstraints):
 class TimestampConstraints(ValueConstraints):
     min_timestamp: datetime = "2024-01-01 00:00:00"
     max_timestamp: datetime = "2024-12-31 00:00:00"
-    greater_than: datetime = "2024-01-01 00:00:00"
-    less_than: datetime = "2024-12-31 00:00:00"
     timestamp_format: str = "%Y-%m-%d %H:%M:%S"
 
 

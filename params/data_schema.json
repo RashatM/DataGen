@@ -1,99 +1,573 @@
 {
-    "source_type": "postgres",
-    "source_name": "pg_db",
-    "entities": [
+  "entities": [
+    {
+      "schema_name": "test",
+      "table_name": "clients",
+      "columns": [
         {
-            "schema_name": "test",
-            "table_name": "client",
-            "columns": [
-                {
-                    "name": "id",
-                    "data_type": "int",
-                    "is_primary_key": true,
-                    "constraints": {
-                        "min_value": 200,
-                        "max_value": 1000,
-                        "greater_than": 0,
-                        "less_than": 300
-                    }
-                },
-                {
-                    "name": "name",
-                    "data_type": "string",
-                    "constraints": {
-                        "null_ratio": 10,
-                        "length": 10,
-                        "lowercase": false,
-                        "uppercase": false,
-                        "regular_expr": "[A-Z]{3}-\\d{4}-[a-z]{2}"
-                    }
-                },
-                {
-                    "name": "flag",
-                    "data_type": "boolean"
-                }
-            ],
-            "total_rows": 100
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true",
+          "constraints": {
+            "min_value": 0,
+            "max_value": 900
+          }
         },
         {
-            "schema_name": "test",
-            "table_name": "orders",
-            "columns": [
-                {
-                    "name": "id",
-                    "data_type": "int",
-                    "is_primary_key": true
-                },
-                {
-                    "name": "client_id",
-                    "data_type": "int",
-                    "foreign_key": {
-                        "table_name": "client",
-                        "column_name": "id",
-                        "relation_type": "one_to_one"
-                    }
-                },
-                {
-                    "name": "order_date",
-                    "data_type": "date",
-                    "constraints": {
-                        "null_ratio": 5,
-                        "min_date": "2024-03-01",
-                        "max_date": "2024-12-01",
-                        "date_format": "%Y-%m-%d"
-                    }
-                }
-            ],
-            "total_rows": 30
+          "name": "name",
+          "data_type": "string",
+          "constraints": {
+            "length": 10,
+            "lowercase": "true"
+          }
         },
         {
-            "schema_name": "test",
-            "table_name": "products",
-            "columns": [
-                {
-                    "name": "id",
-                    "data_type": "int",
-                    "is_primary_key": true
-                },
-                {
-                    "name": "order_id",
-                    "data_type": "int",
-                    "foreign_key": {
-                        "table_name": "orders",
-                        "column_name": "id",
-                        "relation_type": "one_to_many"
-                    }
-                },
-                {
-                    "name": "price",
-                    "data_type": "float",
-                    "constraints": {
-                        "min_value": 0.0,
-                        "max_value": 1000.0
-                    }
-                }
-            ],
-            "total_rows": 210
+          "name": "address",
+          "data_type": "string",
+          "constraints": {
+            "null_ratio": 20,
+            "length": 10,
+            "lowercase": "true"
+          }
         }
-    ]
+      ],
+      "total_rows": 100
+    },
+    {
+      "schema_name": "test",
+      "table_name": "clients",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true",
+          "constraints": {
+            "min_value": 0,
+            "max_value": 900
+          }
+        },
+        {
+          "name": "name",
+          "data_type": "string",
+          "constraints": {
+            "length": 10,
+            "lowercase": "true"
+          }
+        },
+        {
+          "name": "address",
+          "data_type": "string",
+          "constraints": {
+            "null_ratio": 20,
+            "length": 10,
+            "lowercase": "true"
+          }
+        }
+      ],
+      "total_rows": 100
+    },
+    {
+      "schema_name": "test",
+      "table_name": "clients",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true",
+          "constraints": {
+            "min_value": 0,
+            "max_value": 900
+          }
+        },
+        {
+          "name": "name",
+          "data_type": "string",
+          "constraints": {
+            "length": 10,
+            "lowercase": "true"
+          }
+        },
+        {
+          "name": "address",
+          "data_type": "string",
+          "constraints": {
+            "null_ratio": 20,
+            "length": 10,
+            "lowercase": "true"
+          }
+        }
+      ],
+      "total_rows": 100
+    },
+    {
+      "schema_name": "test",
+      "table_name": "orders",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "client_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "clients",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "order_date",
+          "data_type": "date",
+          "constraints": {
+            "greater_than": "2024-01-01",
+            "less_than": "2024-10-31"
+          }
+        },
+        {
+          "name": "status",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "IN_PROCESSING",
+              "DELIVERED"
+            ]
+          }
+        }
+      ],
+      "total_rows": 300
+    },
+    {
+      "schema_name": "test",
+      "table_name": "orders",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "client_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "clients",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "order_date",
+          "data_type": "date",
+          "constraints": {
+            "greater_than": "2024-01-01",
+            "less_than": "2024-10-31"
+          }
+        },
+        {
+          "name": "status",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "IN_PROCESSING",
+              "DELIVERED"
+            ]
+          }
+        }
+      ],
+      "total_rows": 300
+    },
+    {
+      "schema_name": "test",
+      "table_name": "orders",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "client_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "clients",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "order_date",
+          "data_type": "date",
+          "constraints": {
+            "greater_than": "2024-01-01",
+            "less_than": "2024-10-31"
+          }
+        },
+        {
+          "name": "status",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "IN_PROCESSING",
+              "DELIVERED"
+            ]
+          }
+        }
+      ],
+      "total_rows": 300
+    },
+    {
+      "schema_name": "test",
+      "table_name": "orders",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "client_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "clients",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "order_date",
+          "data_type": "date",
+          "constraints": {
+            "greater_than": "2024-01-01",
+            "less_than": "2024-10-31"
+          }
+        },
+        {
+          "name": "status",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "IN_PROCESSING",
+              "DELIVERED"
+            ]
+          }
+        }
+      ],
+      "total_rows": 300
+    },
+    {
+      "schema_name": "test",
+      "table_name": "products",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "price",
+          "data_type": "float",
+          "constraints": {
+            "min_value": 150.15,
+            "max_value": 999.25
+          }
+        },
+        {
+          "name": "category",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "A",
+              "B",
+              "C"
+            ]
+          }
+        },
+        {
+          "name": "description",
+          "data_type": "string",
+          "constraints": {
+            "null_ratio": 30,
+            "length": 20,
+            "uppercase": "true "
+          }
+        }
+      ],
+      "total_rows": 200
+    },
+    {
+      "schema_name": "test",
+      "table_name": "products",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "price",
+          "data_type": "float",
+          "constraints": {
+            "min_value": 150.15,
+            "max_value": 999.25
+          }
+        },
+        {
+          "name": "category",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "A",
+              "B",
+              "C"
+            ]
+          }
+        },
+        {
+          "name": "description",
+          "data_type": "string",
+          "constraints": {
+            "null_ratio": 30,
+            "length": 20,
+            "uppercase": "true "
+          }
+        }
+      ],
+      "total_rows": 200
+    },
+    {
+      "schema_name": "test",
+      "table_name": "products",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "price",
+          "data_type": "float",
+          "constraints": {
+            "min_value": 150.15,
+            "max_value": 999.25
+          }
+        },
+        {
+          "name": "category",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "A",
+              "B",
+              "C"
+            ]
+          }
+        },
+        {
+          "name": "description",
+          "data_type": "string",
+          "constraints": {
+            "null_ratio": 30,
+            "length": 20,
+            "uppercase": "true "
+          }
+        }
+      ],
+      "total_rows": 200
+    },
+    {
+      "schema_name": "test",
+      "table_name": "products",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "price",
+          "data_type": "float",
+          "constraints": {
+            "min_value": 150.15,
+            "max_value": 999.25
+          }
+        },
+        {
+          "name": "category",
+          "data_type": "string",
+          "constraints": {
+            "allowed_values": [
+              "A",
+              "B",
+              "C"
+            ]
+          }
+        },
+        {
+          "name": "description",
+          "data_type": "string",
+          "constraints": {
+            "null_ratio": 30,
+            "length": 20,
+            "uppercase": "true "
+          }
+        }
+      ],
+      "total_rows": 200
+    },
+    {
+      "schema_name": "test",
+      "table_name": "order_items",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "order_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "orders",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "product_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "products",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "quantity",
+          "data_type": "int",
+          "constraints": {
+            "greater_than": 0,
+            "less_than": 50
+          }
+        }
+      ],
+      "total_rows": 500
+    },
+    {
+      "schema_name": "test",
+      "table_name": "order_items",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "order_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "orders",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "product_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "products",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "quantity",
+          "data_type": "int",
+          "constraints": {
+            "greater_than": 0,
+            "less_than": 50
+          }
+        }
+      ],
+      "total_rows": 500
+    },
+    {
+      "schema_name": "test",
+      "table_name": "order_items",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "order_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "orders",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "product_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "products",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "quantity",
+          "data_type": "int",
+          "constraints": {
+            "greater_than": 0,
+            "less_than": 50
+          }
+        }
+      ],
+      "total_rows": 500
+    },
+    {
+      "schema_name": "test",
+      "table_name": "order_items",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "is_primary_key": "true"
+        },
+        {
+          "name": "order_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "orders",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "product_id",
+          "data_type": "int",
+          "foreign_key": {
+            "table_name": "products",
+            "column_name": "id",
+            "relation_type": "one_to_many"
+          }
+        },
+        {
+          "name": "quantity",
+          "data_type": "int",
+          "constraints": {
+            "greater_than": 0,
+            "less_than": 50
+          }
+        }
+      ],
+      "total_rows": 500
+    }
+  ],
+  "source_name": "example_source",
+  "source_type": "postgres"
 }
