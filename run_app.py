@@ -86,14 +86,14 @@ def run():
                     },
                     {
                         "name": "VALUE_DAY",
-                        "data_type": "timestamp",
+                        "data_type": "date",
                         "is_primary_key": False,
                         "foreign_key": None,
                         "constraints": {
                             "null_ratio": 0,
                             "is_unique": False,
-                            "allowed_values": ["2024-04-15 03:00:00"],
-                            "timestamp_format": "%Y-%m-%d %H:%M:%S"
+                            # "allowed_values": ["2024-04-15 03:00:00"],
+                            "timestamp_format": "%Y%m%d"
                         }
                     }
                 ]
