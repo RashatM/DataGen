@@ -181,7 +181,6 @@ def run():
 
     entities = [convert_to_mock_data_entity(entity_data) for entity_data in data["entities"]]
 
-
     mock_factory = provide_mock_factory()
     mock_service = provide_mock_service(mock_factory)
     mock_results = mock_service.generate_entity_values(entities)
