@@ -2,7 +2,9 @@ from typing import Any, List
 
 from app.core.application.ports.value_converter_port import ISourceValueConverter
 from app.core.domain.constraints import StringConstraints
+from app.core.domain.conversion_rules import ConversionNotAllowedError
 from app.core.domain.enums import DataType
+from app.core.domain.validation_errors import InvalidConstraintsError, ValueConversionError
 
 
 class StringSourceValueConverter(ISourceValueConverter[StringConstraints]):
@@ -18,7 +20,7 @@ class StringSourceValueConverter(ISourceValueConverter[StringConstraints]):
         column_name: str,
     ) -> List[Any]:
         if not isinstance(constraints, StringConstraints):
-            raise ValueError(f"Invalid string constraints for column {column_name}")
+            raise InvalidConstraintsError(f"Invalid string constraints for column {column_name}")
 
         if target_type == DataType.STRING:
             return [str(value) for value in values]
@@ -29,12 +31,12 @@ class StringSourceValueConverter(ISourceValueConverter[StringConstraints]):
                 try:
                     converted_values.append(int(value_as_string))
                 except ValueError as exc:
-                    raise ValueError(
+                    raise ValueConversionError(
                         f"Column {column_name}: cannot convert '{value_as_string}' from STRING to INT"
                     ) from exc
             return converted_values
 
-        raise ValueError(
+        raise ConversionNotAllowedError(
             f"Unsupported conversion for column {column_name}: "
             f"{self.source_type.value} -> {target_type.value}"
         )

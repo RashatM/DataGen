@@ -3,6 +3,7 @@ from typing import Dict
 from app.core.application.ports.query_builder_port import IQueryBuilderService
 from app.core.domain.entities import MockDataColumn, MockDataEntity
 from app.core.domain.enums import DataType
+from app.infrastructure.errors import UnsupportedOutputDataTypeError
 
 
 class PostgresQueryBuilderService(IQueryBuilderService):
@@ -18,7 +19,9 @@ class PostgresQueryBuilderService(IQueryBuilderService):
     def map_column_type(self, entity_column: MockDataColumn) -> str:
         column_type = self.default_type_mapping.get(entity_column.output_data_type)
         if not column_type:
-            raise ValueError(f"Unsupported output data type: {entity_column.output_data_type}")
+            raise UnsupportedOutputDataTypeError(
+                f"Unsupported output data type: {entity_column.output_data_type}"
+            )
         return column_type
 
     def create_ddl(self, entity: MockDataEntity) -> str:

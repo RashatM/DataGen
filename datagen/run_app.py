@@ -1,6 +1,6 @@
 import pandas as pd
 
-from app.core.application.services import MockDataService
+from app.core.application.services.mock_data_service import MockDataService
 from app.core.domain.enums import DataType
 from app.infrastructure.converters.schema_converter import convert_to_mock_data_entity
 from app.infrastructure.converters.value_converter_factory import ValueConverterFactory

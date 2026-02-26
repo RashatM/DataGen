@@ -1,9 +1,9 @@
 import random
 from typing import Any, List
 
-from app.core.application.ports import IValueConverter
 from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
 from app.core.application.ports.mock_factory_port import IMockFactory
+from app.core.application.ports.value_converter_port import IValueConverter
 from app.core.domain.entities import MockDataColumn, MockDataEntity, MockDataEntityResult
 from app.core.domain.enums import RelationType
 from app.shared.utils import shuffle_values_with_nulls

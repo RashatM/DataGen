@@ -6,6 +6,7 @@ import rstr
 from app.core.application.ports.mock_generator_port import IMockDataGenerator
 from app.core.domain.constraints import StringConstraints
 from app.core.domain.enums import CaseMode, CharacterSet
+from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.logger import logger
 
 
@@ -46,10 +47,10 @@ class StringGeneratorMock(IMockDataGenerator[StringConstraints]):
     @staticmethod
     def validate(constraints: StringConstraints) -> None:
         if constraints.length <= 0:
-            raise ValueError("Length must be greater than 0")
+            raise InvalidConstraintsError("Length must be greater than 0")
 
         if constraints.regular_expr and constraints.is_unique:
-            raise ValueError("Unique regex generation is not deterministic and is not supported")
+            raise InvalidConstraintsError("Unique regex generation is not deterministic and is not supported")
 
     @staticmethod
     def generate_constant_values(total_rows: int, constraints: StringConstraints) -> List[str]:
@@ -57,7 +58,7 @@ class StringGeneratorMock(IMockDataGenerator[StringConstraints]):
 
         if constraints.is_unique:
             if total_rows > len(values):
-                raise ValueError("Not enough unique allowed values")
+                raise UnsatisfiableConstraintsError("Not enough unique allowed values")
             return random.sample(values, total_rows)
 
         return random.choices(values, k=total_rows)
@@ -93,7 +94,7 @@ class StringGeneratorMock(IMockDataGenerator[StringConstraints]):
 
         if constraints.is_unique:
             if total_rows > space:
-                raise ValueError("Not enough unique digit combinations")
+                raise UnsatisfiableConstraintsError("Not enough unique digit combinations")
             sampled_numbers = random.sample(range(min_value, max_value + 1), total_rows)
             return [str(n) for n in sampled_numbers]
 
@@ -107,7 +108,7 @@ class StringGeneratorMock(IMockDataGenerator[StringConstraints]):
 
         if constraints.is_unique:
             if total_rows > max_unique_values:
-                raise ValueError("Not enough unique combinations")
+                raise UnsatisfiableConstraintsError("Not enough unique combinations")
             sampled_indexes = random.sample(range(max_unique_values), total_rows)
             return [self.encode_index(i, pool, length) for i in sampled_indexes]
 

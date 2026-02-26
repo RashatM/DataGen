@@ -4,6 +4,7 @@ from app.core.application.ports.mock_factory_port import IMockFactory
 from app.core.application.ports.mock_generator_port import IMockDataGenerator
 from app.core.domain.constraints import Constraints
 from app.core.domain.enums import DataType
+from app.infrastructure.errors import MockGeneratorNotRegisteredError
 
 
 class MockFactory(IMockFactory):
@@ -16,4 +17,4 @@ class MockFactory(IMockFactory):
     def get(self, data_type: DataType) -> IMockDataGenerator[Constraints]:
         if data_type in self.mock_generators:
             return self.mock_generators[data_type]
-        raise ValueError(f"Unknown generator data type: {data_type.value}")
+        raise MockGeneratorNotRegisteredError(f"Unknown generator data type: {data_type.value}")

@@ -2,7 +2,9 @@ from typing import Any, List
 
 from app.core.application.ports.value_converter_port import ISourceValueConverter
 from app.core.domain.constraints import IntConstraints
+from app.core.domain.conversion_rules import ConversionNotAllowedError
 from app.core.domain.enums import DataType
+from app.core.domain.validation_errors import InvalidConstraintsError
 
 
 class IntSourceValueConverter(ISourceValueConverter[IntConstraints]):
@@ -18,7 +20,7 @@ class IntSourceValueConverter(ISourceValueConverter[IntConstraints]):
         column_name: str,
     ) -> List[Any]:
         if not isinstance(constraints, IntConstraints):
-            raise ValueError(f"Invalid int constraints for column {column_name}")
+            raise InvalidConstraintsError(f"Invalid int constraints for column {column_name}")
 
         if target_type == DataType.FLOAT:
             return [float(value) for value in values]
@@ -27,7 +29,7 @@ class IntSourceValueConverter(ISourceValueConverter[IntConstraints]):
         if target_type == DataType.BOOLEAN:
             return [bool(value) for value in values]
 
-        raise ValueError(
+        raise ConversionNotAllowedError(
             f"Unsupported conversion for column {column_name}: "
             f"{self.source_type.value} -> {target_type.value}"
         )

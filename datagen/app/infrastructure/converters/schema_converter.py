@@ -18,6 +18,7 @@ from app.core.domain.entities import (
     MockDataForeignKey
 )
 from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
+from app.infrastructure.errors import SchemaValidationError
 
 LEGACY_MAPPING = {
     "DATE_STRING": DataType.DATE,
@@ -29,13 +30,24 @@ def resolve_data_types(column_data: Dict, constraints_data: Dict) -> Tuple[DataT
     output_raw = column_data.get("output_data_type")
 
     if not generator_raw:
-        raise ValueError(f"Column {column_data.get('name')} has no generator data type")
+        raise SchemaValidationError(f"Column {column_data.get('name')} has no generator data type")
 
     generator_normalized = str(generator_raw).upper()
-    generator_data_type = LEGACY_MAPPING.get(generator_normalized, DataType(generator_normalized))
+    if generator_normalized in LEGACY_MAPPING:
+        generator_data_type = LEGACY_MAPPING[generator_normalized]
+    else:
+        try:
+            generator_data_type = DataType(generator_normalized)
+        except ValueError as exc:
+            raise SchemaValidationError(f"Unsupported generator data type: {generator_normalized}") from exc
 
     if output_raw:
-        output_data_type = DataType(str(output_raw).upper())
+        try:
+            output_data_type = DataType(str(output_raw).upper())
+        except ValueError as exc:
+            raise SchemaValidationError(
+                f"Unsupported output data type for column {column_data.get('name')}: {output_raw}"
+            ) from exc
     elif (
             (generator_data_type == DataType.DATE and "date_format" in constraints_data) or
             (generator_data_type == DataType.TIMESTAMP and "timestamp_format" in constraints_data)
@@ -61,16 +73,19 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
 
         is_primary_key = column_data.get("is_primary_key", False)
         foreign_key_data = column_data.get("foreign_key")
-        foreign_key = (
-            MockDataForeignKey(
-                schema_name=foreign_key_data["schema_name"],
-                table_name=foreign_key_data["table_name"],
-                column_name=foreign_key_data["column_name"],
-                relation_type=RelationType(foreign_key_data["relation_type"].upper()),
-            )
-            if foreign_key_data
-            else None
-        )
+        foreign_key = None
+        if foreign_key_data:
+            try:
+                foreign_key = MockDataForeignKey(
+                    schema_name=foreign_key_data["schema_name"],
+                    table_name=foreign_key_data["table_name"],
+                    column_name=foreign_key_data["column_name"],
+                    relation_type=RelationType(str(foreign_key_data["relation_type"]).upper()),
+                )
+            except ValueError as exc:
+                raise SchemaValidationError(
+                    f"Unsupported relation_type for column {column_name}: {foreign_key_data.get('relation_type')}"
+                ) from exc
 
         null_ratio = constraints_data.get("null_ratio", 0)
         is_unique = (
@@ -223,7 +238,7 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
             )
             continue
 
-        raise ValueError(f"Unsupported generator data type: {generator_data_type.value}")
+        raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
 
     return MockDataEntity(
         schema_name=schema_name,

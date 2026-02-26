@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 from app.core.application.ports.value_converter_port import ISourceValueConverter, IValueConverter
 from app.core.domain.entities import MockDataColumn
 from app.core.domain.enums import DataType
+from app.infrastructure.errors import SourceValueConverterNotRegisteredError
 
 
 class ValueTypeConverter(IValueConverter):
@@ -18,7 +19,9 @@ class ValueTypeConverter(IValueConverter):
 
         converter = self.converter_by_source_type.get(source_type)
         if not converter:
-            raise ValueError(f"No converter for source data type: {source_type.value}")
+            raise SourceValueConverterNotRegisteredError(
+                f"No converter for source data type: {source_type.value}"
+            )
 
         return converter.convert(
             values=values,
