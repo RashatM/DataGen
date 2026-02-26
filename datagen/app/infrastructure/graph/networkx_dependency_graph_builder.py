@@ -1,5 +1,4 @@
 from typing import Dict, List
-
 import networkx as nx
 
 from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
