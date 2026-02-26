@@ -17,6 +17,7 @@ from app.core.domain.entities import (
 )
 from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
 from app.core.domain.typevars import TConstraints
+from app.core.domain.validation_errors import InvalidForeignKeyError
 
 __all__ = [
     "BooleanConstraints",
@@ -28,6 +29,7 @@ __all__ = [
     "DateConstraints",
     "FloatConstraints",
     "IntConstraints",
+    "InvalidForeignKeyError",
     "MockDataColumn",
     "MockDataEntity",
     "MockDataEntityResult",

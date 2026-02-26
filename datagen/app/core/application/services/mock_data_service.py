@@ -36,7 +36,7 @@ class MockDataService:
         return values
 
     def generate_entity_values(self, entities: List[MockDataEntity]) -> List[MockDataEntityResult]:
-        entity_order_list = self.dependency_order_builder.build_graph(entities) if len(entities) > 1 else entities
+        entity_order_list = self.dependency_order_builder.build_graph(entities)
 
         generated_entity_data = {}
         mock_results = []
