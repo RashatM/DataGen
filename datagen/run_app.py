@@ -189,13 +189,8 @@ def run():
 
     with mock_repository:
         entity_writer = provide_entity_writer(mock_repository)
-
-        with pd.ExcelWriter("results.xlsx", engine="openpyxl") as writer:
-            for mock_result in mock_results:
-                df = pd.DataFrame(mock_result.generated_data)
-                sheet_name = f"{mock_result.entity.schema_name}_{mock_result.entity.table_name}"
-                df.to_excel(writer, sheet_name=sheet_name, index=False, na_rep="")
-                entity_writer.persist_entity_result(mock_result)
+        for mock_result in mock_results:
+            entity_writer.persist_entity_result(mock_result)
 
 
 if __name__ == "__main__":
