@@ -1,0 +1,1 @@
+"""Infrastructure graph package."""
