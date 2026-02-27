@@ -1,10 +1,13 @@
 import pandas as pd
 
 from app.core.application.services.mock_data_service import MockDataService
+from app.core.domain.entities import MockDataEntity
 from app.core.domain.enums import DataType
 from app.infrastructure.converters.schema_converter import convert_to_mock_data_entity
 from app.infrastructure.converters.value_converter_factory import ValueConverterFactory
-from app.infrastructure.ddl.postgres_query_builder import PostgresQueryBuilderService
+from app.infrastructure.ddl.hive_query_builder import HiveQueryBuilder
+from app.infrastructure.ddl.iceberg_query_builder import IcebergQueryBuilder
+from app.infrastructure.ddl.postgres_query_builder import PostgresQueryBuilder
 from app.infrastructure.generators.boolean_generator import BooleanGeneratorMock
 from app.infrastructure.generators.date_generator import DateGeneratorMock
 from app.infrastructure.generators.float_generator import FloatGeneratorMock
@@ -54,7 +57,24 @@ def provide_value_converter():
 
 
 def provide_ddl_query_service():
-    return PostgresQueryBuilderService()
+    return PostgresQueryBuilder()
+
+
+def build_target_ddl_queries(entities: list[MockDataEntity]) -> dict[str, dict[str, str]]:
+    hive_builder = HiveQueryBuilder()
+    iceberg_builder = IcebergQueryBuilder()
+
+    hive_queries = {}
+    iceberg_queries = {}
+    for entity in entities:
+        hive_queries[entity.full_table_name] = hive_builder.create_ddl(entity)
+        iceberg_queries[entity.full_table_name] = iceberg_builder.create_ddl(entity)
+
+    return {
+        "hive": hive_queries,
+        "iceberg": iceberg_queries,
+    }
+
 
 def provide_entity_writer(mock_repository):
     return SqlEntityWriter(
@@ -175,11 +195,13 @@ def run():
                 ]
             }
         ],
-        "source_name": "example_source",
-        "source_type": "postgres"
+        "source_name": "example_source"
     }
 
     entities = [convert_to_mock_data_entity(entity_data) for entity_data in data["entities"]]
+    target_ddl_queries = build_target_ddl_queries(entities)
+    # Next step: persist this payload as ddl_hadoop.sql and ddl_iceberg.sql artifacts.
+    _ = target_ddl_queries
 
     mock_factory = provide_mock_factory()
     mock_service = provide_mock_service(mock_factory)

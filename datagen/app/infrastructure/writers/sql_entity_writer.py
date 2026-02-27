@@ -1,13 +1,13 @@
 from typing import Set
 
 from app.core.application.ports.entity_writer_port import IEntityWriter
-from app.core.application.ports.query_builder_port import IQueryBuilderService
+from app.core.application.ports.query_builder_port import IQueryBuilder
 from app.core.application.ports.repository_port import IMockRepository
 from app.core.domain.entities import MockDataEntityResult
 
 
 class SqlEntityWriter(IEntityWriter):
-    def __init__(self, mock_repository: IMockRepository, ddl_query_builder: IQueryBuilderService):
+    def __init__(self, mock_repository: IMockRepository, ddl_query_builder: IQueryBuilder):
         self.mock_repository = mock_repository
         self.ddl_query_builder = ddl_query_builder
         self.created_schema_names: Set[str] = set()
