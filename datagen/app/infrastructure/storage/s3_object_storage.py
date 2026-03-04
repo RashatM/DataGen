@@ -56,6 +56,10 @@ class S3StorageAdapter(IObjectStorage):
         )
         return self.generate_uri(full_key)
 
+    def build_uri(self, key: str) -> str:
+        full_key = self.build_key(key)
+        return self.generate_uri(full_key)
+
     @staticmethod
     def is_not_found_error(error: ClientError) -> bool:
         error_code = str(error.response.get("Error", {}).get("Code", ""))

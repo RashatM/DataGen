@@ -1,8 +1,8 @@
 import boto3
 from botocore.client import BaseClient
 
-from app.core.application.ports.run_state_repository_port import IRunStateRepository
-from app.core.application.services.mock_artifact_service import MockArtifactService
+from app.core.application.ports.publication_repository_port import IPublicationRepository
+from app.core.application.services.publication_service import PublicationService
 from app.core.application.services.mock_data_service import MockDataService
 from app.core.domain.enums import DataType
 from app.infrastructure.converters.source_value_converters.boolean_source_value_converter import BooleanSourceValueConverter
@@ -23,8 +23,7 @@ from app.infrastructure.generators.string_generator import StringGeneratorMock
 from app.infrastructure.generators.timestamp_generator import TimestampGeneratorMock
 from app.infrastructure.graph.networkx_dependency_graph_builder import NetworkXDependencyGraphBuilder
 from app.infrastructure.ports.object_storage_port import IObjectStorage
-from app.infrastructure.repositories.s3_artifact_repository import S3ArtifactRepository
-from app.infrastructure.repositories.s3_run_state_repository import S3RunStateRepository
+from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.storage.s3_object_storage import S3StorageAdapter
 from app.shared.settings import S3TargetSettings
 
@@ -72,23 +71,19 @@ def provide_s3_object_storage(bucket: str, prefix: str, s3_client: BaseClient) -
     return S3StorageAdapter(bucket=bucket, prefix=prefix, s3_client=s3_client)
 
 
-def provide_mock_artifact_repository(object_storage: IObjectStorage) -> S3ArtifactRepository:
-    return S3ArtifactRepository(object_storage)
+def provide_publication_repository(
+    object_storage: IObjectStorage,
+) -> IPublicationRepository:
+    return S3PublicationRepository(object_storage)
 
 
-def provide_mock_artifact_service(
-    artifact_repository: S3ArtifactRepository,
-    run_state_repository: IRunStateRepository,
-) -> MockArtifactService:
-    return MockArtifactService(
-        artifact_repository=artifact_repository,
-        run_state_repository=run_state_repository,
+def provide_publication_service(
+    repository: IPublicationRepository,
+) -> PublicationService:
+    return PublicationService(
+        repository=repository,
         ddl_builders={
             "hive": HiveQueryBuilder(),
             "iceberg": IcebergQueryBuilder(),
-        }
+        },
     )
-
-
-def provide_run_state_repository(object_storage: IObjectStorage) -> IRunStateRepository:
-    return S3RunStateRepository(object_storage)

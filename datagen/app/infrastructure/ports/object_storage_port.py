@@ -21,6 +21,11 @@ class IObjectStorage(ABC):
         pass
 
     @abstractmethod
+    def build_uri(self, key: str) -> str:
+        """Строит URI для ключа без записи объекта."""
+        pass
+
+    @abstractmethod
     def get_json(self, key: str) -> Dict[str, Any]:
         """Читает JSON по ключу."""
         pass

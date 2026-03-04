@@ -1,19 +1,19 @@
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Any, Dict, List
 
-from app.core.application.dto import MockEntityArtifacts
+from app.core.application.dto import TablePublication
 from app.core.domain.entities import MockDataEntityResult
 from app.infrastructure.converters.schema_converter import convert_to_mock_data_entity
+from app.infrastructure.dag_payload_mapper import DagPayloadMapper
 from app.shared.logger import logger
 from app.shared.settings import AppSettings, load_app_settings
 from app.providers import (
     provide_mock_factory,
     provide_mock_service,
+    provide_publication_repository,
+    provide_publication_service,
     provide_s3_client,
     provide_s3_object_storage,
-    provide_mock_artifact_repository,
-    provide_mock_artifact_service,
-    provide_run_state_repository,
 )
 
 
@@ -28,13 +28,13 @@ def resolve_run_id(config: AppSettings) -> str:
 def export_mock_artifacts_to_s3(
     mock_results: List[MockDataEntityResult],
     config: AppSettings,
-) -> Dict[str, Dict[str, MockEntityArtifacts]]:
+) -> Dict[str, Dict[str, Any]]:
     if not config.s3.enabled:
         logger.info("S3 export disabled by configuration")
         return {}
 
     run_id = resolve_run_id(config)
-    uploaded_artifacts_by_env: Dict[str, Dict[str, MockEntityArtifacts]] = {}
+    dag_payloads_by_env: Dict[str, Dict[str, Any]] = {}
 
     for s3_target in config.s3.targets:
         if not s3_target.bucket:
@@ -51,23 +51,25 @@ def export_mock_artifacts_to_s3(
             s3_client=s3_client,
         )
 
-        artifact_repository = provide_mock_artifact_repository(object_storage)
-        run_state_repository = provide_run_state_repository(object_storage)
-        artifact_service = provide_mock_artifact_service(artifact_repository, run_state_repository)
+        publication_repository = provide_publication_repository(object_storage)
+        publication_service = provide_publication_service(publication_repository)
 
-        uploaded_tables: Dict[str, MockEntityArtifacts] = {}
+        published_tables: List[TablePublication] = []
 
         for mock_result in mock_results:
-            table_artifacts: MockEntityArtifacts = artifact_service.persist(
+            table_publication: TablePublication = publication_service.publish(
                 entity_result=mock_result,
                 run_id=run_id,
             )
-            uploaded_tables[mock_result.entity.full_table_name] = table_artifacts
+            published_tables.append(table_publication)
 
-        uploaded_artifacts_by_env[s3_target.name] = uploaded_tables
+        dag_payloads_by_env[s3_target.name] = DagPayloadMapper.build_payload(
+            run_id=run_id,
+            table_publications=published_tables,
+        )
 
     logger.info("Uploaded artifacts to S3 for run_id=%s", run_id)
-    return uploaded_artifacts_by_env
+    return dag_payloads_by_env
 
 
 def run():
