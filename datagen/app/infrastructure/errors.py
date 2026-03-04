@@ -20,3 +20,15 @@ class UnsupportedOutputDataTypeError(InfrastructureConfigurationError):
 
 class SchemaValidationError(ValueError):
     """Raised when input schema definition is invalid."""
+
+
+class ObjectPayloadFormatError(ValueError):
+    """Raised when object payload has an unexpected structure."""
+
+
+class RunStateCorruptedError(ValueError):
+    """Raised when latest run pointer exists but has invalid content."""
+
+
+class ObjectNotFoundError(FileNotFoundError):
+    """Raised when object does not exist in object storage."""

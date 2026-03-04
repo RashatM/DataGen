@@ -1,218 +1,89 @@
-import pandas as pd
+from datetime import datetime, timezone
+from typing import Dict, List
 
-from app.core.application.services.mock_data_service import MockDataService
-from app.core.domain.entities import MockDataEntity
-from app.core.domain.enums import DataType
+from app.core.application.dto import MockEntityArtifacts
+from app.core.domain.entities import MockDataEntityResult
 from app.infrastructure.converters.schema_converter import convert_to_mock_data_entity
-from app.infrastructure.converters.value_converter_factory import ValueConverterFactory
-from app.infrastructure.ddl.hive_query_builder import HiveQueryBuilder
-from app.infrastructure.ddl.iceberg_query_builder import IcebergQueryBuilder
-from app.infrastructure.ddl.postgres_query_builder import PostgresQueryBuilder
-from app.infrastructure.generators.boolean_generator import BooleanGeneratorMock
-from app.infrastructure.generators.date_generator import DateGeneratorMock
-from app.infrastructure.generators.float_generator import FloatGeneratorMock
-from app.infrastructure.generators.int_generator import IntGeneratorMock
-from app.infrastructure.generators.mock_factory import MockFactory
-from app.infrastructure.generators.string_generator import StringGeneratorMock
-from app.infrastructure.generators.timestamp_generator import TimestampGeneratorMock
-from app.infrastructure.graph.networkx_dependency_graph_builder import NetworkXDependencyGraphBuilder
-from app.infrastructure.repositories.postgres_repository import MockRepository
-from app.infrastructure.converters.source_value_converters.boolean_source_value_converter import BooleanSourceValueConverter
-from app.infrastructure.converters.source_value_converters.date_source_value_converter import DateSourceValueConverter
-from app.infrastructure.converters.source_value_converters.float_source_value_converter import FloatSourceValueConverter
-from app.infrastructure.converters.source_value_converters.int_source_value_converter import IntSourceValueConverter
-from app.infrastructure.converters.source_value_converters.string_source_value_converter import StringSourceValueConverter
-from app.infrastructure.converters.source_value_converters.timestamp_source_value_converter import TimestampSourceValueConverter
-from app.infrastructure.writers.sql_entity_writer import SqlEntityWriter
+from app.shared.logger import logger
+from app.shared.settings import AppSettings, load_app_settings
+from app.providers import (
+    provide_mock_factory,
+    provide_mock_service,
+    provide_s3_client,
+    provide_s3_object_storage,
+    provide_mock_artifact_repository,
+    provide_mock_artifact_service,
+    provide_run_state_repository,
+)
 
 
-def provide_mock_factory():
-    mock_factory = MockFactory()
-    mock_factory.register(data_type=DataType.STRING, mock_generator=StringGeneratorMock())
-    mock_factory.register(data_type=DataType.INT, mock_generator=IntGeneratorMock())
-    mock_factory.register(data_type=DataType.FLOAT, mock_generator=FloatGeneratorMock())
-    mock_factory.register(data_type=DataType.DATE, mock_generator=DateGeneratorMock())
-    mock_factory.register(data_type=DataType.TIMESTAMP, mock_generator=TimestampGeneratorMock())
-    mock_factory.register(data_type=DataType.BOOLEAN, mock_generator=BooleanGeneratorMock())
-    return mock_factory
+def create_run_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def provide_mock_service(mock_factory):
-    graph_order_builder = NetworkXDependencyGraphBuilder()
-    return MockDataService(
-        mock_factory=mock_factory,
-        dependency_order_builder=graph_order_builder,
-        value_converter=provide_value_converter(),
-    )
-
-def provide_value_converter():
-    value_converter_factory = ValueConverterFactory()
-    value_converter_factory.register(source_type=DataType.STRING, source_converter=StringSourceValueConverter())
-    value_converter_factory.register(source_type=DataType.INT, source_converter=IntSourceValueConverter())
-    value_converter_factory.register(source_type=DataType.FLOAT, source_converter=FloatSourceValueConverter())
-    value_converter_factory.register(source_type=DataType.DATE, source_converter=DateSourceValueConverter())
-    value_converter_factory.register(source_type=DataType.TIMESTAMP, source_converter=TimestampSourceValueConverter())
-    value_converter_factory.register(source_type=DataType.BOOLEAN, source_converter=BooleanSourceValueConverter())
-    return value_converter_factory.create()
+def resolve_run_id(config: AppSettings) -> str:
+    return config.s3.run_id or create_run_id()
 
 
-def provide_ddl_query_service():
-    return PostgresQueryBuilder()
+def export_mock_artifacts_to_s3(
+    mock_results: List[MockDataEntityResult],
+    config: AppSettings,
+) -> Dict[str, Dict[str, MockEntityArtifacts]]:
+    if not config.s3.enabled:
+        logger.info("S3 export disabled by configuration")
+        return {}
 
+    run_id = resolve_run_id(config)
+    uploaded_artifacts_by_env: Dict[str, Dict[str, MockEntityArtifacts]] = {}
 
-def build_target_ddl_queries(entities: list[MockDataEntity]) -> dict[str, dict[str, str]]:
-    hive_builder = HiveQueryBuilder()
-    iceberg_builder = IcebergQueryBuilder()
+    for s3_target in config.s3.targets:
+        if not s3_target.bucket:
+            logger.info(
+                "S3 bucket not configured for environment=%s, skipping",
+                s3_target.name,
+            )
+            continue
 
-    hive_queries = {}
-    iceberg_queries = {}
-    for entity in entities:
-        hive_queries[entity.full_table_name] = hive_builder.create_ddl(entity)
-        iceberg_queries[entity.full_table_name] = iceberg_builder.create_ddl(entity)
+        s3_client = provide_s3_client(s3_target)
+        object_storage = provide_s3_object_storage(
+            bucket=s3_target.bucket,
+            prefix=s3_target.prefix,
+            s3_client=s3_client,
+        )
 
-    return {
-        "hive": hive_queries,
-        "iceberg": iceberg_queries,
-    }
+        artifact_repository = provide_mock_artifact_repository(object_storage)
+        run_state_repository = provide_run_state_repository(object_storage)
+        artifact_service = provide_mock_artifact_service(artifact_repository, run_state_repository)
 
+        uploaded_tables: Dict[str, MockEntityArtifacts] = {}
 
-def provide_entity_writer(mock_repository):
-    return SqlEntityWriter(
-        mock_repository=mock_repository,
-        ddl_query_builder=provide_ddl_query_service(),
-    )
+        for mock_result in mock_results:
+            table_artifacts: MockEntityArtifacts = artifact_service.persist(
+                entity_result=mock_result,
+                run_id=run_id,
+            )
+            uploaded_tables[mock_result.entity.full_table_name] = table_artifacts
+
+        uploaded_artifacts_by_env[s3_target.name] = uploaded_tables
+
+    logger.info("Uploaded artifacts to S3 for run_id=%s", run_id)
+    return uploaded_artifacts_by_env
 
 
 def run():
-    data = {
-        "entities": [
-            {
-                "schema_name": "analytics",
-                "table_name": "company_groups",
-                "total_rows": 5000,
-                "columns": [
-                    {
-                        "name": "INN",
-                        "gen_data_type": "string",
-                        "output_data_type": "int",
-                        "is_primary_key": True,
-                        "constraints": {
-                            "null_ratio": 0,
-                            "is_unique": True,
-                            "length": 10,
-                            "character_set": "digits"
-                        }
-                    },
-                    {
-                        "name": "GROUP_ID_DM",
-                        "gen_data_type": "int",
-                        "constraints": {
-                            "null_ratio": 0,
-                            "min_value": 1,
-                            "max_value": 6000000
-                        }
-                    },
-                    {
-                        "name": "MAIN_COMPANY_FLG_DM",
-                        "gen_data_type": "int",
-                        "constraints": {
-                            "allowed_values": [0, 1]
-                        }
-                    },
-                    {
-                        "name": "VALUE_DAY",
-                        "gen_data_type": "date",
-                        "output_data_type": "int",
-                        "constraints": {
-                            "date_format": "%Y%m%d"
-                        }
-                    }
-                ]
-            },
-            {
-                "schema_name": "analytics",
-                "table_name": "subjects",
-                "total_rows": 10000,
-                "columns": [
-                    {
-                        "name": "STYPE",
-                        "gen_data_type": "string",
-                        "constraints": {
-                            "allowed_values": ["c", "cpr"]
-                        }
-                    },
-                    {
-                        "name": "SINN",
-                        "gen_data_type": "int",
-                        "foreign_key": {
-                            "schema_name": "analytics",
-                            "table_name": "company_groups",
-                            "column_name": "INN",
-                            "relation_type": "one_to_many"
-                        },
-                    },
-                    {
-                        "name": "SOGRN",
-                        "gen_data_type": "int",
-                        "constraints": {
-                            "null_ratio": 10,
-                            "min_value": 10 ** 12,
-                            "max_value": 10 ** 15
-                        }
-                    },
-                    {
-                        "name": "SPIN",
-                        "gen_data_type": "string",
-                        "constraints": {
-                            "null_ratio": 10,
-                            "length": 6,
-                            "case_mode": "upper",
-                            "regular_expr": "^[A-Z0-9]{6}$"
-                        }
-                    },
-                    {
-                        "name": "SABSCODE",
-                        "gen_data_type": "string",
-                        "constraints": {
-                            "allowed_values": ["SFAProd"]
-                        }
-                    },
-                    {
-                        "name": "SPINSFA",
-                        "gen_data_type": "string",
-                        "constraints": {
-                            "regular_expr": "^ABR-FW-SCRMFW-WORK-ACCOUNT ACB-\\d+$"
-                        }
-                    },
-                    {
-                        "name": "IDSUBJECT",
-                        "gen_data_type": "int",
-                        "constraints": {
-                            "min_value": 1,
-                            "max_value": 20000000
-                        }
-                    }
-                ]
-            }
-        ],
-        "source_name": "example_source"
-    }
+    config: AppSettings = load_app_settings()
 
-    entities = [convert_to_mock_data_entity(entity_data) for entity_data in data["entities"]]
-    target_ddl_queries = build_target_ddl_queries(entities)
-    # Next step: persist this payload as ddl_hadoop.sql and ddl_iceberg.sql artifacts.
-    _ = target_ddl_queries
+    # Пример данных
+    raw_entities = []
+
+    entities = [convert_to_mock_data_entity(e) for e in raw_entities]
 
     mock_factory = provide_mock_factory()
     mock_service = provide_mock_service(mock_factory)
     mock_results = mock_service.generate_entity_values(entities)
 
-    mock_repository = MockRepository()
-
-    with mock_repository:
-        entity_writer = provide_entity_writer(mock_repository)
-        for mock_result in mock_results:
-            entity_writer.persist_entity_result(mock_result)
+    uploaded_artifacts = export_mock_artifacts_to_s3(mock_results, config)
+    _ = uploaded_artifacts
 
 
 if __name__ == "__main__":
