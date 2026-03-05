@@ -8,10 +8,10 @@ from app.core.domain.entities import GeneratedTableData
 
 class PublicationService:
     def __init__(
-            self,
-            repository: IPublicationRepository,
-            ddl_builders: Dict[str, IQueryBuilder],
-            run_id: str,
+        self,
+        repository: IPublicationRepository,
+        ddl_builders: Dict[str, IQueryBuilder],
+        run_id: str,
     ):
         self.repository = repository
         self.ddl_builders = ddl_builders
@@ -23,7 +23,6 @@ class PublicationService:
             for table_format, builder in self.ddl_builders.items()
         }
 
-
     def cleanup_run_artifacts(self, generated_tables: List[GeneratedTableData]) -> None:
         for table_data in generated_tables:
             table = table_data.table
@@ -33,13 +32,13 @@ class PublicationService:
                 run_id=self.run_id,
             )
 
-    def publish_entities(self, generated_tables: List[GeneratedTableData]) -> List[TablePublication]:
+    def publish_tables(self, generated_tables: List[GeneratedTableData]) -> List[TablePublication]:
         try:
             staged_publications = [
                 self.repository.stage_artifacts(
                     table_data=table_data,
                     run_id=self.run_id,
-                    ddl_queries=self.build_ddl_queries(table_data)
+                    ddl_queries=self.build_ddl_queries(table_data),
                 ) for table_data in generated_tables
             ]
         except Exception:

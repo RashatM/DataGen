@@ -1,13 +1,13 @@
 import random
 from typing import List
 
-from app.core.application.ports.mock_generator_port import IMockDataGenerator
+from app.core.application.ports.generator_port import IDataGenerator
 from app.core.domain.constraints import IntConstraints
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.utils import random_choices_from_constants
 
 
-class IntGeneratorMock(IMockDataGenerator[IntConstraints]):
+class IntDataGenerator(IDataGenerator[IntConstraints]):
     def generate_values(self, total_rows: int, constraints: IntConstraints) -> List[int]:
         min_value = constraints.min_value
         max_value = constraints.max_value

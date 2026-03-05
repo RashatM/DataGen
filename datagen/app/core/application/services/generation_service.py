@@ -2,29 +2,29 @@ import random
 from typing import Any, List
 
 from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
-from app.core.application.ports.mock_factory_port import IMockFactory
+from app.core.application.ports.generator_factory_port import IDataGeneratorFactory
 from app.core.application.ports.value_converter_port import IValueConverter
 from app.core.domain.entities import TableColumnSpec, GeneratedTableData, GenerationRun
 from app.core.domain.enums import RelationType
 from app.shared.utils import shuffle_values_with_nulls
 
 
-class MockDataService:
+class DataGenerationService:
     def __init__(
         self,
         dependency_order_builder: IDependencyGraphBuilder,
-        mock_factory: IMockFactory,
+        data_generator_factory: IDataGeneratorFactory,
         value_converter: IValueConverter,
     ):
         self.dependency_order_builder = dependency_order_builder
-        self.mock_factory = mock_factory
+        self.data_generator_factory = data_generator_factory
         self.value_converter = value_converter
 
     def generate_column_values(self, total_rows: int, table_column: TableColumnSpec) -> List[Any]:
         total_nulls = int(total_rows * (table_column.constraints.null_ratio / 100))
         total_non_nulls = total_rows - total_nulls
 
-        values = self.mock_factory.get(table_column.gen_data_type).generate_values(
+        values = self.data_generator_factory.get(table_column.gen_data_type).generate_values(
             total_rows=total_non_nulls,
             constraints=table_column.constraints,
         )
@@ -35,7 +35,7 @@ class MockDataService:
 
         return values
 
-    def generate_tables_data(self, generation_run: GenerationRun) -> List[GeneratedTableData]:
+    def generate_table_data(self, generation_run: GenerationRun) -> List[GeneratedTableData]:
         ordered_tables = self.dependency_order_builder.build_graph(generation_run.tables)
 
         generated_table_data = {}

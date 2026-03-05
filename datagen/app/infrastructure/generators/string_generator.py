@@ -3,14 +3,14 @@ import string
 from typing import List
 import rstr
 
-from app.core.application.ports.mock_generator_port import IMockDataGenerator
+from app.core.application.ports.generator_port import IDataGenerator
 from app.core.domain.constraints import StringConstraints
 from app.core.domain.enums import CaseMode, CharacterSet
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.logger import logger
 
 
-class StringGeneratorMock(IMockDataGenerator[StringConstraints]):
+class StringDataGenerator(IDataGenerator[StringConstraints]):
     @staticmethod
     def apply_case(value: str, mode: CaseMode) -> str:
         if mode == CaseMode.LOWER:
@@ -99,7 +99,6 @@ class StringGeneratorMock(IMockDataGenerator[StringConstraints]):
             return [str(n) for n in sampled_numbers]
 
         return [str(random.randint(min_value, max_value)) for _ in range(total_rows)]
-
 
     def generate_letter_values(self, total_rows: int, constraints: StringConstraints) -> List[str]:
         pool = self.build_char_pool(constraints)

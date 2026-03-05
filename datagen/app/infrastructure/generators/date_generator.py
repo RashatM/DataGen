@@ -2,13 +2,13 @@ import random
 from datetime import date, timedelta
 from typing import List
 
-from app.core.application.ports.mock_generator_port import IMockDataGenerator
+from app.core.application.ports.generator_port import IDataGenerator
 from app.core.domain.constraints import DateConstraints
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.utils import random_choices_from_constants
 
 
-class DateGeneratorMock(IMockDataGenerator[DateConstraints]):
+class DateDataGenerator(IDataGenerator[DateConstraints]):
     def generate_values(self, total_rows: int, constraints: DateConstraints) -> List[date]:
         start_date = constraints.min_date
         end_date = constraints.max_date

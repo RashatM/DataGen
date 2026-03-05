@@ -2,13 +2,13 @@ import random
 from datetime import datetime, timedelta
 from typing import List
 
-from app.core.application.ports.mock_generator_port import IMockDataGenerator
+from app.core.application.ports.generator_port import IDataGenerator
 from app.core.domain.constraints import TimestampConstraints
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.utils import random_choices_from_constants
 
 
-class TimestampGeneratorMock(IMockDataGenerator[TimestampConstraints]):
+class TimestampDataGenerator(IDataGenerator[TimestampConstraints]):
     def generate_values(self, total_rows: int, constraints: TimestampConstraints) -> List[datetime]:
         start_ts = constraints.min_timestamp
         end_ts = constraints.max_timestamp

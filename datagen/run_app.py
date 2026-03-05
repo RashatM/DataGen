@@ -8,7 +8,7 @@ from app.infrastructure.converters.schema_converter import convert_to_generation
 from app.infrastructure.dag_payload_mapper import DagPayloadMapper
 from app.shared.logger import logger
 from app.shared.config import AppConfig, load_app_settings
-from app.providers import provide_mock_service, provide_publication_service
+from app.providers import provide_generation_service, provide_publication_service
 
 
 def generate_run_id() -> str:
@@ -31,7 +31,7 @@ def publish_run_artifacts(
             continue
 
         publication_service = provide_publication_service(run_id=run_id, s3_config=s3_config)
-        published_tables: List[TablePublication] = publication_service.publish_entities(
+        published_tables: List[TablePublication] = publication_service.publish_tables(
             generated_tables=generated_tables,
         )
 
@@ -55,8 +55,8 @@ def run():
         raw_tables=raw_tables,
     )
 
-    mock_service = provide_mock_service()
-    generated_tables = mock_service.generate_tables_data(generation_run)
+    generation_service = provide_generation_service()
+    generated_tables = generation_service.generate_table_data(generation_run)
 
     uploaded_artifacts = publish_run_artifacts(
         run_id=run_id,

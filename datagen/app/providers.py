@@ -3,7 +3,7 @@ from botocore.client import BaseClient
 
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.application.services.publication_service import PublicationService
-from app.core.application.services.mock_data_service import MockDataService
+from app.core.application.services.generation_service import DataGenerationService
 from app.core.domain.enums import DataType
 from app.infrastructure.converters.source_value_converters.boolean_source_value_converter import BooleanSourceValueConverter
 from app.infrastructure.converters.source_value_converters.date_source_value_converter import DateSourceValueConverter
@@ -14,13 +14,13 @@ from app.infrastructure.converters.source_value_converters.timestamp_source_valu
 from app.infrastructure.converters.value_converter_factory import ValueConverterFactory
 from app.infrastructure.ddl.hive_query_builder import HiveQueryBuilder
 from app.infrastructure.ddl.iceberg_query_builder import IcebergQueryBuilder
-from app.infrastructure.generators.boolean_generator import BooleanGeneratorMock
-from app.infrastructure.generators.date_generator import DateGeneratorMock
-from app.infrastructure.generators.float_generator import FloatGeneratorMock
-from app.infrastructure.generators.int_generator import IntGeneratorMock
-from app.infrastructure.generators.mock_factory import MockFactory
-from app.infrastructure.generators.string_generator import StringGeneratorMock
-from app.infrastructure.generators.timestamp_generator import TimestampGeneratorMock
+from app.infrastructure.generators.boolean_generator import BooleanDataGenerator
+from app.infrastructure.generators.date_generator import DateDataGenerator
+from app.infrastructure.generators.float_generator import FloatDataGenerator
+from app.infrastructure.generators.int_generator import IntDataGenerator
+from app.infrastructure.generators.generator_factory import DataGeneratorFactory
+from app.infrastructure.generators.string_generator import StringDataGenerator
+from app.infrastructure.generators.timestamp_generator import TimestampDataGenerator
 from app.infrastructure.graph.networkx_dependency_graph_builder import NetworkXDependencyGraphBuilder
 from app.infrastructure.ports.object_storage_port import IObjectStorage
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
@@ -28,14 +28,14 @@ from app.infrastructure.storage.s3_object_storage import S3StorageAdapter
 from app.shared.config import S3Config
 
 
-def provide_mock_factory() -> MockFactory:
-    factory = MockFactory()
-    factory.register(DataType.STRING, StringGeneratorMock())
-    factory.register(DataType.INT, IntGeneratorMock())
-    factory.register(DataType.FLOAT, FloatGeneratorMock())
-    factory.register(DataType.DATE, DateGeneratorMock())
-    factory.register(DataType.TIMESTAMP, TimestampGeneratorMock())
-    factory.register(DataType.BOOLEAN, BooleanGeneratorMock())
+def provide_generator_factory() -> DataGeneratorFactory:
+    factory = DataGeneratorFactory()
+    factory.register(DataType.STRING, StringDataGenerator())
+    factory.register(DataType.INT, IntDataGenerator())
+    factory.register(DataType.FLOAT, FloatDataGenerator())
+    factory.register(DataType.DATE, DateDataGenerator())
+    factory.register(DataType.TIMESTAMP, TimestampDataGenerator())
+    factory.register(DataType.BOOLEAN, BooleanDataGenerator())
     return factory
 
 
@@ -50,10 +50,10 @@ def provide_value_converter():
     return factory.create()
 
 
-def provide_mock_service() -> MockDataService:
-    mock_factory = provide_mock_factory()
-    return MockDataService(
-        mock_factory=mock_factory,
+def provide_generation_service() -> DataGenerationService:
+    data_generator_factory = provide_generator_factory()
+    return DataGenerationService(
+        data_generator_factory=data_generator_factory,
         dependency_order_builder=NetworkXDependencyGraphBuilder(),
         value_converter=provide_value_converter(),
     )

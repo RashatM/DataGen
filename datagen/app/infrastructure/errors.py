@@ -10,8 +10,8 @@ class SourceValueConverterNotRegisteredError(InfrastructureConfigurationError):
     """Raised when no source value converter exists for a source data type."""
 
 
-class MockGeneratorNotRegisteredError(InfrastructureConfigurationError):
-    """Raised when no mock generator exists for a source data type."""
+class DataGeneratorNotRegisteredError(InfrastructureConfigurationError):
+    """Raised when no data generator exists for a data type."""
 
 
 class UnsupportedOutputDataTypeError(InfrastructureConfigurationError):
