@@ -63,8 +63,8 @@ def provide_s3_client(s3_config: S3Config) -> BaseClient:
     client = boto3.client(
         "s3",
         endpoint_url=s3_config.endpoint_url,
-        aws_access_key_id=,
-        aws_secret_access_key=,
+        aws_access_key_id=s3_config.aws_access_key_id,
+        aws_secret_access_key=s3_config.aws_secret_access_key,
         use_ssl=s3_config.use_ssl,
         verify=s3_config.ssl_cert
     )

@@ -11,6 +11,8 @@ DEFAULT_ENVIRONMENTS = ("dev", "test", "prod")
 class S3Config:
     bucket: str
     prefix: str
+    aws_access_key_id: str
+    aws_secret_access_key: str
     endpoint_url: str
     region_name: str
     use_ssl: bool
@@ -46,6 +48,8 @@ def parse_s3_configs(config_data: Dict[str, Any]) -> List[S3Config]:
                 region_name=config.get("region_name", ""),
                 use_ssl=config.get("use_ssl", True),
                 ssl_cert=config.get("ssl_cert", ""),
+                aws_access_key_id=config.get("aws_access_key_id", ""), #TODO заменить на os.env
+                aws_secret_access_key=config.get("aws_secret_access_key", ""), #TODO заменить на os.env
             )
         )
     return s3_configs
