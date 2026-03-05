@@ -8,18 +8,16 @@ from app.core.domain.entities import MockDataEntityResult
 
 class PublicationService:
     def __init__(
-        self,
-        repository: IPublicationRepository,
-        ddl_builders: Dict[str, IQueryBuilder],
+            self,
+            repository: IPublicationRepository,
+            ddl_builders: Dict[str, IQueryBuilder],
+            run_id: str
     ):
         self.repository = repository
         self.ddl_builders = ddl_builders
+        self.run_id = run_id
 
-    def publish(
-        self,
-        entity_result: MockDataEntityResult,
-        run_id: str,
-    ) -> TablePublication:
+    def publish(self, entity_result: MockDataEntityResult) -> TablePublication:
         entity = entity_result.entity
 
         ddl_queries: Dict[str, str] = {}
@@ -28,7 +26,7 @@ class PublicationService:
 
         return self.repository.publish(
             entity_result=entity_result,
-            run_id=run_id,
+            run_id=self.run_id,
             ddl_queries=ddl_queries,
         )
 
@@ -37,15 +35,15 @@ class PublicationService:
         schema_name: str,
         table_name: str,
     ) -> Optional[Dict[str, Any]]:
-        run_id = self.repository.get_latest_run_id(
+        latest_success_run_id = self.repository.get_latest_run_id(
             schema_name=schema_name,
             table_name=table_name,
         )
-        if not run_id:
+        if not latest_success_run_id:
             return None
 
         return self.repository.read_entity_data(
             schema_name=schema_name,
             table_name=table_name,
-            run_id=run_id,
+            run_id=latest_success_run_id,
         )

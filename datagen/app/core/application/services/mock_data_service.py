@@ -60,6 +60,11 @@ class MockDataService:
                     )
 
             generated_entity_data[entity.full_table_name] = generated_column_data
-            mock_results.append(MockDataEntityResult(entity=entity, generated_data=generated_column_data))
+            mock_results.append(
+                MockDataEntityResult(
+                    entity=entity,
+                    generated_data=generated_column_data
+                )
+            )
 
         return mock_results

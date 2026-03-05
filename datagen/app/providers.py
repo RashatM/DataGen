@@ -25,18 +25,18 @@ from app.infrastructure.graph.networkx_dependency_graph_builder import NetworkXD
 from app.infrastructure.ports.object_storage_port import IObjectStorage
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.storage.s3_object_storage import S3StorageAdapter
-from app.shared.settings import S3TargetSettings
+from app.shared.config import S3Config
 
 
 def provide_mock_factory() -> MockFactory:
-    f = MockFactory()
-    f.register(DataType.STRING, StringGeneratorMock())
-    f.register(DataType.INT, IntGeneratorMock())
-    f.register(DataType.FLOAT, FloatGeneratorMock())
-    f.register(DataType.DATE, DateGeneratorMock())
-    f.register(DataType.TIMESTAMP, TimestampGeneratorMock())
-    f.register(DataType.BOOLEAN, BooleanGeneratorMock())
-    return f
+    factory = MockFactory()
+    factory.register(DataType.STRING, StringGeneratorMock())
+    factory.register(DataType.INT, IntGeneratorMock())
+    factory.register(DataType.FLOAT, FloatGeneratorMock())
+    factory.register(DataType.DATE, DateGeneratorMock())
+    factory.register(DataType.TIMESTAMP, TimestampGeneratorMock())
+    factory.register(DataType.BOOLEAN, BooleanGeneratorMock())
+    return factory
 
 
 def provide_value_converter():
@@ -50,7 +50,8 @@ def provide_value_converter():
     return factory.create()
 
 
-def provide_mock_service(mock_factory: MockFactory) -> MockDataService:
+def provide_mock_service() -> MockDataService:
+    mock_factory = provide_mock_factory()
     return MockDataService(
         mock_factory=mock_factory,
         dependency_order_builder=NetworkXDependencyGraphBuilder(),
@@ -58,35 +59,37 @@ def provide_mock_service(mock_factory: MockFactory) -> MockDataService:
     )
 
 
-def provide_s3_client(s3_target: S3TargetSettings) -> BaseClient:
-    kwargs = {"verify": s3_target.verify_ssl}
-    if s3_target.endpoint_url:
-        kwargs["endpoint_url"] = s3_target.endpoint_url
-    if s3_target.region_name:
-        kwargs["region_name"] = s3_target.region_name
-    return boto3.client("s3", **kwargs)
+def provide_s3_client(s3_config: S3Config) -> BaseClient:
+    client = boto3.client(
+        "s3",
+        endpoint_url=s3_config.endpoint_url,
+        aws_access_key_id=,
+        aws_secret_access_key=,
+        use_ssl=s3_config.use_ssl,
+        verify=s3_config.ssl_cert
+    )
+    return client
 
 
 def provide_s3_object_storage(bucket: str, prefix: str, s3_client: BaseClient) -> IObjectStorage:
     return S3StorageAdapter(bucket=bucket, prefix=prefix, s3_client=s3_client)
 
 
-def provide_publication_repository(
-    object_storage: IObjectStorage,
-) -> IPublicationRepository:
+def provide_publication_repository(object_storage: IObjectStorage) -> IPublicationRepository:
     return S3PublicationRepository(object_storage)
 
 
-def provide_publication_service(s3_target: S3TargetSettings) -> PublicationService:
-    s3_client = provide_s3_client(s3_target)
+def provide_publication_service(run_id: str, s3_config: S3Config) -> PublicationService:
+    s3_client = provide_s3_client(s3_config)
     object_storage = provide_s3_object_storage(
-        bucket=s3_target.bucket,
-        prefix=s3_target.prefix,
+        bucket=s3_config.bucket,
+        prefix=s3_config.prefix,
         s3_client=s3_client,
     )
 
     publication_repository = provide_publication_repository(object_storage)
     return PublicationService(
+        run_id=run_id,
         repository=publication_repository,
         ddl_builders={
             "hive": HiveQueryBuilder(),

@@ -1,21 +1,19 @@
 s3:
-  enabled: true
-  targets:
-    dev:
-      bucket: "dev-bucket"
-      prefix: "dev"
-      endpoint_url: "https://s3.dev.example.com"
-      region_name: "us-east-1"
-      verify_ssl: true
-    test:
-      bucket: "test-bucket"
-      prefix: "test"
-      endpoint_url: "https://s3.test.example.com"
-      region_name: "us-east-1"
-      verify_ssl: true
-    prod:
-      bucket: "prod-bucket"
-      prefix: "prod"
-      endpoint_url: "https://s3.prod.example.com"
-      region_name: "us-east-1"
-      verify_ssl: true
+  dev:
+    bucket: "dev-bucket"
+    prefix: "dev"
+    endpoint_url: "https://s3.dev.example.com"
+    region_name: "us-east-1"
+    ssl_cert: true
+  test:
+    bucket: "test-bucket"
+    prefix: "test"
+    endpoint_url: "https://s3.test.example.com"
+    region_name: "us-east-1"
+    ssl_cert: true
+  prod:
+    bucket: "prod-bucket"
+    prefix: "prod"
+    endpoint_url: "https://s3.prod.example.com"
+    region_name: "us-east-1"
+    ssl_cert: true
