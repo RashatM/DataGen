@@ -34,3 +34,8 @@ class IObjectStorage(ABC):
     def get_bytes(self, key: str) -> bytes:
         """Читает бинарные данные по ключу."""
         pass
+
+    @abstractmethod
+    def delete_prefix(self, prefix: str) -> int:
+        """Удаляет все объекты по префиксу, возвращает количество удаленных объектов."""
+        pass

@@ -1,11 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
-import os
+from typing import Any, Dict
 import yaml
-
-DEFAULT_ENVIRONMENTS = ("dev", "test", "prod")
-
 
 @dataclass(slots=True)
 class S3Config:
@@ -21,7 +17,7 @@ class S3Config:
 
 @dataclass(slots=True)
 class AppConfig:
-    s3: List[S3Config]
+    s3: Dict[str, S3Config]
 
 
 class ConfigurationError(ValueError):
@@ -35,22 +31,20 @@ def load_yaml_config(config_path: Path) -> Dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
-def parse_s3_configs(config_data: Dict[str, Any]) -> List[S3Config]:
-    s3_configs_by_env = config_data.get("endpoints", {})
-    s3_configs: List[S3Config] = []
+def parse_s3_configs(config_data: Dict[str, Any]) -> Dict[str, S3Config]:
+    s3_configs_by_env = config_data.get("s3", {})
+    s3_configs: Dict[str, S3Config] = {}
 
-    for env, config in s3_configs_by_env.keys():
-        s3_configs.append(
-            S3Config(
-                bucket=config.get("bucket", ""),
-                prefix=config.get("prefix", "").strip("/"),
-                endpoint_url=config.get("endpoint_url", ""),
-                region_name=config.get("region_name", ""),
-                use_ssl=config.get("use_ssl", True),
-                ssl_cert=config.get("ssl_cert", ""),
-                aws_access_key_id=config.get("aws_access_key_id", ""), #TODO заменить на os.env
-                aws_secret_access_key=config.get("aws_secret_access_key", ""), #TODO заменить на os.env
-            )
+    for env, config in s3_configs_by_env.items():
+        s3_configs[env] = S3Config(
+            bucket=config.get("bucket", ""),
+            prefix=config.get("prefix", "").strip("/"),
+            endpoint_url=config.get("endpoint_url", ""),
+            region_name=config.get("region_name", ""),
+            use_ssl=config.get("use_ssl", True),
+            ssl_cert=config.get("ssl_cert", ""),
+            aws_access_key_id=config.get("aws_access_key_id", ""),  # TODO заменить на os.env
+            aws_secret_access_key=config.get("aws_secret_access_key", ""),  # TODO заменить на os.env
         )
     return s3_configs
 

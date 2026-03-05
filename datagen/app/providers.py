@@ -89,10 +89,10 @@ def provide_publication_service(run_id: str, s3_config: S3Config) -> Publication
 
     publication_repository = provide_publication_repository(object_storage)
     return PublicationService(
-        run_id=run_id,
         repository=publication_repository,
         ddl_builders={
             "hive": HiveQueryBuilder(),
             "iceberg": IcebergQueryBuilder(),
         },
+        run_id=run_id,
     )

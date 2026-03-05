@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Any
 
 from dateutil.parser import parse
 
@@ -15,7 +15,7 @@ from app.core.domain.conversion_rules import ensure_conversion_supported
 from app.core.domain.entities import (
     MockDataColumn,
     MockDataEntity,
-    MockDataForeignKey
+    MockDataForeignKey, MockDataRun
 )
 from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
 from app.infrastructure.errors import SchemaValidationError
@@ -246,3 +246,7 @@ def convert_to_mock_data_entity(entity_data: Dict) -> MockDataEntity:
         columns=entity_columns,
         total_rows=total_rows,
     )
+
+def convert_to_mock_data_run(run_id: str, raw_entities: List[Dict[str, Any]]) -> MockDataRun:
+    entities = [convert_to_mock_data_entity(e) for e in raw_entities]
+    return MockDataRun(run_id=run_id, entities=entities)

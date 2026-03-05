@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from app.core.application.dto import TablePublication
-from app.core.domain.entities import MockDataEntityResult
-from app.infrastructure.converters.schema_converter import convert_to_mock_data_entity
+from app.core.domain.entities import MockDataRun, MockDataRunResult
+from app.infrastructure.converters.schema_converter import convert_to_mock_data_entity, convert_to_mock_data_run
 from app.infrastructure.dag_payload_mapper import DagPayloadMapper
 from app.shared.logger import logger
 from app.shared.config import AppConfig, load_app_settings
@@ -16,34 +16,31 @@ def generate_run_id() -> str:
 
 
 def export_mock_artifacts_to_s3(
-    mock_results: List[MockDataEntityResult],
+    mock_data_run_result: MockDataRunResult,
     config: AppConfig,
 ) -> Dict[str, Dict[str, Any]]:
-    if not config.s3.enabled:
-        logger.info("S3 export disabled by configuration")
+    if not config.s3:
+        logger.info("S3 export skipped: no targets configured")
         return {}
 
     dag_payloads_by_env: Dict[str, Dict[str, Any]] = {}
-    run_id = generate_run_id()
+    run_id = mock_data_run_result.run_id
 
-    for s3_target in config.s3.targets:
+    for env_name, s3_target in config.s3.items():
         if not s3_target.bucket:
             logger.info(
                 "S3 bucket not configured for environment=%s, skipping",
-                s3_target.name,
+                env_name,
             )
             continue
 
-        publication_service = provide_publication_service(s3_target)
-        published_tables: List[TablePublication] = []
+        publication_service = provide_publication_service(run_id=run_id, s3_config=s3_target)
+        published_tables: List[TablePublication] = publication_service.publish_entities(
+            entity_results=mock_data_run_result.entity_results,
+        )
 
-        for mock_result in mock_results:
-            table_publication: TablePublication = publication_service.publish(
-                entity_result=mock_result
-            )
-            published_tables.append(table_publication)
-
-        dag_payloads_by_env[s3_target.name] = DagPayloadMapper.build_payload(
+        dag_payloads_by_env[env_name] = DagPayloadMapper.build_payload(
+            run_id=run_id,
             table_publications=published_tables,
         )
 
@@ -53,15 +50,19 @@ def export_mock_artifacts_to_s3(
 
 def run():
     config: AppConfig = load_app_settings()
+    run_id = generate_run_id()
 
     raw_entities = []
 
-    entities = [convert_to_mock_data_entity(e) for e in raw_entities]
+    mock_data_run = convert_to_mock_data_run(
+        run_id=run_id,
+        raw_entities=raw_entities
+    )
 
     mock_service = provide_mock_service()
-    mock_results = mock_service.generate_entity_values(entities)
+    mock_data_run_result = mock_service.generate_entity_values(mock_data_run)
 
-    uploaded_artifacts = export_mock_artifacts_to_s3(mock_results, config)
+    uploaded_artifacts = export_mock_artifacts_to_s3(mock_data_run_result, config)
     _ = uploaded_artifacts
 
 

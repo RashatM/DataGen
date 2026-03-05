@@ -54,7 +54,7 @@ class S3PublicationRepository(IPublicationRepository):
         table = pq.read_table(pa.BufferReader(payload))
         return table.to_pydict()
 
-    def publish(
+    def stage_artifacts(
         self,
         entity_result: MockDataEntityResult,
         run_id: str,
@@ -69,7 +69,7 @@ class S3PublicationRepository(IPublicationRepository):
         ddl_uris: Dict[str, str] = {}
         for engine_name, ddl_query in ddl_queries.items():
             ddl_key = self.build_ddl_key(
-                schema_name= entity.schema_name,
+                schema_name=entity.schema_name,
                 table_name=entity.table_name,
                 run_id=run_id,
                 engine_name=engine_name,
@@ -79,9 +79,6 @@ class S3PublicationRepository(IPublicationRepository):
                 content=f"{ddl_query.strip()}\n",
             )
 
-        pointer_key = self.build_pointer_key(entity.schema_name, entity.table_name)
-        pointer_uri = self.object_storage.build_uri(pointer_key)
-
         publication = TablePublication(
             storage_type=StorageType.S3.value,
             schema_name=entity.schema_name,
@@ -90,10 +87,18 @@ class S3PublicationRepository(IPublicationRepository):
             storage={
                 "data_uri": data_uri,
                 "ddl_uris": ddl_uris,
-                "pointer_uri": pointer_uri,
             },
         )
 
+        return publication
+
+    def commit_pointer(
+        self,
+        schema_name: str,
+        table_name: str,
+        run_id: str,
+    ) -> None:
+        pointer_key = self.build_pointer_key(schema_name, table_name)
         self.object_storage.put_json(
             key=pointer_key,
             payload={
@@ -101,8 +106,6 @@ class S3PublicationRepository(IPublicationRepository):
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
-
-        return publication
 
     def get_latest_run_id(
         self,
@@ -129,3 +132,12 @@ class S3PublicationRepository(IPublicationRepository):
         key = self.build_data_key(schema_name, table_name, run_id)
         payload = self.object_storage.get_bytes(key=key)
         return self.deserialize_parquet(payload)
+
+    def cleanup_run_artifacts(
+        self,
+        schema_name: str,
+        table_name: str,
+        run_id: str,
+    ) -> None:
+        run_prefix = self.base_prefix(schema_name, table_name, run_id)
+        self.object_storage.delete_prefix(run_prefix)

@@ -7,12 +7,21 @@ from app.core.domain.entities import MockDataEntityResult
 
 class IPublicationRepository(ABC):
     @abstractmethod
-    def publish(
+    def stage_artifacts(
         self,
         entity_result: MockDataEntityResult,
         run_id: str,
         ddl_queries: Dict[str, str],
     ) -> TablePublication:
+        pass
+
+    @abstractmethod
+    def commit_pointer(
+        self,
+        schema_name: str,
+        table_name: str,
+        run_id: str,
+    ) -> None:
         pass
 
     @abstractmethod
@@ -30,4 +39,13 @@ class IPublicationRepository(ABC):
         table_name: str,
         run_id: str,
     ) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def cleanup_run_artifacts(
+        self,
+        schema_name: str,
+        table_name: str,
+        run_id: str,
+    ) -> None:
         pass

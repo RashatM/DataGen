@@ -4,7 +4,7 @@ from typing import Any, List
 from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
 from app.core.application.ports.mock_factory_port import IMockFactory
 from app.core.application.ports.value_converter_port import IValueConverter
-from app.core.domain.entities import MockDataColumn, MockDataEntity, MockDataEntityResult
+from app.core.domain.entities import MockDataColumn, MockDataEntityResult, MockDataRun, MockDataRunResult
 from app.core.domain.enums import RelationType
 from app.shared.utils import shuffle_values_with_nulls
 
@@ -35,8 +35,8 @@ class MockDataService:
 
         return values
 
-    def generate_entity_values(self, entities: List[MockDataEntity]) -> List[MockDataEntityResult]:
-        entity_order_list = self.dependency_order_builder.build_graph(entities)
+    def generate_entity_values(self, mock_data_run: MockDataRun) -> MockDataRunResult:
+        entity_order_list = self.dependency_order_builder.build_graph(mock_data_run.entities)
 
         generated_entity_data = {}
         mock_results = []
@@ -67,4 +67,7 @@ class MockDataService:
                 )
             )
 
-        return mock_results
+        return MockDataRunResult(
+            run_id=mock_data_run.run_id,
+            entity_results=mock_results,
+        )

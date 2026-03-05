@@ -59,3 +59,40 @@ class MockDataEntity:
 class MockDataEntityResult:
     entity: MockDataEntity
     generated_data: Dict[str, List[Any]]
+
+
+class DuplicateEntityInRunError(ValueError):
+    pass
+
+
+@dataclass
+class MockDataRun:
+    run_id: str
+    entities: List[MockDataEntity]
+
+    def __post_init__(self) -> None:
+        if not self.run_id.strip():
+            raise ValueError("run_id must not be empty")
+
+        seen = set()
+        duplicates = set()
+
+        for entity in self.entities:
+            full_table_name = entity.full_table_name
+            if full_table_name in seen:
+                duplicates.add(full_table_name)
+            else:
+                seen.add(full_table_name)
+
+        if duplicates:
+            ordered_duplicates = sorted(duplicates)
+            duplicate_text = ", ".join(ordered_duplicates)
+            raise DuplicateEntityInRunError(
+                f"Duplicate entities are not allowed in MockDataRun: {duplicate_text}"
+            )
+
+
+@dataclass
+class MockDataRunResult:
+    run_id: str
+    entity_results: List[MockDataEntityResult]

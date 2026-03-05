@@ -84,3 +84,35 @@ class S3StorageAdapter(IObjectStorage):
                 f"Object payload must be a JSON object for key={key}"
             )
         return loaded
+
+    def delete_prefix(self, prefix: str) -> int:
+        full_prefix = self.build_key(prefix)
+        paginator = self.s3_client.get_paginator("list_objects_v2")
+        deleted_total = 0
+
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=full_prefix):
+            contents = page.get("Contents", [])
+            if not contents:
+                continue
+
+            objects = [{"Key": item["Key"]} for item in contents if "Key" in item]
+            if not objects:
+                continue
+
+            for offset in range(0, len(objects), 1000):
+                chunk = objects[offset: offset + 1000]
+                response = self.s3_client.delete_objects(
+                    Bucket=self.bucket,
+                    Delete={"Objects": chunk, "Quiet": True},
+                )
+
+                errors = response.get("Errors", [])
+                if errors:
+                    first_error = errors[0]
+                    key = first_error.get("Key", "")
+                    message = first_error.get("Message", "")
+                    raise RuntimeError(f"Failed to delete object key={key}: {message}")
+
+                deleted_total += len(response.get("Deleted", []))
+
+        return deleted_total
