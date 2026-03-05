@@ -44,16 +44,8 @@ def export_mock_artifacts_to_s3(
             )
             continue
 
-        s3_client = provide_s3_client(s3_target)
-        object_storage = provide_s3_object_storage(
-            bucket=s3_target.bucket,
-            prefix=s3_target.prefix,
-            s3_client=s3_client,
-        )
 
-        publication_repository = provide_publication_repository(object_storage)
-        publication_service = provide_publication_service(publication_repository)
-
+        publication_service = provide_publication_service(s3_target)
         published_tables: List[TablePublication] = []
 
         for mock_result in mock_results:

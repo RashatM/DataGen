@@ -5,5 +5,5 @@ from app.core.domain.entities import MockDataEntity
 
 class IQueryBuilder(ABC):
     @abstractmethod
-    def create_ddl(self, entity: MockDataEntity) -> str:
+    def generate_ddl(self, entity: MockDataEntity) -> str:
         pass

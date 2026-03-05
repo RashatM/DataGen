@@ -15,7 +15,7 @@ class HiveQueryBuilder(BaseSqlQueryBuilder):
         DataType.FLOAT: "double",
     }
 
-    def create_ddl(self, entity: MockDataEntity) -> str:
+    def generate_ddl(self, entity: MockDataEntity) -> str:
         columns_definition = self.build_columns_definition(entity.columns)
         return (
             f"CREATE TABLE IF NOT EXISTS {entity.full_table_name} (\n"

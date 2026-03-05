@@ -1,9 +1,7 @@
 from typing import Any, Dict, Optional
 
 from app.core.application.dto import TablePublication
-from app.core.application.ports.publication_repository_port import (
-    IPublicationRepository,
-)
+from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.application.ports.query_builder_port import IQueryBuilder
 from app.core.domain.entities import MockDataEntityResult
 
@@ -24,14 +22,14 @@ class PublicationService:
     ) -> TablePublication:
         entity = entity_result.entity
 
-        ddl_map: Dict[str, str] = {}
-        for target, builder in self.ddl_builders.items():
-            ddl_map[target] = builder.create_ddl(entity)
+        ddl_queries: Dict[str, str] = {}
+        for table_format, builder in self.ddl_builders.items():
+            ddl_queries[table_format] = builder.generate_ddl(entity)
 
         return self.repository.publish(
             entity_result=entity_result,
             run_id=run_id,
-            ddl_map=ddl_map,
+            ddl_queries=ddl_queries,
         )
 
     def read_latest_entity_data(

@@ -11,7 +11,7 @@ class IPublicationRepository(ABC):
         self,
         entity_result: MockDataEntityResult,
         run_id: str,
-        ddl_map: Dict[str, str],
+        ddl_queries: Dict[str, str],
     ) -> TablePublication:
         pass
 

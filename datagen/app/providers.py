@@ -77,11 +77,17 @@ def provide_publication_repository(
     return S3PublicationRepository(object_storage)
 
 
-def provide_publication_service(
-    repository: IPublicationRepository,
-) -> PublicationService:
+def provide_publication_service(s3_target: S3TargetSettings) -> PublicationService:
+    s3_client = provide_s3_client(s3_target)
+    object_storage = provide_s3_object_storage(
+        bucket=s3_target.bucket,
+        prefix=s3_target.prefix,
+        s3_client=s3_client,
+    )
+
+    publication_repository = provide_publication_repository(object_storage)
     return PublicationService(
-        repository=repository,
+        repository=publication_repository,
         ddl_builders={
             "hive": HiveQueryBuilder(),
             "iceberg": IcebergQueryBuilder(),

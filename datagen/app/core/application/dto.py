@@ -2,9 +2,8 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class TablePublication:
-    contract_version: str
     storage_type: str
     schema_name: str
     table_name: str

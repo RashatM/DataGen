@@ -20,7 +20,7 @@ class IcebergQueryBuilder(BaseSqlQueryBuilder):
         self.write_meta_num = write_meta_num
 
 
-    def create_ddl(self, entity: MockDataEntity) -> str:
+    def generate_ddl(self, entity: MockDataEntity) -> str:
         columns_definition = self.build_columns_definition(entity.columns)
         write_meta_num = len(entity.columns)
         return (
