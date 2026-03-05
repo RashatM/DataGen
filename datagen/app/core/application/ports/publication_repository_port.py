@@ -2,14 +2,14 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 from app.core.application.dto import TablePublication
-from app.core.domain.entities import MockDataEntityResult
+from app.core.domain.entities import GeneratedTableData
 
 
 class IPublicationRepository(ABC):
     @abstractmethod
     def stage_artifacts(
         self,
-        entity_result: MockDataEntityResult,
+        table_data: GeneratedTableData,
         run_id: str,
         ddl_queries: Dict[str, str],
     ) -> TablePublication:
@@ -33,7 +33,7 @@ class IPublicationRepository(ABC):
         pass
 
     @abstractmethod
-    def read_entity_data(
+    def read_table_data(
         self,
         schema_name: str,
         table_name: str,

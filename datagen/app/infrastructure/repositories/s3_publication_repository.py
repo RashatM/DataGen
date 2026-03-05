@@ -5,7 +5,7 @@ import pyarrow.parquet as pq
 
 from app.core.application.dto import TablePublication
 from app.core.application.ports.publication_repository_port import IPublicationRepository
-from app.core.domain.entities import MockDataEntityResult
+from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.constants import StorageType
 from app.infrastructure.errors import ObjectNotFoundError, RunStateCorruptedError
 from app.infrastructure.ports.object_storage_port import IObjectStorage
@@ -56,21 +56,21 @@ class S3PublicationRepository(IPublicationRepository):
 
     def stage_artifacts(
         self,
-        entity_result: MockDataEntityResult,
+        table_data: GeneratedTableData,
         run_id: str,
         ddl_queries: Dict[str, str],
     ) -> TablePublication:
-        entity = entity_result.entity
+        table = table_data.table
 
-        data_key = self.build_data_key(entity.schema_name, entity.table_name, run_id)
-        parquet_bytes = self.serialize_parquet(entity_result.generated_data)
+        data_key = self.build_data_key(table.schema_name, table.table_name, run_id)
+        parquet_bytes = self.serialize_parquet(table_data.generated_data)
         data_uri = self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
         ddl_uris: Dict[str, str] = {}
         for engine_name, ddl_query in ddl_queries.items():
             ddl_key = self.build_ddl_key(
-                schema_name=entity.schema_name,
-                table_name=entity.table_name,
+                schema_name=table.schema_name,
+                table_name=table.table_name,
                 run_id=run_id,
                 engine_name=engine_name,
             )
@@ -81,8 +81,8 @@ class S3PublicationRepository(IPublicationRepository):
 
         publication = TablePublication(
             storage_type=StorageType.S3.value,
-            schema_name=entity.schema_name,
-            table_name=entity.table_name,
+            schema_name=table.schema_name,
+            table_name=table.table_name,
             run_id=run_id,
             storage={
                 "data_uri": data_uri,
@@ -123,7 +123,7 @@ class S3PublicationRepository(IPublicationRepository):
             raise RunStateCorruptedError(f"latest_generated pointer is corrupted for key={pointer_key}: invalid run_id")
         return run_id
 
-    def read_entity_data(
+    def read_table_data(
         self,
         schema_name: str,
         table_name: str,

@@ -1,6 +1,6 @@
 from typing import Dict
 
-from app.core.domain.entities import MockDataEntity
+from app.core.domain.entities import TableSpec
 from app.core.domain.enums import DataType
 from app.infrastructure.ddl.base_sql_query_builder import BaseSqlQueryBuilder
 
@@ -20,11 +20,11 @@ class IcebergQueryBuilder(BaseSqlQueryBuilder):
         self.write_meta_num = write_meta_num
 
 
-    def generate_ddl(self, entity: MockDataEntity) -> str:
-        columns_definition = self.build_columns_definition(entity.columns)
-        write_meta_num = len(entity.columns)
+    def generate_ddl(self, table: TableSpec) -> str:
+        columns_definition = self.build_columns_definition(table.columns)
+        write_meta_num = len(table.columns)
         return (
-            f"CREATE TABLE IF NOT EXISTS {entity.full_table_name} (\n"
+            f"CREATE TABLE IF NOT EXISTS {table.full_table_name} (\n"
             f"  {columns_definition}\n"
             f")\n"
             f"USING ICEBERG\n"

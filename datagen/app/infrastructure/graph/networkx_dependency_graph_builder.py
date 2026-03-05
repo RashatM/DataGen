@@ -2,67 +2,67 @@ from typing import Dict, List
 import networkx as nx
 
 from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
-from app.core.domain.entities import MockDataEntity
+from app.core.domain.entities import TableSpec
 from app.core.domain.validation_errors import InvalidForeignKeyError
 
 
 class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
     @staticmethod
-    def can_skip_graph_build(entities: List[MockDataEntity]) -> bool:
-        return len(entities) == 1 and all(column.foreign_key is None for column in entities[0].columns)
+    def can_skip_graph_build(tables: List[TableSpec]) -> bool:
+        return len(tables) == 1 and all(column.foreign_key is None for column in tables[0].columns)
 
     @staticmethod
     def collect_invalid_references(
-        entities: List[MockDataEntity],
-        entity_dict: Dict[str, MockDataEntity],
-        entity_columns_map: Dict[str, set[str]],
+        tables: List[TableSpec],
+        table_by_name: Dict[str, TableSpec],
+        table_columns_map: Dict[str, set[str]],
         graph: nx.DiGraph,
     ) -> List[str]:
         invalid_references: List[str] = []
 
-        for entity in entities:
-            graph.add_node(entity)
-            for column in entity.columns:
+        for table in tables:
+            graph.add_node(table)
+            for column in table.columns:
                 fk_info = column.foreign_key
                 if not fk_info:
                     continue
 
                 ref_table_name = fk_info.full_table_name
-                source_column_name = f"{entity.full_table_name}.{column.name}"
+                source_column_name = f"{table.full_table_name}.{column.name}"
                 referenced_column_name = f"{ref_table_name}.{fk_info.column_name}"
-                ref_entity = entity_dict.get(ref_table_name)
+                ref_table = table_by_name.get(ref_table_name)
 
-                if not ref_entity:
+                if not ref_table:
                     invalid_references.append(
                         f"{source_column_name} -> {referenced_column_name} "
                         f"(missing table '{ref_table_name}')"
                     )
                     continue
 
-                if fk_info.column_name not in entity_columns_map[ref_table_name]:
+                if fk_info.column_name not in table_columns_map[ref_table_name]:
                     invalid_references.append(
                         f"{source_column_name} -> {referenced_column_name} "
                         f"(missing column '{fk_info.column_name}' in table '{ref_table_name}')"
                     )
                     continue
 
-                graph.add_edge(ref_entity, entity)
+                graph.add_edge(ref_table, table)
 
         return invalid_references
 
-    def build_graph(self, entities: List[MockDataEntity]) -> List[MockDataEntity]:
-        if self.can_skip_graph_build(entities):
-            return entities
+    def build_graph(self, tables: List[TableSpec]) -> List[TableSpec]:
+        if self.can_skip_graph_build(tables):
+            return tables
 
-        entity_dict: Dict[str, MockDataEntity] = {entity.full_table_name: entity for entity in entities}
-        entity_columns_map = {
-            entity.full_table_name: {column.name for column in entity.columns} for entity in entities
+        table_by_name: Dict[str, TableSpec] = {table.full_table_name: table for table in tables}
+        table_columns_map = {
+            table.full_table_name: {column.name for column in table.columns} for table in tables
         }
         graph = nx.DiGraph()
         invalid_references = self.collect_invalid_references(
-            entities=entities,
-            entity_dict=entity_dict,
-            entity_columns_map=entity_columns_map,
+            tables=tables,
+            table_by_name=table_by_name,
+            table_columns_map=table_columns_map,
             graph=graph,
         )
 

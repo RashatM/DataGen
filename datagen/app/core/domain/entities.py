@@ -6,7 +6,7 @@ from app.core.domain.typevars import TConstraints
 
 
 @dataclass
-class MockDataForeignKey:
+class TableForeignKeySpec:
     schema_name: str
     table_name: str
     column_name: str
@@ -20,12 +20,12 @@ class MockDataForeignKey:
 
 
 @dataclass
-class MockDataColumn(Generic[TConstraints]):
+class TableColumnSpec(Generic[TConstraints]):
     name: str
     gen_data_type: DataType
     is_primary_key: bool
     constraints: TConstraints
-    foreign_key: Optional[MockDataForeignKey]
+    foreign_key: Optional[TableForeignKeySpec]
     output_data_type: Optional[DataType] = None
 
     @property
@@ -38,10 +38,10 @@ class MockDataColumn(Generic[TConstraints]):
 
 
 @dataclass
-class MockDataEntity:
+class TableSpec:
     schema_name: str
     table_name: str
-    columns: List[MockDataColumn]
+    columns: List[TableColumnSpec]
     total_rows: int
     full_table_name: str = field(init=False)
 
@@ -49,26 +49,26 @@ class MockDataEntity:
         return hash(self.full_table_name)
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, MockDataEntity) and self.full_table_name == other.full_table_name
+        return isinstance(other, TableSpec) and self.full_table_name == other.full_table_name
 
     def __post_init__(self) -> None:
         self.full_table_name = f"{self.schema_name}.{self.table_name}"
 
 
 @dataclass
-class MockDataEntityResult:
-    entity: MockDataEntity
+class GeneratedTableData:
+    table: TableSpec
     generated_data: Dict[str, List[Any]]
 
 
-class DuplicateEntityInRunError(ValueError):
+class DuplicateTableSpecInRunError(ValueError):
     pass
 
 
 @dataclass
-class MockDataRun:
+class GenerationRun:
     run_id: str
-    entities: List[MockDataEntity]
+    tables: List[TableSpec]
 
     def __post_init__(self) -> None:
         if not self.run_id.strip():
@@ -77,8 +77,8 @@ class MockDataRun:
         seen = set()
         duplicates = set()
 
-        for entity in self.entities:
-            full_table_name = entity.full_table_name
+        for table in self.tables:
+            full_table_name = table.full_table_name
             if full_table_name in seen:
                 duplicates.add(full_table_name)
             else:
@@ -87,12 +87,6 @@ class MockDataRun:
         if duplicates:
             ordered_duplicates = sorted(duplicates)
             duplicate_text = ", ".join(ordered_duplicates)
-            raise DuplicateEntityInRunError(
-                f"Duplicate entities are not allowed in MockDataRun: {duplicate_text}"
+            raise DuplicateTableSpecInRunError(
+                f"Duplicate table specs are not allowed in GenerationRun: {duplicate_text}"
             )
-
-
-@dataclass
-class MockDataRunResult:
-    run_id: str
-    entity_results: List[MockDataEntityResult]
