@@ -1,10 +1,14 @@
 import boto3
 from botocore.client import BaseClient
 
+from app.core.application.ports.dag_runner_port import DagRunnerPort
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.application.services.publication_service import PublicationService
 from app.core.application.services.generation_service import DataGenerationService
+from app.core.application.use_cases.data_pipeline_use_case import DataPipelineUseCase
 from app.core.domain.enums import DataType
+from app.infrastructure.airflow.airflow_client import AirflowClient
+from app.infrastructure.airflow.airflow_dag_runner import AirflowDagRunner
 from app.infrastructure.converters.source_value_converters.boolean_source_value_converter import BooleanSourceValueConverter
 from app.infrastructure.converters.source_value_converters.date_source_value_converter import DateSourceValueConverter
 from app.infrastructure.converters.source_value_converters.float_source_value_converter import FloatSourceValueConverter
@@ -26,7 +30,7 @@ from app.core.application.ports.object_storage_port import IObjectStorage
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
-from app.shared.config import S3Config
+from app.shared.config import S3Config, AirflowConfig, AppConfig
 
 
 def provide_generator_factory() -> DataGeneratorFactory:
@@ -81,14 +85,13 @@ def provide_publication_repository(object_storage: IObjectStorage) -> IPublicati
     return S3PublicationRepository(object_storage=object_storage, schema_builder=schema_builder)
 
 
-def provide_publication_service(run_id: str, s3_config: S3Config) -> PublicationService:
+def provide_publication_service(s3_config: S3Config) -> PublicationService:
     s3_client = provide_s3_client(s3_config)
     object_storage = provide_s3_object_storage(
         bucket=s3_config.bucket,
         prefix=s3_config.prefix,
         s3_client=s3_client,
     )
-
     publication_repository = provide_publication_repository(object_storage)
     return PublicationService(
         repository=publication_repository,
@@ -96,5 +99,19 @@ def provide_publication_service(run_id: str, s3_config: S3Config) -> Publication
             "hive": HiveQueryBuilder(),
             "iceberg": IcebergQueryBuilder(),
         },
-        run_id=run_id,
+    )
+
+
+def provide_dag_runner(airflow_config: AirflowConfig) -> DagRunnerPort:
+    return AirflowDagRunner(client=AirflowClient(airflow_config))
+
+
+def provide_pipeline_use_case(env_name: str, config: AppConfig) -> DataPipelineUseCase:
+    s3_config = config.s3[env_name]
+    airflow_config = config.airflow[env_name]
+
+    return DataPipelineUseCase(
+        generation_service=provide_generation_service(),
+        publication_service=provide_publication_service(s3_config=s3_config),
+        dag_runner=provide_dag_runner(airflow_config),
     )

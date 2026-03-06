@@ -10,12 +10,10 @@ class PublicationService:
     def __init__(
         self,
         repository: IPublicationRepository,
-        ddl_builders: Dict[str, IQueryBuilder],
-        run_id: str,
+        ddl_builders: Dict[str, IQueryBuilder]
     ):
         self.repository = repository
         self.ddl_builders = ddl_builders
-        self.run_id = run_id
 
     def build_ddl_queries(self, table_data: GeneratedTableData) -> Dict[str, str]:
         return {
@@ -31,14 +29,18 @@ class PublicationService:
                 run_id=self.run_id,
             )
 
-    def publish_tables(self, generated_tables: List[GeneratedTableData]) -> List[TablePublication]:
+    def publish_tables(
+            self,
+            run_id: str,
+            generated_tables: List[GeneratedTableData],
+    ) -> List[TablePublication]:
         staged_publications = []
 
         try:
             for table_data in generated_tables:
                 table_publication = self.repository.stage_artifacts(
                     table_data=table_data,
-                    run_id=self.run_id,
+                    run_id=run_id,
                     ddl_queries=self.build_ddl_queries(table_data),
                 )
                 staged_publications.append(table_publication)
