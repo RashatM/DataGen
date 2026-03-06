@@ -28,10 +28,6 @@ class TableColumnSpec(Generic[TConstraints]):
     foreign_key: Optional[TableForeignKeySpec]
     output_data_type: Optional[DataType] = None
 
-    @property
-    def data_type(self) -> DataType:
-        return self.gen_data_type
-
     def __post_init__(self):
         if not self.output_data_type:
             self.output_data_type = self.gen_data_type

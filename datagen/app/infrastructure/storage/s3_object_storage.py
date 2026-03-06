@@ -6,7 +6,7 @@ from botocore.client import BaseClient
 
 
 from app.infrastructure.errors import ObjectNotFoundError, ObjectPayloadFormatError
-from app.infrastructure.ports.object_storage_port import IObjectStorage
+from app.core.application.ports.object_storage_port import IObjectStorage
 
 
 class S3StorageAdapter(IObjectStorage):

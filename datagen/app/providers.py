@@ -22,7 +22,8 @@ from app.infrastructure.generators.generator_factory import DataGeneratorFactory
 from app.infrastructure.generators.string_generator import StringDataGenerator
 from app.infrastructure.generators.timestamp_generator import TimestampDataGenerator
 from app.infrastructure.graph.networkx_dependency_graph_builder import NetworkXDependencyGraphBuilder
-from app.infrastructure.ports.object_storage_port import IObjectStorage
+from app.core.application.ports.object_storage_port import IObjectStorage
+from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.storage.s3_object_storage import S3StorageAdapter
 from app.shared.config import S3Config
@@ -76,7 +77,8 @@ def provide_s3_object_storage(bucket: str, prefix: str, s3_client: BaseClient) -
 
 
 def provide_publication_repository(object_storage: IObjectStorage) -> IPublicationRepository:
-    return S3PublicationRepository(object_storage)
+    schema_builder = ArrowSchemaBuilder()
+    return S3PublicationRepository(object_storage=object_storage, schema_builder=schema_builder)
 
 
 def provide_publication_service(run_id: str, s3_config: S3Config) -> PublicationService:

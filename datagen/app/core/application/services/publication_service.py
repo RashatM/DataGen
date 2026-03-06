@@ -23,26 +23,27 @@ class PublicationService:
             for table_format, builder in self.ddl_builders.items()
         }
 
-    def cleanup_run_artifacts(self, generated_tables: List[GeneratedTableData]) -> None:
-        for table_data in generated_tables:
-            table = table_data.table
+    def cleanup_run_artifacts(self, table_publications: List[TablePublication]) -> None:
+        for publication in table_publications:
             self.repository.cleanup_run_artifacts(
-                schema_name=table.schema_name,
-                table_name=table.table_name,
+                schema_name=publication.schema_name,
+                table_name=publication.table_name,
                 run_id=self.run_id,
             )
 
     def publish_tables(self, generated_tables: List[GeneratedTableData]) -> List[TablePublication]:
+        staged_publications = []
+
         try:
-            staged_publications = [
-                self.repository.stage_artifacts(
+            for table_data in generated_tables:
+                table_publication = self.repository.stage_artifacts(
                     table_data=table_data,
                     run_id=self.run_id,
                     ddl_queries=self.build_ddl_queries(table_data),
-                ) for table_data in generated_tables
-            ]
+                )
+                staged_publications.append(table_publication)
         except Exception:
-            self.cleanup_run_artifacts(generated_tables=generated_tables)
+            self.cleanup_run_artifacts(table_publications=staged_publications)
             raise
 
         for publication in staged_publications:
