@@ -25,6 +25,7 @@ LEGACY_MAPPING = {
     "TIMESTAMP_STRING": DataType.TIMESTAMP,
 }
 
+
 def resolve_data_types(column_data: Dict, constraints_data: Dict) -> Tuple[DataType, DataType]:
     generator_raw = column_data.get("gen_data_type")
     output_raw = column_data.get("output_data_type")
@@ -246,6 +247,7 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
         columns=table_columns,
         total_rows=total_rows,
     )
+
 
 def convert_to_generation_run(run_id: str, raw_tables: List[Dict[str, Any]]) -> GenerationRun:
     tables = [convert_to_table_spec(table_data) for table_data in raw_tables]

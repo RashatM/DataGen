@@ -1,19 +1,36 @@
 s3:
-  dev:
-    bucket: "dev-bucket"
-    prefix: "dev"
-    endpoint_url: "https://s3.dev.example.com"
+  defaults:
     region_name: "us-east-1"
-    ssl_cert: true
-  test:
-    bucket: "test-bucket"
-    prefix: "test"
-    endpoint_url: "https://s3.test.example.com"
-    region_name: "us-east-1"
-    ssl_cert: true
-  prod:
-    bucket: "prod-bucket"
-    prefix: "prod"
-    endpoint_url: "https://s3.prod.example.com"
-    region_name: "us-east-1"
-    ssl_cert: true
+    use_ssl: true
+    ssl_cert: ""
+  envs:
+    dev:
+      bucket: "dev-bucket"
+      prefix: "dev"
+      endpoint_url: "https://s3.dev.example.com"
+    test:
+      bucket: "test-bucket"
+      prefix: "test"
+      endpoint_url: "https://s3.test.example.com"
+    prod:
+      bucket: "prod-bucket"
+      prefix: "prod"
+      endpoint_url: "https://s3.prod.example.com"
+      region_name: "eu-west-1"  # пример переопределения дефолта
+
+airflow:
+  defaults:
+    dag_id: "datagen_pipeline"
+    dag_run_id_prefix: "datagen"
+    poll_interval_seconds: 10
+    max_retries: 3
+    retry_backoff_base: 2
+  envs:
+    dev:
+      base_url: "https://airflow.dev.example.com"
+      poll_interval_seconds: 30
+    test:
+      base_url: "https://airflow.test.example.com"
+    prod:
+      base_url: "https://airflow.prod.example.com"
+      max_retries: 5

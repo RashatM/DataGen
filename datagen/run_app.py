@@ -1,69 +1,63 @@
-import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from app.core.application.dto import TablePublication
-from app.core.domain.entities import GeneratedTableData
-from app.infrastructure.converters.schema_converter import convert_to_generation_run
-from app.infrastructure.dag_payload_mapper import DagPayloadMapper
-from app.shared.logger import logger
-from app.shared.config import AppConfig, load_app_settings
+
+from app.core.application.ports.dag_runner_port import DagRunnerPort
+from app.core.application.use_cases.data_pipeline_use_case import DataPipelineUseCase
+from app.infrastructure.airflow.airflow_client import AirflowClient
+from app.infrastructure.airflow.airflow_dag_runner import AirflowDagRunner
 from app.providers import provide_generation_service, provide_publication_service
+from app.shared.config import AppConfig, AirflowConfig, load_app_settings
+from app.shared.logger import logger
 
 
-def generate_run_id() -> str:
-    return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid7()}"
+def build_dag_runner(airflow_config: AirflowConfig) -> DagRunnerPort:
+    return AirflowDagRunner(client=AirflowClient(airflow_config))
 
 
-def publish_run_artifacts(
-    run_id: str,
-    generated_tables: List[GeneratedTableData],
-    config: AppConfig,
-) -> Dict[str, Dict[str, Any]]:
-    if not config.s3:
-        logger.info("S3 export skipped: no targets configured")
-        return {}
+def build_dag_runners(config: AppConfig) -> Dict[str, DagRunnerPort]:
+    return {
+        env_name: build_dag_runner(airflow_config)
+        for env_name, airflow_config in config.airflow.items()
+    }
 
-    dag_payloads_by_env: Dict[str, Dict[str, Any]] = {}
-    for env_name, s3_config in config.s3.items():
-        if not s3_config.bucket:
-            logger.info(f"S3 bucket not configured for environment={env_name}, skipping")
-            continue
 
-        publication_service = provide_publication_service(run_id=run_id, s3_config=s3_config)
-        published_tables: List[TablePublication] = publication_service.publish_tables(
-            generated_tables=generated_tables,
+def build_publication_services(config: AppConfig):
+    return {
+        env_name: provide_publication_service(s3_config=s3_config)
+        for env_name, s3_config in config.s3.items()
+        if s3_config.bucket
+    }
+
+
+def build_pipeline(config: AppConfig) -> DataPipelineUseCase:
+    publication_services = build_publication_services(config)
+    dag_runners = build_dag_runners(config)
+
+    if publication_services.keys() != dag_runners.keys():
+        raise ValueError(
+            f"S3 envs {set(publication_services)} and Airflow envs {set(dag_runners)} do not match"
         )
 
-        dag_payloads_by_env[env_name] = DagPayloadMapper.build_payload(
-            run_id=run_id,
-            table_publications=published_tables,
-        )
-
-    logger.info("Uploaded artifacts to S3 for run_id=%s", run_id)
-    return dag_payloads_by_env
+    return DataPipelineUseCase(
+        generation_service=provide_generation_service(),
+        publication_services=publication_services,
+    )
 
 
 def run():
-    config: AppConfig = load_app_settings()
-    run_id = generate_run_id()
+    config = load_app_settings()
+    raw_tables: List[Any] = []
 
-    raw_tables = []
+    pipeline = build_pipeline(config)
+    results = pipeline.execute(raw_tables)
 
-    generation_run = convert_to_generation_run(
-        run_id=run_id,
-        raw_tables=raw_tables,
-    )
-
-    generation_service = provide_generation_service()
-    generated_tables = generation_service.generate_table_data(generation_run)
-
-    uploaded_artifacts = publish_run_artifacts(
-        run_id=run_id,
-        generated_tables=generated_tables,
-        config=config,
-    )
-    _ = uploaded_artifacts
+    for env_name, dag_result in results.items():
+        logger.info(
+            "env=%s dag_run_id=%s status=%s",
+            env_name,
+            dag_result.run_id,
+            dag_result.status.value,
+        )
 
 
 if __name__ == "__main__":

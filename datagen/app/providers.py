@@ -25,7 +25,7 @@ from app.infrastructure.graph.networkx_dependency_graph_builder import NetworkXD
 from app.core.application.ports.object_storage_port import IObjectStorage
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
-from app.infrastructure.storage.s3_object_storage import S3StorageAdapter
+from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 from app.shared.config import S3Config
 
 

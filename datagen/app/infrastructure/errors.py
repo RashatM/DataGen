@@ -31,4 +31,4 @@ class RunStateCorruptedError(ValueError):
 
 
 class ObjectNotFoundError(FileNotFoundError):
-    """Raised when object does not exist in object storage."""
+    """Raised when object does not exist in object s3."""
