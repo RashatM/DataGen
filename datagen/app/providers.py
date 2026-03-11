@@ -5,7 +5,6 @@ from app.core.application.ports.dag_runner_port import DagRunnerPort
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.application.services.publication_service import PublicationService
 from app.core.application.services.generation_service import DataGenerationService
-from app.core.application.use_cases.data_pipeline_use_case import DataPipelineUseCase
 from app.core.domain.enums import DataType
 from app.infrastructure.airflow.airflow_client import AirflowClient
 from app.infrastructure.airflow.airflow_dag_runner import AirflowDagRunner
@@ -104,14 +103,3 @@ def provide_publication_service(s3_config: S3Config) -> PublicationService:
 
 def provide_dag_runner(airflow_config: AirflowConfig) -> DagRunnerPort:
     return AirflowDagRunner(client=AirflowClient(airflow_config))
-
-
-def provide_pipeline_use_case(env_name: str, config: AppConfig) -> DataPipelineUseCase:
-    s3_config = config.s3[env_name]
-    airflow_config = config.airflow[env_name]
-
-    return DataPipelineUseCase(
-        generation_service=provide_generation_service(),
-        publication_service=provide_publication_service(s3_config=s3_config),
-        dag_runner=provide_dag_runner(airflow_config),
-    )

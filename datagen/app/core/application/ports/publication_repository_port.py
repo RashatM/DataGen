@@ -42,10 +42,5 @@ class IPublicationRepository(ABC):
         pass
 
     @abstractmethod
-    def cleanup_run_artifacts(
-        self,
-        schema_name: str,
-        table_name: str,
-        run_id: str,
-    ) -> None:
+    def cleanup_run_artifacts(self, run_id: str) -> None:
         pass

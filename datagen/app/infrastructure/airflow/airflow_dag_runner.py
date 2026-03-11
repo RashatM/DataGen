@@ -23,12 +23,11 @@ class AirflowDagRunner(DagRunnerPort):
                 "schema_name": pub.schema_name,
                 "table_name": pub.table_name,
                 "storage_type": pub.storage_type,
-                "s3": pub.storage,
+                "storage": pub.storage,
             }
             for pub in publications
         ]
         return {
-            "contract_version": "3",
             "run_id": run_id,
             "tables": tables,
         }
