@@ -1,7 +1,6 @@
 import argparse
 import logging
 from contextlib import contextmanager
-
 from pyspark.sql import SparkSession
 
 from common import BaseLoader, parse_table_contracts, logger
