@@ -14,6 +14,7 @@ class DataType(Enum):
     TIMESTAMP = "TIMESTAMP"
     BOOLEAN = "BOOLEAN"
 
+
 class CharacterSet(Enum):
     DIGITS = "digits"
     LETTERS = "letters"

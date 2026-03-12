@@ -18,7 +18,6 @@ class TableForeignKeySpec:
         self.full_table_name = f"{self.schema_name}.{self.table_name}"
 
 
-
 @dataclass
 class TableColumnSpec(Generic[TConstraints]):
     name: str

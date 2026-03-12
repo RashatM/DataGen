@@ -2,13 +2,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, List
 
-from app.core.application.dto import TablePublication, DagRunResult
+from app.core.application.dto import DagRunResult, TablePublication
 from app.core.application.ports.dag_runner_port import DagRunnerPort
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.application.services.publication_service import PublicationService
 from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
-from app.providers import provide_generation_service, provide_publication_service, provide_dag_runner
+from app.providers import provide_dag_runner, provide_generation_service, provide_publication_service
 from app.shared.config import load_app_settings
 from app.shared.logger import logger
 
@@ -18,11 +18,11 @@ DEFAULT_DAG_TIMEOUT_SECONDS = 600
 class DataPipelineExecutor:
 
     def __init__(
-            self,
-            generation_service: DataGenerationService,
-            publication_service: PublicationService,
-            dag_runner: DagRunnerPort,
-            dag_timeout_seconds: int = DEFAULT_DAG_TIMEOUT_SECONDS,
+        self,
+        generation_service: DataGenerationService,
+        publication_service: PublicationService,
+        dag_runner: DagRunnerPort,
+        dag_timeout_seconds: int = DEFAULT_DAG_TIMEOUT_SECONDS,
     ) -> None:
         self.generation_service = generation_service
         self.publication_service = publication_service
@@ -34,9 +34,9 @@ class DataPipelineExecutor:
         return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid7()}"
 
     def generate(
-            self,
-            run_id: str,
-            raw_tables: List[Any],
+        self,
+        run_id: str,
+        raw_tables: List[Any],
     ) -> List[GeneratedTableData]:
         generation_run = convert_to_generation_run(run_id=run_id, raw_tables=raw_tables)
         generated_tables = self.generation_service.generate_table_data(generation_run)
@@ -45,9 +45,9 @@ class DataPipelineExecutor:
         return generated_tables
 
     def publish(
-            self,
-            run_id: str,
-            generated_tables: List[GeneratedTableData],
+        self,
+        run_id: str,
+        generated_tables: List[GeneratedTableData],
     ) -> List[TablePublication]:
         published_tables = self.publication_service.publish_tables(
             run_id=run_id,
@@ -57,9 +57,9 @@ class DataPipelineExecutor:
         return published_tables
 
     def trigger_dag(
-            self,
-            run_id: str,
-            published_tables: List[TablePublication],
+        self,
+        run_id: str,
+        published_tables: List[TablePublication],
     ) -> DagRunResult:
         dag_result = self.dag_runner.trigger_and_wait(
             run_id=run_id,
@@ -81,21 +81,14 @@ class DataPipelineExecutor:
         return dag_result
 
 
-def run(env_name: str):
-    config = load_app_settings()
+def run_app(env_name: str) -> None:
+    config = load_app_settings(env_name)
     raw_tables: List[Any] = []
-
-    if env_name not in config.airflow:
-        logger.warning("No Airflow config for env=%s, skipping", env_name)
-        return
-
-    s3_config = config.s3[env_name]
-    airflow_config = config.airflow[env_name]
 
     pipeline = DataPipelineExecutor(
         generation_service=provide_generation_service(),
-        publication_service=provide_publication_service(s3_config=s3_config),
-        dag_runner=provide_dag_runner(airflow_config),
+        publication_service=provide_publication_service(s3_config=config.s3),
+        dag_runner=provide_dag_runner(config.airflow),
     )
     dag_result = pipeline.execute(raw_tables)
 
@@ -108,4 +101,4 @@ def run(env_name: str):
 
 
 if __name__ == "__main__":
-    run(env_name="dev")
+    run_app(env_name="dev")

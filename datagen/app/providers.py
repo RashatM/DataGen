@@ -1,5 +1,5 @@
 import boto3
-from botocore.client import BaseClient
+from mypy_boto3_s3 import S3Client
 
 from app.core.application.ports.dag_runner_port import DagRunnerPort
 from app.core.application.ports.publication_repository_port import IPublicationRepository
@@ -29,7 +29,7 @@ from app.core.application.ports.object_storage_port import IObjectStorage
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
-from app.shared.config import S3Config, AirflowConfig, AppConfig
+from app.shared.config import S3Config, AirflowConfig
 
 
 def provide_generator_factory() -> DataGeneratorFactory:
@@ -75,8 +75,8 @@ def provide_s3_client(s3_config: S3Config) -> BaseClient:
     return client
 
 
-def provide_s3_object_storage(bucket: str, prefix: str, s3_client: BaseClient) -> IObjectStorage:
-    return S3StorageAdapter(bucket=bucket, prefix=prefix, s3_client=s3_client)
+def provide_s3_object_storage(bucket: str, s3_client: S3Client) -> IObjectStorage:
+    return S3StorageAdapter(bucket=bucket, s3_client=s3_client)
 
 
 def provide_publication_repository(object_storage: IObjectStorage) -> IPublicationRepository:
@@ -88,7 +88,6 @@ def provide_publication_service(s3_config: S3Config) -> PublicationService:
     s3_client = provide_s3_client(s3_config)
     object_storage = provide_s3_object_storage(
         bucket=s3_config.bucket,
-        prefix=s3_config.prefix,
         s3_client=s3_client,
     )
     publication_repository = provide_publication_repository(object_storage)

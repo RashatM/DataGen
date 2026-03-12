@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from core.application.dto import DagRunResult, TablePublication
+from app.core.application.dto import DagRunResult, TablePublication
 
 
 class DagRunnerPort(ABC):
