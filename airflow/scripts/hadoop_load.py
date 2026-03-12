@@ -2,7 +2,7 @@ import argparse
 from contextlib import contextmanager
 from pyspark.sql import SparkSession
 
-from common import BaseLoader, parse_table_contracts, logger
+from common import BaseSynthLoader, parse_table_contracts, logger
 
 
 @contextmanager
@@ -47,26 +47,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-class HadoopLoader(BaseLoader):
+class HadoopSynthLoader(BaseSynthLoader):
 
     def write_to_tmp(self, data_uri: str, tmp_name: str) -> None:
-        (
-            self.spark.read
-            .parquet(data_uri)
-            .hint("REBALANCE")
-            .write
-            .mode("overwrite")
-            .format("hive")
-            .insertInto(tmp_name, overwrite=True)
-        )
+        self.spark.read.parquet(data_uri).write.mode("overwrite").insertInto(tmp_name, overwrite=True)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    contract = parse_contract(args.contract)
-    run_id = get_run_id(contract)
     tables = parse_table_contracts(args.contract, ddl_target="hive")
 
     with open_spark_session(args.app_name) as spark:
-        loader = HadoopLoader(spark, run_id=args.run_id)
+        loader = HadoopSynthLoader(spark, run_id=args.run_id)
         loader.load_all(tables)

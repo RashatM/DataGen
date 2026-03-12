@@ -56,7 +56,7 @@ def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableCont
     ]
 
 
-class BaseLoader(ABC):
+class BaseSynthLoader(ABC):
 
     def __init__(self, spark: SparkSession, run_id: str) -> None:
         self.run_id = run_id

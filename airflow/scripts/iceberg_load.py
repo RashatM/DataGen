@@ -2,8 +2,9 @@ import argparse
 import logging
 from contextlib import contextmanager
 from pyspark.sql import SparkSession
+import pyspark.sql.functions as f
 
-from common import BaseLoader, parse_table_contracts, logger
+from common import BaseSynthLoader, parse_table_contracts, logger
 
 
 def create_logger() -> logging.Logger:
@@ -53,17 +54,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-class IcebergLoader(BaseLoader):
+class IcebergSynthLoader(BaseSynthLoader):
 
     def write_to_tmp(self, data_uri: str, tmp_name: str) -> None:
-        (
-            self.spark.read
-            .parquet(data_uri)
-            .write
-            .mode("overwrite")
-            .format("iceberg")
-            .saveAsTable(tmp_name)
-        )
+        self.spark.read.parquet(data_uri).writeTo(tmp_name).overwrite(f.lit(True))
 
 
 if __name__ == "__main__":
@@ -71,5 +65,5 @@ if __name__ == "__main__":
     tables = parse_table_contracts(args.contract, ddl_target="iceberg")
 
     with open_spark_session(args.app_name) as spark:
-        loader = IcebergLoader(spark, run_id=args.run_id)
+        loader = IcebergSynthLoader(spark, run_id=args.run_id)
         loader.load_all(tables)
