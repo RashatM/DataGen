@@ -31,7 +31,7 @@ class DataPipelineExecutor:
 
     @staticmethod
     def generate_run_id() -> str:
-        return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid7()}"
+        return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4()}"
 
     def generate(
         self,
@@ -41,7 +41,8 @@ class DataPipelineExecutor:
         generation_run = convert_to_generation_run(run_id=run_id, raw_tables=raw_tables)
         generated_tables = self.generation_service.generate_table_data(generation_run)
 
-        logger.info("Generated %d tables for run_id=%s", len(generated_tables), run_id)
+        table_names = [t.table.full_table_name for t in generated_tables]
+        logger.info(f"Generated {len(generated_tables)} tables for run_id={run_id}: {table_names}")
         return generated_tables
 
     def publish(
@@ -49,35 +50,35 @@ class DataPipelineExecutor:
         run_id: str,
         generated_tables: List[GeneratedTableData],
     ) -> List[TablePublication]:
-        published_tables = self.publication_service.publish_tables(
+        publications = self.publication_service.publish(
             run_id=run_id,
             generated_tables=generated_tables,
         )
-        logger.info("Published %d tables run_id=%s", len(published_tables), run_id)
-        return published_tables
+        logger.info(f"Published {len(publications)} tables for run_id={run_id}")
+        return publications
 
     def trigger_dag(
         self,
         run_id: str,
-        published_tables: List[TablePublication],
+        publications: List[TablePublication],
     ) -> DagRunResult:
         dag_result = self.dag_runner.trigger_and_wait(
             run_id=run_id,
-            publications=published_tables,
+            publications=publications,
             timeout_seconds=self.dag_timeout_seconds,
         )
-        logger.info("DAG finished run_id=%s status=%s", run_id, dag_result.status.value)
+        logger.info(f"DAG finished run_id={run_id} status={dag_result.status.value}")
         return dag_result
 
     def execute(self, raw_tables: List[Any]) -> DagRunResult:
         run_id = self.generate_run_id()
-        logger.info("Starting pipeline run_id=%s", run_id)
+        logger.info(f"Starting pipeline run_id={run_id}")
 
         generated_tables = self.generate(run_id, raw_tables)
-        published_tables = self.publish(run_id, generated_tables)
-        dag_result = self.trigger_dag(run_id, published_tables)
+        publications = self.publish(run_id, generated_tables)
+        dag_result = self.trigger_dag(run_id, publications)
 
-        logger.info("Pipeline completed run_id=%s", run_id)
+        logger.info(f"Pipeline completed run_id={run_id} status={dag_result.status.value}")
         return dag_result
 
 
@@ -87,17 +88,12 @@ def run_app(env_name: str) -> None:
 
     pipeline = DataPipelineExecutor(
         generation_service=provide_generation_service(),
-        publication_service=provide_publication_service(s3_config=config.s3),
+        publication_service=provide_publication_service(config.s3, config.target_storage),
         dag_runner=provide_dag_runner(config.airflow),
     )
     dag_result = pipeline.execute(raw_tables)
 
-    logger.info(
-        "env=%s dag_run_id=%s status=%s",
-        env_name,
-        dag_result.run_id,
-        dag_result.status.value,
-    )
+    logger.info(f"env={env_name} dag_run_id={dag_result.run_id} status={dag_result.status.value}")
 
 
 if __name__ == "__main__":

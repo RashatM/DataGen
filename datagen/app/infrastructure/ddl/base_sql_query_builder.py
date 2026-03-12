@@ -2,13 +2,16 @@ from abc import ABC
 from typing import Dict, List
 
 from app.core.application.ports.query_builder_port import IQueryBuilder
-from app.core.domain.entities import TableColumnSpec
+from app.core.domain.entities import TableColumnSpec, TableSpec
 from app.core.domain.enums import DataType
 from app.infrastructure.errors import UnsupportedOutputDataTypeError
 
 
 class BaseSqlQueryBuilder(IQueryBuilder, ABC):
     type_mapping: Dict[DataType, str] = {}
+
+    def __init__(self, database_name: str):
+        self.database_name = database_name
 
     def map_column_type(self, table_column: TableColumnSpec) -> str:
         column_type = self.type_mapping.get(table_column.output_data_type)
@@ -24,3 +27,6 @@ class BaseSqlQueryBuilder(IQueryBuilder, ABC):
             column_type = self.map_column_type(column)
             columns_sql.append(f"{column.name} {column_type}")
         return ",\n  ".join(columns_sql)
+
+    def build_target_table_name(self, table: TableSpec) -> str:
+        return f"{self.database_name}.{table.schema_name}__{table.table_name}"

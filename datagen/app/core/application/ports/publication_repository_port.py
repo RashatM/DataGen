@@ -7,7 +7,7 @@ from app.core.domain.entities import GeneratedTableData
 
 class IPublicationRepository(ABC):
     @abstractmethod
-    def stage_artifacts(
+    def stage_table_artifacts(
         self,
         table_data: GeneratedTableData,
         run_id: str,

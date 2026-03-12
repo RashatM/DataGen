@@ -15,16 +15,12 @@ class IcebergQueryBuilder(BaseSqlQueryBuilder):
         DataType.FLOAT: "double",
     }
 
-
-    def __init__(self, write_meta_num: str = "{{ WRITE_META_NUM }}"):
-        self.write_meta_num = write_meta_num
-
-
-    def generate_ddl(self, table: TableSpec) -> str:
+    def generate_table_ddl(self, table: TableSpec) -> str:
         columns_definition = self.build_columns_definition(table.columns)
+        target_table_name = self.build_target_table_name(table)
         write_meta_num = len(table.columns)
         return (
-            f"CREATE TABLE IF NOT EXISTS {table.full_table_name} (\n"
+            f"CREATE TABLE IF NOT EXISTS {target_table_name} (\n"
             f"  {columns_definition}\n"
             f")\n"
             f"USING ICEBERG\n"

@@ -49,7 +49,7 @@ class S3PublicationRepository(IPublicationRepository):
         table = pq.read_table(pa.BufferReader(payload))
         return table.to_pydict()
 
-    def stage_artifacts(
+    def stage_table_artifacts(
             self, table_data: GeneratedTableData,
             run_id: str,
             ddl_queries: Dict[str, str]

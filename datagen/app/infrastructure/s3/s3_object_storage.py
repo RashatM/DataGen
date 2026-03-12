@@ -14,7 +14,7 @@ class S3StorageAdapter(IObjectStorage):
         self.s3_client = s3_client
 
     def generate_uri(self, key: str) -> str:
-        return f's3://{self.bucket}/{key.strip("/")}'
+        return f's3a://{self.bucket}/{key.strip("/")}'
 
     def put_text(self, key: str, content: str) -> str:
         self.s3_client.put_object(

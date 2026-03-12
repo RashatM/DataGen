@@ -29,7 +29,7 @@ from app.core.application.ports.object_storage_port import IObjectStorage
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
-from app.shared.config import S3Config, AirflowConfig
+from app.shared.config import S3Config, AirflowConfig, TargetStorageConfig
 
 
 def provide_generator_factory() -> DataGeneratorFactory:
@@ -63,7 +63,7 @@ def provide_generation_service() -> DataGenerationService:
     )
 
 
-def provide_s3_client(s3_config: S3Config) -> BaseClient:
+def provide_s3_client(s3_config: S3Config) -> S3Client:
     client = boto3.client(
         "s3",
         endpoint_url=s3_config.endpoint_url,
@@ -84,7 +84,7 @@ def provide_publication_repository(object_storage: IObjectStorage) -> IPublicati
     return S3PublicationRepository(object_storage=object_storage, schema_builder=schema_builder)
 
 
-def provide_publication_service(s3_config: S3Config) -> PublicationService:
+def provide_publication_service(s3_config: S3Config, target_storage: TargetStorageConfig) -> PublicationService:
     s3_client = provide_s3_client(s3_config)
     object_storage = provide_s3_object_storage(
         bucket=s3_config.bucket,
@@ -94,8 +94,12 @@ def provide_publication_service(s3_config: S3Config) -> PublicationService:
     return PublicationService(
         repository=publication_repository,
         ddl_builders={
-            "hive": HiveQueryBuilder(),
-            "iceberg": IcebergQueryBuilder(),
+            "hive": HiveQueryBuilder(
+                database_name=target_storage.hive.database_name,
+            ),
+            "iceberg": IcebergQueryBuilder(
+                database_name=target_storage.iceberg.database_name,
+            ),
         },
     )
 

@@ -5,6 +5,12 @@ s3:
   use_ssl: true
   ssl_cert: ""
 
+target_storage:
+  hive:
+    database_name: "datagen_hive"
+  iceberg:
+    database_name: "datagen_iceberg"
+
 airflow:
   defaults:
     dag_id: "datagen_pipeline"
