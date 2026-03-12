@@ -44,6 +44,36 @@ class TableContract:
 
 
 def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableContract]:
+    """
+    Парсит JSON-контракт от DataGen и извлекает из него список TableContract для указанного движка.
+
+    Формат контракта:
+    {
+      "run_id": "20260312T120000Z_uuid",
+      "tables": [
+        {
+          "schema_name": "sales",
+          "table_name": "orders",
+          "storage_type": "s3",
+          "storage": {
+            "data_uri": "s3a://bucket/runs/{run_id}/sales/orders/data/data.parquet",
+            "ddl_uris": {
+              "hive": "s3a://bucket/runs/{run_id}/sales/orders/ddl/hive.sql",
+              "iceberg": "s3a://bucket/runs/{run_id}/sales/orders/ddl/iceberg.sql"
+            }
+          }
+        }
+      ]
+    }
+
+    DDL внутри файлов использует фиксированную БД per engine:
+      hive.sql:    CREATE TABLE IF NOT EXISTS datagen_hive.sales__orders (...)
+      iceberg.sql: CREATE TABLE IF NOT EXISTS datagen_iceberg.sales__orders (...)
+
+    Аргументы:
+        contract_json: JSON-строка с контрактом
+        ddl_target: ключ движка в ddl_uris ("hive" или "iceberg")
+    """
     contract = json.loads(contract_json)
     return [
         TableContract(
