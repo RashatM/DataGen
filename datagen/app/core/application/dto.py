@@ -5,7 +5,7 @@ from app.core.application.constants import DagRunStatus
 
 
 @dataclass(slots=True)
-class EngineLoadSpec:
+class EngineLoadArtifact:
     ddl_uri: str
     target_table_name: str
 
@@ -13,11 +13,11 @@ class EngineLoadSpec:
 @dataclass(slots=True)
 class PublicationArtifacts:
     data_uri: str
-    engines: Dict[str, EngineLoadSpec]
+    engines: Dict[str, EngineLoadArtifact]
 
 
 @dataclass(slots=True)
-class EngineArtifactDraft:
+class EngineLoadPayload:
     ddl_query: str
     target_table_name: str
 

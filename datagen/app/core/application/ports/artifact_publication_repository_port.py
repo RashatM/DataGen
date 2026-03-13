@@ -1,17 +1,17 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-from app.core.application.dto import EngineArtifactDraft, TablePublication
+from app.core.application.dto import EngineLoadPayload, TablePublication
 from app.core.domain.entities import GeneratedTableData
 
 
-class IPublicationRepository(ABC):
+class IArtifactPublicationRepository(ABC):
     @abstractmethod
     def stage_table_artifacts(
         self,
         table_data: GeneratedTableData,
         run_id: str,
-        engine_artifacts: Dict[str, EngineArtifactDraft],
+        engine_load_payloads: Dict[str, EngineLoadPayload],
     ) -> TablePublication:
         pass
 

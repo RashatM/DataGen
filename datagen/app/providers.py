@@ -2,8 +2,8 @@ import boto3
 from mypy_boto3_s3 import S3Client
 
 from app.core.application.ports.dag_runner_port import DagRunnerPort
-from app.core.application.ports.publication_repository_port import IPublicationRepository
-from app.core.application.services.publication_service import PublicationService
+from app.core.application.ports.artifact_publication_repository_port import IArtifactPublicationRepository
+from app.core.application.services.artifact_publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.domain.enums import DataType
 from app.infrastructure.airflow.airflow_client import AirflowClient
@@ -80,20 +80,23 @@ def provide_s3_object_storage(bucket: str, s3_client: S3Client) -> IObjectStorag
     return S3StorageAdapter(bucket=bucket, s3_client=s3_client)
 
 
-def provide_publication_repository(object_storage: IObjectStorage) -> IPublicationRepository:
+def provide_artifact_publication_repository(object_storage: IObjectStorage) -> IArtifactPublicationRepository:
     schema_builder = ArrowSchemaBuilder()
     return S3PublicationRepository(object_storage=object_storage, schema_builder=schema_builder)
 
 
-def provide_publication_service(s3_config: S3Config, target_storage: TargetStorageConfig) -> PublicationService:
+def provide_artifact_publication_service(
+    s3_config: S3Config,
+    target_storage: TargetStorageConfig,
+) -> ArtifactPublicationService:
     s3_client = provide_s3_client(s3_config)
     object_storage = provide_s3_object_storage(
         bucket=s3_config.bucket,
         s3_client=s3_client,
     )
-    publication_repository = provide_publication_repository(object_storage)
-    return PublicationService(
-        repository=publication_repository,
+    artifact_publication_repository = provide_artifact_publication_repository(object_storage)
+    return ArtifactPublicationService(
+        repository=artifact_publication_repository,
         query_builders={
             "hive": HiveQueryBuilder(
                 database_name=target_storage.hive.database_name,

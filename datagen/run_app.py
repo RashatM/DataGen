@@ -5,11 +5,11 @@ from zoneinfo import ZoneInfo
 
 from app.core.application.dto import DagRunResult, TablePublication
 from app.core.application.ports.dag_runner_port import DagRunnerPort
+from app.core.application.services.artifact_publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
-from app.core.application.services.publication_service import PublicationService
 from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
-from app.providers import provide_dag_runner, provide_generation_service, provide_publication_service
+from app.providers import provide_artifact_publication_service, provide_dag_runner, provide_generation_service
 from app.shared.config import load_app_settings
 from app.shared.logger import pipeline_logger
 
@@ -22,12 +22,12 @@ class DataPipelineExecutor:
     def __init__(
         self,
         generation_service: DataGenerationService,
-        publication_service: PublicationService,
+        artifact_publication_service: ArtifactPublicationService,
         dag_runner: DagRunnerPort,
         dag_timeout_seconds: int = DEFAULT_DAG_TIMEOUT_SECONDS,
     ) -> None:
         self.generation_service = generation_service
-        self.publication_service = publication_service
+        self.artifact_publication_service = artifact_publication_service
         self.dag_runner = dag_runner
         self.dag_timeout_seconds = dag_timeout_seconds
 
@@ -57,12 +57,12 @@ class DataPipelineExecutor:
         run_id: str,
         generated_tables: List[GeneratedTableData],
     ) -> List[TablePublication]:
-        logger.info(f"Publication started. run_id={run_id}, tables_count={len(generated_tables)}")
-        publications = self.publication_service.publish(
+        logger.info(f"Artifact publication started. run_id={run_id}, tables_count={len(generated_tables)}")
+        publications = self.artifact_publication_service.publish(
             run_id=run_id,
             generated_tables=generated_tables,
         )
-        logger.info(f"Publication completed. run_id={run_id}, tables_count={len(publications)}")
+        logger.info(f"Artifact publication completed. run_id={run_id}, tables_count={len(publications)}")
         return publications
 
     def trigger_dag(
@@ -97,7 +97,7 @@ def run_app(env_name: str, raw_tables: List[Any]) -> None:
 
     pipeline = DataPipelineExecutor(
         generation_service=provide_generation_service(),
-        publication_service=provide_publication_service(config.s3, config.target_storage),
+        artifact_publication_service=provide_artifact_publication_service(config.s3, config.target_storage),
         dag_runner=provide_dag_runner(config.airflow),
     )
     dag_result = pipeline.execute(raw_tables)
