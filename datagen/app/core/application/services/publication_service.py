@@ -25,7 +25,9 @@ class PublicationService:
         }
 
     def cleanup_run_artifacts(self, run_id: str) -> None:
+        logger.info(f"Artifact cleanup started. run_id={run_id}")
         self.repository.cleanup_run_artifacts(run_id=run_id)
+        logger.info(f"Artifact cleanup completed. run_id={run_id}")
 
     def stage_tables(
             self,

@@ -42,6 +42,7 @@ class DataPipelineExecutor:
         run_id: str,
         raw_tables: List[Any],
     ) -> List[GeneratedTableData]:
+        logger.info(f"Generation started. run_id={run_id}, raw_tables_count={len(raw_tables)}")
         generation_run = convert_to_generation_run(run_id=run_id, raw_tables=raw_tables)
         generated_tables = self.generation_service.generate_table_data(generation_run)
 
@@ -56,6 +57,7 @@ class DataPipelineExecutor:
         run_id: str,
         generated_tables: List[GeneratedTableData],
     ) -> List[TablePublication]:
+        logger.info(f"Publication started. run_id={run_id}, tables_count={len(generated_tables)}")
         publications = self.publication_service.publish(
             run_id=run_id,
             generated_tables=generated_tables,
@@ -68,6 +70,7 @@ class DataPipelineExecutor:
         run_id: str,
         publications: List[TablePublication],
     ) -> DagRunResult:
+        logger.info(f"DAG execution started. run_id={run_id}, tables_count={len(publications)}")
         dag_result = self.dag_runner.trigger_and_wait(
             run_id=run_id,
             publications=publications,
@@ -89,6 +92,7 @@ class DataPipelineExecutor:
 
 
 def run_app(env_name: str) -> None:
+    logger.info(f"Application started. env={env_name}")
     config = load_app_settings(env_name)
     raw_tables: List[Any] = []
 

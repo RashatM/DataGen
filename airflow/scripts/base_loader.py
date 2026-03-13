@@ -145,6 +145,7 @@ class BaseSynthLoader(ABC):
                 logger.error(f"Failed to drop temporary table. table={table.tmp_name}, error={error}")
 
     def load_all(self, tables: List[TableContract]) -> None:
+        logger.info(f"Loader execution started. run_id={self.run_id}, tables_count={len(tables)}")
         try:
             for table in tables:
                 self.prepare_table(table)
@@ -156,3 +157,4 @@ class BaseSynthLoader(ABC):
         for table in tables:
             self.commit_table(table)
             logger.info(f"Table committed. table={table.full_name}, run_id={self.run_id}")
+        logger.info(f"Loader execution completed. run_id={self.run_id}, tables_count={len(tables)}")

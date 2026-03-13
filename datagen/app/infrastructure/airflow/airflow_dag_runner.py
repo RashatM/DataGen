@@ -50,6 +50,7 @@ class AirflowDagRunner(DagRunnerPort):
     ) -> DagRunResult:
         poll_interval = self.client.poll_interval()
         deadline = time.monotonic() + timeout_seconds
+        previous_state = None
 
         while time.monotonic() < deadline:
             dag_run_state = self.client.get_dag_run_state(dag_run_id)
@@ -58,8 +59,12 @@ class AirflowDagRunner(DagRunnerPort):
                 logger.info(f"DAG reached terminal state. dag_run_id={dag_run_id}, state={dag_run_state.state}")
                 return self.to_dag_run_result(dag_run_state)
 
-            elapsed = int(timeout_seconds - (deadline - time.monotonic()))
-            logger.info(f"DAG is still running. dag_run_id={dag_run_id}, state={dag_run_state.state}, elapsed_seconds={elapsed}")
+            if dag_run_state.state != previous_state:
+                elapsed = int(timeout_seconds - (deadline - time.monotonic()))
+                logger.info(
+                    f"DAG state updated. dag_run_id={dag_run_id}, state={dag_run_state.state}, elapsed_seconds={elapsed}"
+                )
+                previous_state = dag_run_state.state
             time.sleep(poll_interval)
 
         logger.warning(f"DAG polling timed out. dag_run_id={dag_run_id}, timeout_seconds={timeout_seconds}")
@@ -82,6 +87,7 @@ class AirflowDagRunner(DagRunnerPort):
             f"DAG trigger requested. dag_id={self.client.dag_id()}, dag_run_id={dag_run_id}, tables_count={len(publications)}"
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
+        logger.info(f"DAG trigger accepted. dag_id={self.client.dag_id()}, dag_run_id={dag_run_id}")
 
         return self.poll_until_terminal(
             dag_run_id=dag_run_id,
