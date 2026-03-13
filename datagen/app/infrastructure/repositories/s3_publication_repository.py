@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -85,7 +86,7 @@ class S3PublicationRepository(IPublicationRepository):
             payload={
                 "run_id": run_id,
                 "previous_run_id": previous_run_id,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S"),
             },
         )
 

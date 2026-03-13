@@ -9,11 +9,12 @@ import os
 from plugins.platform_services.operators.templated_spark_operator import PlatformTemplatedSparkOperator
 
 DAG_ID = "datagen__synth_load"
-DAG_DESCRIPTION = "DataGen: loads synthetic data from S3 to Iceberg and Hadoop per contract v3"
+DAG_DESCRIPTION = "DataGen: loads synthetic data from S3 to Iceberg and Hadoop"
 DAG_TAGS = ["datagen", "synthetic"]
 SCHEDULE_INTERVAL = None
 EMAIL_LIST = []
 
+BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/datagen/base_loader.py"
 ICEBERG_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/datagen/iceberg_load.py"
 HADOOP_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/datagen/hadoop_load.py"
 
@@ -107,6 +108,7 @@ with DAG(
         conf=get_iceberg_spark_config(),
         retries=0,
         application=ICEBERG_LOADER_SCRIPT,
+        py_files=[BASE_LOADER_SCRIPT],
         application_args=[
             "--run_id", "{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
@@ -119,6 +121,7 @@ with DAG(
         conn_id="spark_k8s",
         config_callable=get_hadoop_spark_config(),
         application=HADOOP_LOADER_SCRIPT,
+        py_files=[BASE_LOADER_SCRIPT],
         application_args=[
             "--run_id", "{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",

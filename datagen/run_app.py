@@ -1,6 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, List
+from zoneinfo import ZoneInfo
 
 from app.core.application.dto import DagRunResult, TablePublication
 from app.core.application.ports.dag_runner_port import DagRunnerPort
@@ -31,7 +32,9 @@ class DataPipelineExecutor:
 
     @staticmethod
     def generate_run_id() -> str:
-        return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4()}"
+        now = datetime.now(ZoneInfo("Europe/Moscow"))
+        short_uid = uuid.uuid4().hex[:8]
+        return f"{now:%Y%m%d_%H%M%S}_{short_uid}"
 
     def generate(
         self,

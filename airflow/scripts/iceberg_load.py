@@ -1,24 +1,9 @@
 import argparse
-import logging
 from contextlib import contextmanager
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 
 from base_loader import BaseSynthLoader, parse_table_contracts, logger
-
-
-def create_logger() -> logging.Logger:
-    custom_logger = logging.getLogger("logger")
-    if custom_logger.handlers:
-        return custom_logger
-
-    custom_logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(fmt='[DL_PLATFORM] %(asctime)s %(levelname)s: %(message)s',
-                                  datefmt='%d-%m-%y %H:%M:%S')
-    handler.setFormatter(formatter)
-    custom_logger.addHandler(handler)
-    return custom_logger
 
 
 @contextmanager

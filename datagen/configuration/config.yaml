@@ -7,7 +7,7 @@ s3:
 
 target_storage:
   hive:
-    database_name: "datagen_hive"
+    database_name: "synth_"
   iceberg:
     database_name: "datagen_iceberg"
 

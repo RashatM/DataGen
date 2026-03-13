@@ -121,23 +121,30 @@ class BaseSynthLoader(ABC):
         else:
             self.rename_table(table.tmp_name, table.full_name)
 
-    def load_table(self, table: TableContract) -> None:
-        logger.info(f"Loading table={table.full_name} run_id={self.run_id}")
-
+    def prepare_table(self, table: TableContract) -> None:
+        logger.info(f"Preparing table={table.full_name} run_id={self.run_id}")
         tmp_ddl = self.build_tmp_ddl(table)
         self.drop_table(table.tmp_name)
+        self.spark.sql(tmp_ddl)
+        self.write_to_tmp(table.data_uri, table.tmp_name)
+        logger.info(f"Prepared table={table.full_name}")
 
-        try:
-            self.spark.sql(tmp_ddl)
-            self.write_to_tmp(table.data_uri, table.tmp_name)
-            self.commit_table(table)
-            logger.info(f"Successfully loaded table={table.full_name}")
-
-        except Exception as error:
-            logger.error(f"Failed to load table={table.full_name} error={error}")
-            self.drop_table(table.tmp_name)
-            raise
+    def cleanup_tmp_tables(self, tables: List[TableContract]) -> None:
+        for table in tables:
+            try:
+                self.drop_table(table.tmp_name)
+            except Exception as error:
+                logger.error(f"Failed to cleanup tmp table={table.tmp_name} error={error}")
 
     def load_all(self, tables: List[TableContract]) -> None:
+        try:
+            for table in tables:
+                self.prepare_table(table)
+        except Exception:
+            logger.error(f"Prepare phase failed, cleaning up tmp tables run_id={self.run_id}")
+            self.cleanup_tmp_tables(tables)
+            raise
+
         for table in tables:
-            self.load_table(table)
+            self.commit_table(table)
+            logger.info(f"Committed table={table.full_name}")
