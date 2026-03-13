@@ -11,10 +11,10 @@ from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
 from app.providers import provide_dag_runner, provide_generation_service, provide_publication_service
 from app.shared.config import load_app_settings
-from app.shared.logger import get_logger
+from app.shared.logger import pipeline_logger
 
 DEFAULT_DAG_TIMEOUT_SECONDS = 600
-logger = get_logger("datagen.pipeline")
+logger = pipeline_logger
 
 
 class DataPipelineExecutor:
@@ -91,9 +91,9 @@ class DataPipelineExecutor:
         return dag_result
 
 
-def run_app(env_name: str) -> None:
-    logger.info(f"Application started. env={env_name}")
-    config = load_app_settings(env_name)
+def run_app(environment_name: str) -> None:
+    logger.info(f"Application started. environment={environment_name}")
+    config = load_app_settings(environment_name)
     raw_tables: List[Any] = []
 
     pipeline = DataPipelineExecutor(
@@ -103,8 +103,10 @@ def run_app(env_name: str) -> None:
     )
     dag_result = pipeline.execute(raw_tables)
 
-    logger.info(f"Application finished. env={env_name}, dag_run_id={dag_result.run_id}, status={dag_result.status.value}")
+    logger.info(
+        f"Application finished. environment={environment_name}, dag_run_id={dag_result.run_id}, status={dag_result.status.value}"
+    )
 
 
 if __name__ == "__main__":
-    run_app(env_name="dev")
+    run_app(environment_name="dev")

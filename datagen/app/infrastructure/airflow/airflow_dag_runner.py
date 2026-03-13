@@ -6,9 +6,9 @@ from app.core.application.dto import TablePublication, DagRunResult
 from app.core.application.ports.dag_runner_port import DagRunnerPort
 from app.infrastructure.airflow.airflow_client import AirflowClient
 from app.infrastructure.dto import DagRunState
-from app.shared.logger import get_logger
+from app.shared.logger import airflow_logger
 
-logger = get_logger("datagen.airflow")
+logger = airflow_logger
 
 
 class AirflowDagRunner(DagRunnerPort):

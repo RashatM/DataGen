@@ -7,9 +7,9 @@ from app.core.application.ports.generator_port import IDataGenerator
 from app.core.domain.constraints import StringConstraints
 from app.core.domain.enums import CaseMode, CharacterSet
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
-from app.shared.logger import get_logger
+from app.shared.logger import generation_logger
 
-logger = get_logger("datagen.generation")
+logger = generation_logger
 
 
 class StringDataGenerator(IDataGenerator[StringConstraints]):

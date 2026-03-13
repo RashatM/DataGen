@@ -6,10 +6,10 @@ from app.core.application.ports.generator_factory_port import IDataGeneratorFact
 from app.core.application.ports.value_converter_port import IValueConverter
 from app.core.domain.entities import TableColumnSpec, GeneratedTableData, GenerationRun
 from app.core.domain.enums import RelationType
-from app.shared.logger import get_logger
+from app.shared.logger import generation_logger
 from app.shared.utils import shuffle_values_with_nulls
 
-logger = get_logger("datagen.generation")
+logger = generation_logger
 
 
 class DataGenerationService:

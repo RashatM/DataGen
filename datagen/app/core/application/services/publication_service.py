@@ -4,9 +4,9 @@ from app.core.application.dto import TablePublication
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.application.ports.query_builder_port import IQueryBuilder
 from app.core.domain.entities import GeneratedTableData
-from app.shared.logger import get_logger
+from app.shared.logger import publication_logger
 
-logger = get_logger("datagen.publication")
+logger = publication_logger
 
 
 class PublicationService:

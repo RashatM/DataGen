@@ -7,6 +7,7 @@ from pyspark.sql import SparkSession
 
 LOGGER_FORMAT = "[%(name)s] %(asctime)s %(levelname)s: %(message)s"
 LOGGER_DATE_FORMAT = "%d-%m-%y %H:%M:%S"
+AIRFLOW_LOGGER_NAME = "datagen.airflow"
 
 
 def create_logger(name: str) -> logging.Logger:
@@ -31,7 +32,7 @@ def get_logger(name: str) -> logging.Logger:
     return create_logger(name)
 
 
-logger = get_logger("datagen.airflow")
+airflow_logger = get_logger(AIRFLOW_LOGGER_NAME)
 
 
 @dataclass
@@ -130,31 +131,31 @@ class BaseSynthLoader(ABC):
             self.rename_table(table.tmp_name, table.full_name)
 
     def prepare_table(self, table: TableContract) -> None:
-        logger.info(f"Preparing table. table={table.full_name}, run_id={self.run_id}")
+        airflow_logger.info(f"Preparing table. table={table.full_name}, run_id={self.run_id}")
         tmp_ddl = self.build_tmp_ddl(table)
         self.drop_table(table.tmp_name)
         self.spark.sql(tmp_ddl)
         self.write_to_tmp(table.data_uri, table.tmp_name)
-        logger.info(f"Table prepared. table={table.full_name}, run_id={self.run_id}")
+        airflow_logger.info(f"Table prepared. table={table.full_name}, run_id={self.run_id}")
 
     def cleanup_tmp_tables(self, tables: List[TableContract]) -> None:
         for table in tables:
             try:
                 self.drop_table(table.tmp_name)
             except Exception as error:
-                logger.error(f"Failed to drop temporary table. table={table.tmp_name}, error={error}")
+                airflow_logger.error(f"Failed to drop temporary table. table={table.tmp_name}, error={error}")
 
     def load_all(self, tables: List[TableContract]) -> None:
-        logger.info(f"Loader execution started. run_id={self.run_id}, tables_count={len(tables)}")
+        airflow_logger.info(f"Loader execution started. run_id={self.run_id}, tables_count={len(tables)}")
         try:
             for table in tables:
                 self.prepare_table(table)
         except Exception:
-            logger.exception(f"Table preparation failed. run_id={self.run_id}")
+            airflow_logger.exception(f"Table preparation failed. run_id={self.run_id}")
             self.cleanup_tmp_tables(tables)
             raise
 
         for table in tables:
             self.commit_table(table)
-            logger.info(f"Table committed. table={table.full_name}, run_id={self.run_id}")
-        logger.info(f"Loader execution completed. run_id={self.run_id}, tables_count={len(tables)}")
+            airflow_logger.info(f"Table committed. table={table.full_name}, run_id={self.run_id}")
+        airflow_logger.info(f"Loader execution completed. run_id={self.run_id}, tables_count={len(tables)}")
