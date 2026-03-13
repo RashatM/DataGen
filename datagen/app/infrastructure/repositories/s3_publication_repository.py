@@ -53,17 +53,22 @@ class S3PublicationRepository(IPublicationRepository):
     def stage_table_artifacts(
             self, table_data: GeneratedTableData,
             run_id: str,
-            ddl_queries: Dict[str, str]
+            ddl_queries: Dict[str, str],
+            target_table_names: Dict[str, str],
     ) -> TablePublication:
         table = table_data.table
         data_key = self.build_data_key(run_id, table.schema_name, table.table_name)
         parquet_bytes = self.serialize_parquet(table_data)
         data_uri = self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
-        ddl_uris: Dict[str, str] = {}
+        engines: Dict[str, Any] = {}
         for engine_name, ddl_query in ddl_queries.items():
             ddl_key = self.build_ddl_key(run_id, table.schema_name, table.table_name, engine_name)
-            ddl_uris[engine_name] = self.object_storage.put_text(key=ddl_key, content=f"{ddl_query.strip()}\n")
+            ddl_uri = self.object_storage.put_text(key=ddl_key, content=f"{ddl_query.strip()}\n")
+            engines[engine_name] = {
+                "ddl_uri": ddl_uri,
+                "target_table_name": target_table_names[engine_name],
+            }
 
         publication = TablePublication(
             storage_type=StorageType.S3.value,
@@ -72,7 +77,7 @@ class S3PublicationRepository(IPublicationRepository):
             run_id=run_id,
             storage={
                 "data_uri": data_uri,
-                "ddl_uris": ddl_uris,
+                "engines": engines,
             },
         )
         return publication

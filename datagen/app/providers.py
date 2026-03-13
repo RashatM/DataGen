@@ -29,6 +29,7 @@ from app.core.application.ports.object_storage_port import IObjectStorage
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
+from app.core.application.ports.value_converter_port import IValueConverter
 from app.shared.config import S3Config, AirflowConfig, TargetStorageConfig
 
 
@@ -43,7 +44,7 @@ def provide_generator_factory() -> DataGeneratorFactory:
     return factory
 
 
-def provide_value_converter():
+def provide_value_converter() -> IValueConverter:
     factory = ValueConverterFactory()
     factory.register(DataType.STRING, StringSourceValueConverter())
     factory.register(DataType.INT, IntSourceValueConverter())
@@ -93,7 +94,7 @@ def provide_publication_service(s3_config: S3Config, target_storage: TargetStora
     publication_repository = provide_publication_repository(object_storage)
     return PublicationService(
         repository=publication_repository,
-        ddl_builders={
+        query_builders={
             "hive": HiveQueryBuilder(
                 database_name=target_storage.hive.database_name,
             ),

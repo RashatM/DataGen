@@ -40,7 +40,7 @@ class AirflowClient:
                 )
                 response.raise_for_status()
                 return response.json()
-            except requests.HTTPError as error:
+            except requests.RequestException as error:
                 last_error = error
                 if attempt < self.config.max_retries:
                     time.sleep(self.config.retry_backoff_base ** attempt)

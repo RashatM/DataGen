@@ -41,15 +41,14 @@ class TableContract:
     table_name: str
     data_uri: str
     ddl_uri: str
+    target_table_name: str
 
-    full_name: str = field(init=False)
     tmp_name: str = field(init=False)
     old_name: str = field(init=False)
 
     def __post_init__(self):
-        self.full_name = f"{self.schema_name}.{self.table_name}"
-        self.tmp_name = f"{self.full_name}_tmp"
-        self.old_name = f"{self.full_name}_old"
+        self.tmp_name = f"{self.target_table_name}_tmp"
+        self.old_name = f"{self.target_table_name}_old"
 
 
 def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableContract]:
@@ -61,27 +60,29 @@ def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableCont
       "run_id": "20260312T120000Z_uuid",
       "tables": [
         {
-          "schema_name": "sales",
-          "table_name": "orders",
+          "schema_name": "analytics",
+          "table_name": "company_groups",
           "storage_type": "s3",
           "storage": {
-            "data_uri": "s3a://bucket/runs/{run_id}/sales/orders/data/data.parquet",
-            "ddl_uris": {
-              "hive": "s3a://bucket/runs/{run_id}/sales/orders/ddl/hive.sql",
-              "iceberg": "s3a://bucket/runs/{run_id}/sales/orders/ddl/iceberg.sql"
+            "data_uri": "s3a://bucket/runs/{run_id}/analytics/company_groups/data/data.parquet",
+            "engines": {
+              "hive": {
+                "ddl_uri": "s3a://bucket/runs/{run_id}/analytics/company_groups/ddl/hive.sql",
+                "target_table_name": "l_synthetic_data.analytics__company_groups"
+              },
+              "iceberg": {
+                "ddl_uri": "s3a://bucket/runs/{run_id}/analytics/company_groups/ddl/iceberg.sql",
+                "target_table_name": "synth_data.analytics__company_groups"
+              }
             }
           }
         }
       ]
     }
 
-    DDL внутри файлов использует фиксированную БД per engine:
-      hive.sql:    CREATE TABLE IF NOT EXISTS datagen_hive.sales__orders (...)
-      iceberg.sql: CREATE TABLE IF NOT EXISTS datagen_iceberg.sales__orders (...)
-
     Аргументы:
         contract_json: JSON-строка с контрактом
-        ddl_target: ключ движка в ddl_uris ("hive" или "iceberg")
+        ddl_target: ключ движка в engines ("hive" или "iceberg")
     """
     contract = json.loads(contract_json)
     return [
@@ -89,7 +90,8 @@ def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableCont
             schema_name=table["schema_name"],
             table_name=table["table_name"],
             data_uri=table["storage"]["data_uri"],
-            ddl_uri=table["storage"]["ddl_uris"][ddl_target]
+            ddl_uri=table["storage"]["engines"][ddl_target]["ddl_uri"],
+            target_table_name=table["storage"]["engines"][ddl_target]["target_table_name"],
         )
         for table in contract["tables"]
     ]
@@ -110,7 +112,7 @@ class BaseSynthLoader(ABC):
 
     def build_tmp_ddl(self, table: TableContract) -> str:
         ddl = self.read_ddl_from_s3(table.ddl_uri)
-        return ddl.replace(table.full_name, table.tmp_name)
+        return ddl.replace(table.target_table_name, table.tmp_name)
 
     def drop_table(self, table_name: str) -> None:
         self.spark.sql(f"DROP TABLE IF EXISTS {table_name} PURGE")
@@ -120,23 +122,23 @@ class BaseSynthLoader(ABC):
 
     def swap_tables(self, table: TableContract) -> None:
         self.drop_table(table.old_name)
-        self.rename_table(table.full_name, table.old_name)
-        self.rename_table(table.tmp_name, table.full_name)
+        self.rename_table(table.target_table_name, table.old_name)
+        self.rename_table(table.tmp_name, table.target_table_name)
         self.drop_table(table.old_name)
 
     def commit_table(self, table: TableContract) -> None:
-        if self.spark.catalog.tableExists(table.full_name):
+        if self.spark.catalog.tableExists(table.target_table_name):
             self.swap_tables(table)
         else:
-            self.rename_table(table.tmp_name, table.full_name)
+            self.rename_table(table.tmp_name, table.target_table_name)
 
     def prepare_table(self, table: TableContract) -> None:
-        airflow_logger.info(f"Preparing table. table={table.full_name}, run_id={self.run_id}")
+        airflow_logger.info(f"Preparing table. table={table.target_table_name}, run_id={self.run_id}")
         tmp_ddl = self.build_tmp_ddl(table)
         self.drop_table(table.tmp_name)
         self.spark.sql(tmp_ddl)
         self.write_to_tmp(table.data_uri, table.tmp_name)
-        airflow_logger.info(f"Table prepared. table={table.full_name}, run_id={self.run_id}")
+        airflow_logger.info(f"Table prepared. table={table.target_table_name}, run_id={self.run_id}")
 
     def cleanup_tmp_tables(self, tables: List[TableContract]) -> None:
         for table in tables:
@@ -157,5 +159,5 @@ class BaseSynthLoader(ABC):
 
         for table in tables:
             self.commit_table(table)
-            airflow_logger.info(f"Table committed. table={table.full_name}, run_id={self.run_id}")
+            airflow_logger.info(f"Table committed. table={table.target_table_name}, run_id={self.run_id}")
         airflow_logger.info(f"Loader execution completed. run_id={self.run_id}, tables_count={len(tables)}")

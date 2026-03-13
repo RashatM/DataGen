@@ -124,19 +124,8 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
                 case_mode=CaseMode(case_mode_raw.lower()),
                 regular_expr=constraints_data.get("regular_expr"),
             )
-            table_columns.append(
-                TableColumnSpec(
-                    name=column_name,
-                    gen_data_type=generator_data_type,
-                    output_data_type=output_data_type,
-                    is_primary_key=is_primary_key,
-                    foreign_key=foreign_key,
-                    constraints=constraints,
-                )
-            )
-            continue
 
-        if generator_data_type == DataType.INT:
+        elif generator_data_type == DataType.INT:
             constraints = IntConstraints(
                 null_ratio=null_ratio,
                 is_unique=is_unique,
@@ -144,19 +133,8 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
                 min_value=constraints_data.get("min_value", 0),
                 max_value=constraints_data.get("max_value", 1000),
             )
-            table_columns.append(
-                TableColumnSpec(
-                    name=column_name,
-                    gen_data_type=generator_data_type,
-                    output_data_type=output_data_type,
-                    is_primary_key=is_primary_key,
-                    foreign_key=foreign_key,
-                    constraints=constraints,
-                )
-            )
-            continue
 
-        if generator_data_type == DataType.FLOAT:
+        elif generator_data_type == DataType.FLOAT:
             constraints = FloatConstraints(
                 null_ratio=null_ratio,
                 is_unique=is_unique,
@@ -165,19 +143,8 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
                 max_value=constraints_data.get("max_value", 1000),
                 precision=constraints_data.get("precision", 2),
             )
-            table_columns.append(
-                TableColumnSpec(
-                    name=column_name,
-                    gen_data_type=generator_data_type,
-                    output_data_type=output_data_type,
-                    is_primary_key=is_primary_key,
-                    foreign_key=foreign_key,
-                    constraints=constraints,
-                )
-            )
-            continue
 
-        if generator_data_type == DataType.DATE:
+        elif generator_data_type == DataType.DATE:
             min_date = constraints_data.get("min_value")
             max_date = constraints_data.get("max_value")
             normalized_allowed_values = [parse(v).date() for v in allowed_values] if allowed_values else None
@@ -189,19 +156,8 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
                 max_date=parse(max_date).date() if max_date else date(date.today().year, 12, 31),
                 date_format=constraints_data.get("date_format", "%Y-%m-%d"),
             )
-            table_columns.append(
-                TableColumnSpec(
-                    name=column_name,
-                    gen_data_type=generator_data_type,
-                    output_data_type=output_data_type,
-                    is_primary_key=is_primary_key,
-                    foreign_key=foreign_key,
-                    constraints=constraints,
-                )
-            )
-            continue
 
-        if generator_data_type == DataType.TIMESTAMP:
+        elif generator_data_type == DataType.TIMESTAMP:
             min_timestamp = constraints_data.get("min_timestamp")
             max_timestamp = constraints_data.get("max_timestamp")
             normalized_allowed_values = [parse(v) for v in allowed_values] if allowed_values else None
@@ -213,33 +169,23 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
                 max_timestamp=parse(max_timestamp) if max_timestamp else datetime(datetime.now().year, 12, 31, 0, 0, 0),
                 timestamp_format=constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
             )
-            table_columns.append(
-                TableColumnSpec(
-                    name=column_name,
-                    gen_data_type=generator_data_type,
-                    output_data_type=output_data_type,
-                    is_primary_key=is_primary_key,
-                    foreign_key=foreign_key,
-                    constraints=constraints,
-                )
-            )
-            continue
 
-        if generator_data_type == DataType.BOOLEAN:
+        elif generator_data_type == DataType.BOOLEAN:
             constraints = BooleanConstraints(null_ratio=null_ratio, allowed_values=allowed_values)
-            table_columns.append(
-                TableColumnSpec(
-                    name=column_name,
-                    gen_data_type=generator_data_type,
-                    output_data_type=output_data_type,
-                    is_primary_key=is_primary_key,
-                    foreign_key=foreign_key,
-                    constraints=constraints,
-                )
-            )
-            continue
 
-        raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
+        else:
+            raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
+
+        table_columns.append(
+            TableColumnSpec(
+                name=column_name,
+                gen_data_type=generator_data_type,
+                output_data_type=output_data_type,
+                is_primary_key=is_primary_key,
+                foreign_key=foreign_key,
+                constraints=constraints,
+            )
+        )
 
     return TableSpec(
         schema_name=schema_name,

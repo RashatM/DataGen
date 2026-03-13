@@ -13,21 +13,45 @@ class PublicationService:
     def __init__(
             self,
             repository: IPublicationRepository,
-            ddl_builders: Dict[str, IQueryBuilder],
+            query_builders: Dict[str, IQueryBuilder],
     ):
         self.repository = repository
-        self.ddl_builders = ddl_builders
+        self.query_builders = query_builders
 
     def build_table_ddl_queries(self, table_data: GeneratedTableData) -> Dict[str, str]:
         return {
             engine_name: builder.generate_table_ddl(table_data.table)
-            for engine_name, builder in self.ddl_builders.items()
+            for engine_name, builder in self.query_builders.items()
+        }
+
+    def build_target_table_names(self, table_data: GeneratedTableData) -> Dict[str, str]:
+        return {
+            engine_name: builder.build_target_table_name(table_data.table)
+            for engine_name, builder in self.query_builders.items()
         }
 
     def cleanup_run_artifacts(self, run_id: str) -> None:
         logger.info(f"Artifact cleanup started. run_id={run_id}")
         self.repository.cleanup_run_artifacts(run_id=run_id)
         logger.info(f"Artifact cleanup completed. run_id={run_id}")
+
+    def read_latest_table_data(
+            self,
+            schema_name: str,
+            table_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        latest_success_run_id = self.repository.get_latest_run_id(
+            schema_name=schema_name,
+            table_name=table_name,
+        )
+        if not latest_success_run_id:
+            return None
+
+        return self.repository.read_table_data(
+            schema_name=schema_name,
+            table_name=table_name,
+            run_id=latest_success_run_id,
+        )
 
     def stage_tables(
             self,
@@ -41,6 +65,7 @@ class PublicationService:
                 table_data=table_data,
                 run_id=run_id,
                 ddl_queries=self.build_table_ddl_queries(table_data),
+                target_table_names=self.build_target_table_names(table_data),
             )
             table_publications.append(table_publication)
             table = table_data.table
@@ -71,21 +96,3 @@ class PublicationService:
             logger.info(f"Pointer updated. table={publication.schema_name}.{publication.table_name}, run_id={publication.run_id}")
 
         return table_publications
-
-    def read_latest_table_data(
-            self,
-            schema_name: str,
-            table_name: str,
-    ) -> Optional[Dict[str, Any]]:
-        latest_success_run_id = self.repository.get_latest_run_id(
-            schema_name=schema_name,
-            table_name=table_name,
-        )
-        if not latest_success_run_id:
-            return None
-
-        return self.repository.read_table_data(
-            schema_name=schema_name,
-            table_name=table_name,
-            run_id=latest_success_run_id,
-        )

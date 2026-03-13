@@ -5,5 +5,9 @@ from app.core.domain.entities import TableSpec
 
 class IQueryBuilder(ABC):
     @abstractmethod
+    def build_target_table_name(self, table: TableSpec) -> str:
+        pass
+
+    @abstractmethod
     def generate_table_ddl(self, table: TableSpec) -> str:
         pass

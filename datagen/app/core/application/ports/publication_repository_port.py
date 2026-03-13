@@ -12,6 +12,7 @@ class IPublicationRepository(ABC):
         table_data: GeneratedTableData,
         run_id: str,
         ddl_queries: Dict[str, str],
+        target_table_names: Dict[str, str],
     ) -> TablePublication:
         pass
 

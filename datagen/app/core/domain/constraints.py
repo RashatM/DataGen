@@ -19,7 +19,7 @@ class ValueConstraints(Constraints):
 @dataclass
 class StringConstraints(ValueConstraints):
     length: int
-    regular_expr: str
+    regular_expr: Optional[str]
     character_set: CharacterSet = CharacterSet.LETTERS
     case_mode: CaseMode = CaseMode.MIXED
 
