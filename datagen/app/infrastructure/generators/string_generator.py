@@ -7,7 +7,9 @@ from app.core.application.ports.generator_port import IDataGenerator
 from app.core.domain.constraints import StringConstraints
 from app.core.domain.enums import CaseMode, CharacterSet
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
-from app.shared.logger import logger
+from app.shared.logger import get_logger
+
+logger = get_logger("datagen.generation")
 
 
 class StringDataGenerator(IDataGenerator[StringConstraints]):
@@ -65,9 +67,7 @@ class StringDataGenerator(IDataGenerator[StringConstraints]):
 
     def generate_regex_values(self, total_rows: int, constraints: StringConstraints) -> List[str]:
         if total_rows > 10000:
-            logger.warning(
-                "Generating a large number of regex-based strings may be slow and consume significant memory."
-            )
+            logger.warning(f"Regex generation may be slow. rows={total_rows}")
 
         result = []
         batch_size = 1000

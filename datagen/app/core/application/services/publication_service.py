@@ -4,7 +4,9 @@ from app.core.application.dto import TablePublication
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.application.ports.query_builder_port import IQueryBuilder
 from app.core.domain.entities import GeneratedTableData
-from app.shared.logger import logger
+from app.shared.logger import get_logger
+
+logger = get_logger("datagen.publication")
 
 
 class PublicationService:
@@ -41,8 +43,7 @@ class PublicationService:
             table_publications.append(table_publication)
             table = table_data.table
             logger.info(
-                f"Staged table artifacts {table.full_table_name} "
-                f"rows={table.total_rows} columns={len(table.columns)}"
+                f"Artifacts uploaded. table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
             )
 
         return table_publications
@@ -55,7 +56,7 @@ class PublicationService:
         try:
             table_publications = self.stage_tables(run_id, generated_tables)
         except Exception:
-            logger.info(f"Staging failed, cleaning up artifacts for run_id={run_id}")
+            logger.exception(f"Artifact upload failed. run_id={run_id}")
             self.cleanup_run_artifacts(run_id=run_id)
             raise
 
@@ -65,7 +66,7 @@ class PublicationService:
                 table_name=publication.table_name,
                 run_id=publication.run_id,
             )
-            logger.info(f"Committed pointer {publication.schema_name}.{publication.table_name}")
+            logger.info(f"Pointer updated. table={publication.schema_name}.{publication.table_name}, run_id={publication.run_id}")
 
         return table_publications
 

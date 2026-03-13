@@ -11,9 +11,10 @@ from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
 from app.providers import provide_dag_runner, provide_generation_service, provide_publication_service
 from app.shared.config import load_app_settings
-from app.shared.logger import logger
+from app.shared.logger import get_logger
 
 DEFAULT_DAG_TIMEOUT_SECONDS = 600
+logger = get_logger("datagen.pipeline")
 
 
 class DataPipelineExecutor:
@@ -45,7 +46,9 @@ class DataPipelineExecutor:
         generated_tables = self.generation_service.generate_table_data(generation_run)
 
         table_names = [t.table.full_table_name for t in generated_tables]
-        logger.info(f"Generated {len(generated_tables)} tables for run_id={run_id}: {table_names}")
+        logger.info(
+            f"Generation completed. run_id={run_id}, tables_count={len(generated_tables)}, tables={table_names}"
+        )
         return generated_tables
 
     def publish(
@@ -57,7 +60,7 @@ class DataPipelineExecutor:
             run_id=run_id,
             generated_tables=generated_tables,
         )
-        logger.info(f"Published {len(publications)} tables for run_id={run_id}")
+        logger.info(f"Publication completed. run_id={run_id}, tables_count={len(publications)}")
         return publications
 
     def trigger_dag(
@@ -70,18 +73,18 @@ class DataPipelineExecutor:
             publications=publications,
             timeout_seconds=self.dag_timeout_seconds,
         )
-        logger.info(f"DAG finished run_id={run_id} status={dag_result.status.value}")
+        logger.info(f"DAG execution completed. run_id={run_id}, status={dag_result.status.value}")
         return dag_result
 
     def execute(self, raw_tables: List[Any]) -> DagRunResult:
         run_id = self.generate_run_id()
-        logger.info(f"Starting pipeline run_id={run_id}")
+        logger.info(f"Pipeline started. run_id={run_id}")
 
         generated_tables = self.generate(run_id, raw_tables)
         publications = self.publish(run_id, generated_tables)
         dag_result = self.trigger_dag(run_id, publications)
 
-        logger.info(f"Pipeline completed run_id={run_id} status={dag_result.status.value}")
+        logger.info(f"Pipeline completed. run_id={run_id}, status={dag_result.status.value}")
         return dag_result
 
 
@@ -96,7 +99,7 @@ def run_app(env_name: str) -> None:
     )
     dag_result = pipeline.execute(raw_tables)
 
-    logger.info(f"env={env_name} dag_run_id={dag_result.run_id} status={dag_result.status.value}")
+    logger.info(f"Application finished. env={env_name}, dag_run_id={dag_result.run_id}, status={dag_result.status.value}")
 
 
 if __name__ == "__main__":

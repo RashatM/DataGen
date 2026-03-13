@@ -5,25 +5,33 @@ from dataclasses import dataclass, field
 from typing import List
 from pyspark.sql import SparkSession
 
+LOGGER_FORMAT = "[%(name)s] %(asctime)s %(levelname)s: %(message)s"
+LOGGER_DATE_FORMAT = "%d-%m-%y %H:%M:%S"
 
-def create_logger() -> logging.Logger:
-    custom_logger = logging.getLogger("logger")
+
+def create_logger(name: str) -> logging.Logger:
+    custom_logger = logging.getLogger(name)
     if custom_logger.handlers:
         return custom_logger
     custom_logger.setLevel(logging.INFO)
 
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
-        fmt='[DL_PLATFORM] %(asctime)s %(levelname)s: %(message)s',
-        datefmt='%d-%m-%y %H:%M:%S'
+        fmt=LOGGER_FORMAT,
+        datefmt=LOGGER_DATE_FORMAT
     )
     handler.setFormatter(formatter)
 
     custom_logger.addHandler(handler)
+    custom_logger.propagate = False
     return custom_logger
 
 
-logger = create_logger()
+def get_logger(name: str) -> logging.Logger:
+    return create_logger(name)
+
+
+logger = get_logger("datagen.airflow")
 
 
 @dataclass
@@ -122,29 +130,29 @@ class BaseSynthLoader(ABC):
             self.rename_table(table.tmp_name, table.full_name)
 
     def prepare_table(self, table: TableContract) -> None:
-        logger.info(f"Preparing table={table.full_name} run_id={self.run_id}")
+        logger.info(f"Preparing table. table={table.full_name}, run_id={self.run_id}")
         tmp_ddl = self.build_tmp_ddl(table)
         self.drop_table(table.tmp_name)
         self.spark.sql(tmp_ddl)
         self.write_to_tmp(table.data_uri, table.tmp_name)
-        logger.info(f"Prepared table={table.full_name}")
+        logger.info(f"Table prepared. table={table.full_name}, run_id={self.run_id}")
 
     def cleanup_tmp_tables(self, tables: List[TableContract]) -> None:
         for table in tables:
             try:
                 self.drop_table(table.tmp_name)
             except Exception as error:
-                logger.error(f"Failed to cleanup tmp table={table.tmp_name} error={error}")
+                logger.error(f"Failed to drop temporary table. table={table.tmp_name}, error={error}")
 
     def load_all(self, tables: List[TableContract]) -> None:
         try:
             for table in tables:
                 self.prepare_table(table)
         except Exception:
-            logger.error(f"Prepare phase failed, cleaning up tmp tables run_id={self.run_id}")
+            logger.exception(f"Table preparation failed. run_id={self.run_id}")
             self.cleanup_tmp_tables(tables)
             raise
 
         for table in tables:
             self.commit_table(table)
-            logger.info(f"Committed table={table.full_name}")
+            logger.info(f"Table committed. table={table.full_name}, run_id={self.run_id}")

@@ -2,7 +2,9 @@ import argparse
 from contextlib import contextmanager
 from pyspark.sql import SparkSession
 
-from base_loader import BaseSynthLoader, parse_table_contracts, logger
+from base_loader import BaseSynthLoader, get_logger, parse_table_contracts
+
+logger = get_logger("datagen.airflow")
 
 
 @contextmanager
@@ -32,11 +34,11 @@ def open_spark_session(app_name: str):
     )
     try:
         spark_session.sparkContext.setLogLevel("INFO")
-        logger.info("Spark session opened")
+        logger.info("Spark session opened.")
         yield spark_session
     finally:
         spark_session.stop()
-        logger.info("Spark session closed")
+        logger.info("Spark session closed.")
 
 
 def parse_args() -> argparse.Namespace:

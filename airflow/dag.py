@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict
+from typing import Any, Dict
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
@@ -17,6 +17,13 @@ EMAIL_LIST = []
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/datagen/base_loader.py"
 ICEBERG_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/datagen/iceberg_load.py"
 HADOOP_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/datagen/hadoop_load.py"
+HADOOP_CLUSTER_CONFIG_VARIABLE = "datagen_hadoop_cluster_config"
+
+SPARK_CONF_DIRS = {
+    "BDA51": "/opt/airflow/dags/repo/configs/datagen/bda51/spark-conf",
+    "BDA61": "/opt/airflow/dags/repo/configs/datagen/bda61/spark-conf",
+    "BDA71": "/opt/airflow/dags/repo/configs/datagen/bda71/spark-conf",
+}
 
 
 def validate_contract(**context) -> None:
@@ -40,22 +47,28 @@ def get_iceberg_spark_config() -> Dict[str, str]:
     }
 
 
+def get_hadoop_cluster_config() -> Dict[str, Any]:
+    cluster_config = Variable.get(HADOOP_CLUSTER_CONFIG_VARIABLE, deserialize_json=True)
+    required_keys = ["cluster_name", "kerberos_principal", "kerberos_keytab_path"]
+    missing_keys = [key for key in required_keys if not cluster_config.get(key)]
+
+    if missing_keys:
+        raise ValueError(
+            f"Variable {HADOOP_CLUSTER_CONFIG_VARIABLE} is missing required keys: {', '.join(missing_keys)}"
+        )
+
+    return cluster_config
+
+
 def get_hadoop_spark_config() -> Dict[str, str]:
-    cluster_name = Variable.get("datagen_cluster_name")
-    k_principal = Variable.get("datagen_datalake_principal")
-    k_keytab = Variable.get("datagen_datalake_keytab_path")
+    cluster_config = get_hadoop_cluster_config()
+    cluster_name = cluster_config["cluster_name"]
 
-    spark_conf_dirs = {
-        "BDA51": "/opt/airflow/dags/repo/configs/datagen/bda51/spark-conf",
-        "BDA61": "/opt/airflow/dags/repo/configs/datagen/bda61/spark-conf",
-        "BDA71": "/opt/airflow/dags/repo/configs/datagen/bda71/spark-conf",
-    }
-
-    if cluster_name not in spark_conf_dirs:
-        raise ValueError( f"Unsupported cluster_name={cluster_name}. Expected: {', '.join(spark_conf_dirs)}")
+    if cluster_name not in SPARK_CONF_DIRS:
+        raise ValueError(f"Unsupported cluster_name={cluster_name}. Expected: {', '.join(SPARK_CONF_DIRS)}")
 
     krb5_conf = "/tmp/krb5.conf"
-    os.environ["SPARK_CONF_DIR"] = spark_conf_dirs[cluster_name]
+    os.environ["SPARK_CONF_DIR"] = SPARK_CONF_DIRS[cluster_name]
     os.environ["JAVA_TOOL_OPTIONS"] = (
         "-Djavax.net.ssl.trustStore=/tmp/truststore.jks "
         "-Djavax.net.ssl.trustStorePassword=changeit "
@@ -72,8 +85,8 @@ def get_hadoop_spark_config() -> Dict[str, str]:
         "spark.driver.memory": "16G",
         "spark.executor.memory": "20G",
         "spark.executor.cores": "5",
-        "spark.kerberos.principal": k_principal,
-        "spark.kerberos.keytab": k_keytab,
+        "spark.kerberos.principal": cluster_config["kerberos_principal"],
+        "spark.kerberos.keytab": cluster_config["kerberos_keytab_path"],
         "spark.kubernetes.kerberos.krb5.path": krb5_conf,
     }
 
@@ -105,7 +118,7 @@ with DAG(
         task_id="iceberg_load",
         name="datagen_iceberg_load",
         conn_id="spark_k8s",
-        conf=get_iceberg_spark_config(),
+        config_callable=get_iceberg_spark_config,
         retries=0,
         application=ICEBERG_LOADER_SCRIPT,
         py_files=[BASE_LOADER_SCRIPT],
@@ -119,7 +132,7 @@ with DAG(
         task_id="hadoop_load",
         name="datagen_hadoop_load",
         conn_id="spark_k8s",
-        config_callable=get_hadoop_spark_config(),
+        config_callable=get_hadoop_spark_config,
         application=HADOOP_LOADER_SCRIPT,
         py_files=[BASE_LOADER_SCRIPT],
         application_args=[
@@ -142,4 +155,3 @@ with DAG(
     start_task >> validate_contract_task >> [iceberg_load_task, hadoop_load_task]
     [iceberg_load_task, hadoop_load_task] >> job_succeeded
     [iceberg_load_task, hadoop_load_task] >> job_failed
-

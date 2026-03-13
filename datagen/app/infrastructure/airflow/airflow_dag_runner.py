@@ -6,7 +6,9 @@ from app.core.application.dto import TablePublication, DagRunResult
 from app.core.application.ports.dag_runner_port import DagRunnerPort
 from app.infrastructure.airflow.airflow_client import AirflowClient
 from app.infrastructure.dto import DagRunState
-from app.shared.logger import logger
+from app.shared.logger import get_logger
+
+logger = get_logger("datagen.airflow")
 
 
 class AirflowDagRunner(DagRunnerPort):
@@ -53,14 +55,14 @@ class AirflowDagRunner(DagRunnerPort):
             dag_run_state = self.client.get_dag_run_state(dag_run_id)
 
             if dag_run_state.is_terminal():
-                logger.info(f"DAG reached terminal state dag_run_id={dag_run_id} state={dag_run_state.state}")
+                logger.info(f"DAG reached terminal state. dag_run_id={dag_run_id}, state={dag_run_state.state}")
                 return self.to_dag_run_result(dag_run_state)
 
             elapsed = int(timeout_seconds - (deadline - time.monotonic()))
-            logger.info(f"Polling DAG dag_run_id={dag_run_id} state={dag_run_state.state} elapsed={elapsed}s")
+            logger.info(f"DAG is still running. dag_run_id={dag_run_id}, state={dag_run_state.state}, elapsed_seconds={elapsed}")
             time.sleep(poll_interval)
 
-        logger.info(f"DAG timed out dag_run_id={dag_run_id} timeout={timeout_seconds}s")
+        logger.warning(f"DAG polling timed out. dag_run_id={dag_run_id}, timeout_seconds={timeout_seconds}")
         return DagRunResult(
             run_id=dag_run_id,
             dag_id=self.client.dag_id(),
@@ -77,8 +79,7 @@ class AirflowDagRunner(DagRunnerPort):
         payload = self.build_payload(run_id, publications)
 
         logger.info(
-            f"Triggering DAG dag_id={self.client.dag_id()} dag_run_id={dag_run_id} "
-            f"tables={len(publications)}"
+            f"DAG trigger requested. dag_id={self.client.dag_id()}, dag_run_id={dag_run_id}, tables_count={len(publications)}"
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
 
