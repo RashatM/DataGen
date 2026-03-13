@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 from app.core.application.dto import EngineLoadPayload, TablePublication
-from app.core.application.ports.artifact_publication_repository_port import IArtifactPublicationRepository
+from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
 from app.core.application.ports.query_builder_port import IQueryBuilder
 from app.core.domain.entities import GeneratedTableData
 from app.shared.logger import publication_logger

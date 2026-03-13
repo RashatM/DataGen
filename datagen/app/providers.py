@@ -2,8 +2,8 @@ import boto3
 from mypy_boto3_s3 import S3Client
 
 from app.core.application.ports.dag_runner_port import DagRunnerPort
-from app.core.application.ports.artifact_publication_repository_port import IArtifactPublicationRepository
-from app.core.application.services.artifact_publication_service import ArtifactPublicationService
+from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
+from app.core.application.services.publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.domain.enums import DataType
 from app.infrastructure.airflow.airflow_client import AirflowClient

@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 
 from app.core.application.dto import EngineLoadArtifact, EngineLoadPayload, PublicationArtifacts, TablePublication
 from app.core.application.ports.object_storage_port import IObjectStorage
-from app.core.application.ports.artifact_publication_repository_port import IArtifactPublicationRepository
+from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
 from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.constants import StorageType
 from app.infrastructure.errors import ObjectNotFoundError, RunStateCorruptedError

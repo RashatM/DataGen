@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from app.core.application.dto import DagRunResult, TablePublication
 from app.core.application.ports.dag_runner_port import DagRunnerPort
-from app.core.application.services.artifact_publication_service import ArtifactPublicationService
+from app.core.application.services.publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
