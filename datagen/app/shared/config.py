@@ -89,7 +89,7 @@ def parse_s3_config(config_data: Dict[str, Any]) -> S3Config:
     )
 
 
-def parse_airflow_environment_config(config_data: Dict[str, Any], environment_name: str) -> AirflowConfig:
+def parse_airflow_env_config(config_data: Dict[str, Any], env_name: str) -> AirflowConfig:
     airflow_section = config_data.get("airflow", {})
     if not airflow_section:
         raise ConfigurationError("Missing 'airflow' section in config.yaml")
@@ -99,15 +99,15 @@ def parse_airflow_environment_config(config_data: Dict[str, Any], environment_na
     if not environments:
         raise ConfigurationError("Missing 'airflow.environments' section in config.yaml")
 
-    environment_data = environments.get(environment_name)
+    environment_data = environments.get(env_name)
     if not environment_data:
-        raise ConfigurationError(f"Airflow environment '{environment_name}' not found in config.yaml")
+        raise ConfigurationError(f"Airflow environment '{env_name}' not found in config.yaml")
 
     data = merge(defaults, environment_data)
 
     base_url = data.get("base_url", "")
     if not base_url:
-        raise ConfigurationError(f"Airflow environment '{environment_name}' missing 'base_url'")
+        raise ConfigurationError(f"Airflow environment '{env_name}' missing 'base_url'")
 
     return AirflowConfig(
         base_url=base_url,
@@ -150,6 +150,6 @@ def load_app_settings(environment_name: str) -> AppConfig:
 
     return AppConfig(
         s3=parse_s3_config(config_data),
-        airflow=parse_airflow_environment_config(config_data, environment_name),
+        airflow=parse_airflow_env_config(config_data, environment_name),
         target_storage=parse_target_storage_config(config_data),
     )

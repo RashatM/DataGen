@@ -91,10 +91,9 @@ class DataPipelineExecutor:
         return dag_result
 
 
-def run_app(environment_name: str) -> None:
-    logger.info(f"Application started. environment={environment_name}")
-    config = load_app_settings(environment_name)
-    raw_tables: List[Any] = []
+def run_app(env_name: str, raw_tables: List[Any]) -> None:
+    logger.info(f"Application started. environment={env_name}")
+    config = load_app_settings(env_name)
 
     pipeline = DataPipelineExecutor(
         generation_service=provide_generation_service(),
@@ -104,9 +103,5 @@ def run_app(environment_name: str) -> None:
     dag_result = pipeline.execute(raw_tables)
 
     logger.info(
-        f"Application finished. environment={environment_name}, dag_run_id={dag_result.run_id}, status={dag_result.status.value}"
+        f"Application finished. environment={env_name}, dag_run_id={dag_result.run_id}, status={dag_result.status.value}"
     )
-
-
-if __name__ == "__main__":
-    run_app(environment_name="dev")
