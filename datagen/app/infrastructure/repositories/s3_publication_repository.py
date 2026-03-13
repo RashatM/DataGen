@@ -55,13 +55,13 @@ class S3PublicationRepository(IPublicationRepository):
             ddl_queries: Dict[str, str]
     ) -> TablePublication:
         table = table_data.table
-        data_key = self.build_data_key(table.schema_name, table.table_name, run_id)
+        data_key = self.build_data_key(run_id, table.schema_name, table.table_name)
         parquet_bytes = self.serialize_parquet(table_data)
         data_uri = self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
         ddl_uris: Dict[str, str] = {}
         for engine_name, ddl_query in ddl_queries.items():
-            ddl_key = self.build_ddl_key(table.schema_name, table.table_name, run_id, engine_name)
+            ddl_key = self.build_ddl_key(run_id, table.schema_name, table.table_name, engine_name)
             ddl_uris[engine_name] = self.object_storage.put_text(key=ddl_key, content=f"{ddl_query.strip()}\n")
 
         publication = TablePublication(
@@ -102,7 +102,7 @@ class S3PublicationRepository(IPublicationRepository):
         return run_id
 
     def read_table_data(self, schema_name: str, table_name: str, run_id: str) -> Dict[str, Any]:
-        key = self.build_data_key(schema_name, table_name, run_id)
+        key = self.build_data_key(run_id, schema_name, table_name)
         payload = self.object_storage.get_bytes(key=key)
         return self.deserialize_parquet(payload)
 

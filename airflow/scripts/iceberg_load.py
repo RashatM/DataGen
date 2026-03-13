@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 
-from common import BaseSynthLoader, parse_table_contracts, logger
+from base_loader import BaseSynthLoader, parse_table_contracts, logger
 
 
 def create_logger() -> logging.Logger:

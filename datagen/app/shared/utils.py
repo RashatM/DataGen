@@ -1,13 +1,13 @@
 import random
 from typing import Any, List
 
-import matplotlib.pyplot as plt
-import networkx as nx
-
 
 def visualize_graph(graph):
+    import matplotlib.pyplot as plt
+    import networkx as nx
+
     plt.figure(figsize=(10, 6))
-    pos = nx.spring_layout(graph)  # Оптимальная раскладка узлов
+    pos = nx.spring_layout(graph)
     nx.draw(graph, pos, with_labels=True, node_color="lightblue", node_size=2000, font_size=10, font_weight="bold")
     plt.title("Граф зависимостей таблиц")
     plt.show()

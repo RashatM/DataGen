@@ -25,20 +25,18 @@ class AirflowClient:
     def build_dag_run_id(self, run_id: str) -> str:
         return f"{self.config.dag_run_id_prefix}_{run_id}"
 
-    def post_with_retry(
+    def request_with_retry(
             self,
+            method: str,
             url: str,
-            payload: Dict[str, Any],
+            **kwargs,
     ) -> Dict[str, Any]:
         last_error: Optional[Exception] = None
 
         for attempt in range(1, self.config.max_retries + 1):
             try:
-                response = requests.post(
-                    url,
-                    json=payload,
-                    auth=self.auth,
-                    verify=False,
+                response = requests.request(
+                    method, url, auth=self.auth, verify=False, **kwargs,
                 )
                 response.raise_for_status()
                 return response.json()
@@ -48,24 +46,7 @@ class AirflowClient:
                     time.sleep(self.config.retry_backoff_base ** attempt)
 
         raise RuntimeError(
-            f"Airflow POST failed after {self.config.max_retries} attempts"
-        ) from last_error
-
-    def get_with_retry(self, url: str) -> Dict[str, Any]:
-        last_error: Optional[Exception] = None
-
-        for attempt in range(1, self.config.max_retries + 1):
-            try:
-                response = requests.get(url, auth=self.auth, verify=False)
-                response.raise_for_status()
-                return response.json()
-            except requests.HTTPError as error:
-                last_error = error
-                if attempt < self.config.max_retries:
-                    time.sleep(self.config.retry_backoff_base ** attempt)
-
-        raise RuntimeError(
-            f"Airflow GET failed after {self.config.max_retries} attempts"
+            f"Airflow {method.upper()} failed after {self.config.max_retries} attempts"
         ) from last_error
 
     def trigger_dag(
@@ -75,14 +56,14 @@ class AirflowClient:
     ) -> None:
         url = f"{self.config.base_url}/api/v1/dags/{self.config.dag_id}/dagRuns"
         body = {"dag_run_id": dag_run_id, "conf": payload}
-        self.post_with_retry(url=url, payload=body)
+        self.request_with_retry("POST", url=url, json=body)
 
     def get_dag_run_state(self, dag_run_id: str) -> DagRunState:
         url = (
             f"{self.config.base_url}/api/v1/dags/"
             f"{self.config.dag_id}/dagRuns/{dag_run_id}"
         )
-        raw = self.get_with_retry(url=url)
+        raw = self.request_with_retry("GET", url=url)
         return DagRunState(
             dag_run_id=raw.get("dag_run_id", dag_run_id),
             state=raw.get("state", ""),

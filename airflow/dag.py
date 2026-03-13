@@ -21,10 +21,6 @@ HADOOP_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/datagen/hadoop_load.py"
 def validate_contract(**context) -> None:
     conf = context["dag_run"].conf or {}
 
-    if conf.get("contract_version") != "3":
-        raise ValueError(
-            f"Unsupported contract_version={conf.get('contract_version')}, expected '3'"
-        )
     if not conf.get("run_id"):
         raise ValueError("Contract is missing 'run_id'")
     if not conf.get("tables"):
@@ -140,5 +136,7 @@ with DAG(
     )
 
     # iceberg и hadoop параллельно после валидации
-    start_task >> validate_contract_task >> [iceberg_load_task, hadoop_load_task] >> [job_succeeded, job_failed]
+    start_task >> validate_contract_task >> [iceberg_load_task, hadoop_load_task]
+    [iceberg_load_task, hadoop_load_task] >> job_succeeded
+    [iceberg_load_task, hadoop_load_task] >> job_failed
 
