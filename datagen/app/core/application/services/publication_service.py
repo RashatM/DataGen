@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from app.core.application.dto import TablePublication
+from app.core.application.dto import EngineArtifactDraft, TablePublication
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.application.ports.query_builder_port import IQueryBuilder
 from app.core.domain.entities import GeneratedTableData
@@ -18,15 +18,12 @@ class PublicationService:
         self.repository = repository
         self.query_builders = query_builders
 
-    def build_table_ddl_queries(self, table_data: GeneratedTableData) -> Dict[str, str]:
+    def build_engine_artifacts(self, table_data: GeneratedTableData) -> Dict[str, EngineArtifactDraft]:
         return {
-            engine_name: builder.generate_table_ddl(table_data.table)
-            for engine_name, builder in self.query_builders.items()
-        }
-
-    def build_target_table_names(self, table_data: GeneratedTableData) -> Dict[str, str]:
-        return {
-            engine_name: builder.build_target_table_name(table_data.table)
+            engine_name: EngineArtifactDraft(
+                ddl_query=builder.generate_table_ddl(table_data.table),
+                target_table_name=builder.build_target_table_name(table_data.table),
+            )
             for engine_name, builder in self.query_builders.items()
         }
 
@@ -64,8 +61,7 @@ class PublicationService:
             table_publication = self.repository.stage_table_artifacts(
                 table_data=table_data,
                 run_id=run_id,
-                ddl_queries=self.build_table_ddl_queries(table_data),
-                target_table_names=self.build_target_table_names(table_data),
+                engine_artifacts=self.build_engine_artifacts(table_data),
             )
             table_publications.append(table_publication)
             table = table_data.table

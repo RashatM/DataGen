@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-from app.core.application.dto import TablePublication
+from app.core.application.dto import EngineArtifactDraft, TablePublication
 from app.core.domain.entities import GeneratedTableData
 
 
@@ -11,8 +11,7 @@ class IPublicationRepository(ABC):
         self,
         table_data: GeneratedTableData,
         run_id: str,
-        ddl_queries: Dict[str, str],
-        target_table_names: Dict[str, str],
+        engine_artifacts: Dict[str, EngineArtifactDraft],
     ) -> TablePublication:
         pass
 

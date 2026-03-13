@@ -17,6 +17,12 @@ class PublicationArtifacts:
 
 
 @dataclass(slots=True)
+class EngineArtifactDraft:
+    ddl_query: str
+    target_table_name: str
+
+
+@dataclass(slots=True)
 class TablePublication:
     schema_name: str
     table_name: str

@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from app.core.application.dto import EngineLoadSpec, PublicationArtifacts, TablePublication
+from app.core.application.dto import EngineArtifactDraft, EngineLoadSpec, PublicationArtifacts, TablePublication
 from app.core.application.ports.object_storage_port import IObjectStorage
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.domain.entities import GeneratedTableData
@@ -53,8 +53,7 @@ class S3PublicationRepository(IPublicationRepository):
     def stage_table_artifacts(
             self, table_data: GeneratedTableData,
             run_id: str,
-            ddl_queries: Dict[str, str],
-            target_table_names: Dict[str, str],
+            engine_artifacts: Dict[str, EngineArtifactDraft],
     ) -> TablePublication:
         table = table_data.table
         data_key = self.build_data_key(run_id, table.schema_name, table.table_name)
@@ -62,12 +61,12 @@ class S3PublicationRepository(IPublicationRepository):
         data_uri = self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
         engines: Dict[str, EngineLoadSpec] = {}
-        for engine_name, ddl_query in ddl_queries.items():
+        for engine_name, artifact in engine_artifacts.items():
             ddl_key = self.build_ddl_key(run_id, table.schema_name, table.table_name, engine_name)
-            ddl_uri = self.object_storage.put_text(key=ddl_key, content=f"{ddl_query.strip()}\n")
+            ddl_uri = self.object_storage.put_text(key=ddl_key, content=f"{artifact.ddl_query.strip()}\n")
             engines[engine_name] = EngineLoadSpec(
                 ddl_uri=ddl_uri,
-                target_table_name=target_table_names[engine_name],
+                target_table_name=artifact.target_table_name,
             )
 
         publication = TablePublication(
