@@ -18,7 +18,7 @@ class PublicationService:
         self.repository = repository
         self.query_builders = query_builders
 
-    def build_engine_artifacts(self, table_data: GeneratedTableData) -> Dict[str, EngineArtifactDraft]:
+    def build_engine_artifacts(self, table_data: GeneratedTableData) -> Dict[str, EngineArtifaEngineArtifactDraftctDraft]:
         return {
             engine_name: EngineArtifactDraft(
                 ddl_query=builder.generate_table_ddl(table_data.table),
