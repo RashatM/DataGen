@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from app.core.application.dto import TablePublication
+from app.core.application.dto import EngineLoadSpec, PublicationArtifacts, TablePublication
 from app.core.application.ports.object_storage_port import IObjectStorage
 from app.core.application.ports.publication_repository_port import IPublicationRepository
 from app.core.domain.entities import GeneratedTableData
@@ -61,24 +61,24 @@ class S3PublicationRepository(IPublicationRepository):
         parquet_bytes = self.serialize_parquet(table_data)
         data_uri = self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
-        engines: Dict[str, Any] = {}
+        engines: Dict[str, EngineLoadSpec] = {}
         for engine_name, ddl_query in ddl_queries.items():
             ddl_key = self.build_ddl_key(run_id, table.schema_name, table.table_name, engine_name)
             ddl_uri = self.object_storage.put_text(key=ddl_key, content=f"{ddl_query.strip()}\n")
-            engines[engine_name] = {
-                "ddl_uri": ddl_uri,
-                "target_table_name": target_table_names[engine_name],
-            }
+            engines[engine_name] = EngineLoadSpec(
+                ddl_uri=ddl_uri,
+                target_table_name=target_table_names[engine_name],
+            )
 
         publication = TablePublication(
-            storage_type=StorageType.S3.value,
             schema_name=table.schema_name,
             table_name=table.table_name,
             run_id=run_id,
-            storage={
-                "data_uri": data_uri,
-                "engines": engines,
-            },
+            storage_type=StorageType.S3.value,
+            artifacts=PublicationArtifacts(
+                data_uri=data_uri,
+                engines=engines,
+            ),
         )
         return publication
 

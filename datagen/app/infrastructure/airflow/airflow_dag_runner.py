@@ -1,4 +1,5 @@
 import time
+from dataclasses import asdict
 from typing import Any, Dict, List
 
 from app.core.application.constants import DagRunStatus
@@ -17,22 +18,22 @@ class AirflowDagRunner(DagRunnerPort):
         self.client = client
 
     @staticmethod
+    def build_table_entry(pub: TablePublication) -> Dict[str, Any]:
+        return {
+            "schema_name": pub.schema_name,
+            "table_name": pub.table_name,
+            "storage_type": pub.storage_type,
+            "storage": asdict(pub.artifacts),
+        }
+
+    @staticmethod
     def build_payload(
         run_id: str,
         publications: List[TablePublication],
     ) -> Dict[str, Any]:
-        tables = [
-            {
-                "schema_name": pub.schema_name,
-                "table_name": pub.table_name,
-                "storage_type": pub.storage_type,
-                "storage": pub.storage,
-            }
-            for pub in publications
-        ]
         return {
             "run_id": run_id,
-            "tables": tables,
+            "tables": [AirflowDagRunner.build_table_entry(pub) for pub in publications],
         }
 
     def to_dag_run_result(self, dag_run_state: DagRunState) -> DagRunResult:

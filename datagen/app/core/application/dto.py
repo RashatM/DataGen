@@ -1,19 +1,28 @@
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List
+from dataclasses import dataclass, field
+from typing import Any, Dict
 
 from app.core.application.constants import DagRunStatus
 
 
 @dataclass(slots=True)
+class EngineLoadSpec:
+    ddl_uri: str
+    target_table_name: str
+
+
+@dataclass(slots=True)
+class PublicationArtifacts:
+    data_uri: str
+    engines: Dict[str, EngineLoadSpec]
+
+
+@dataclass(slots=True)
 class TablePublication:
-    storage_type: str
     schema_name: str
     table_name: str
     run_id: str
-    storage: Dict[str, Any]
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+    storage_type: str
+    artifacts: PublicationArtifacts
 
 
 @dataclass
