@@ -67,7 +67,7 @@ class StringDataGenerator(IDataGenerator[StringConstraints]):
 
     def generate_regex_values(self, total_rows: int, constraints: StringConstraints) -> List[str]:
         if total_rows > 10000:
-            logger.warning(f"Regex generation may be slow. rows={total_rows}")
+            logger.warning(f"Regex generation may be slow: rows={total_rows}")
 
         result = []
         batch_size = 1000

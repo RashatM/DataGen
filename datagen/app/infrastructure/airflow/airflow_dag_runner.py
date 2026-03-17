@@ -49,25 +49,25 @@ class AirflowDagRunner(DagRunnerPort):
         timeout_seconds: int,
     ) -> DagRunResult:
         poll_interval = self.client.poll_interval()
-        deadline = time.monotonic() + timeout_seconds
+        start = time.monotonic()
+        deadline = start + timeout_seconds
         previous_state = None
 
         while time.monotonic() < deadline:
             dag_run_state = self.client.get_dag_run_state(dag_run_id)
 
             if dag_run_state.is_terminal():
-                logger.info(f"DAG reached terminal state. dag_run_id={dag_run_id}, state={dag_run_state.state}")
+                total = int(time.monotonic() - start)
+                logger.info(f"DAG reached terminal state: dag_run_id={dag_run_id}, state={dag_run_state.state}, total={total}s")
                 return self.to_dag_run_result(dag_run_state)
 
             if dag_run_state.state != previous_state:
-                elapsed = int(timeout_seconds - (deadline - time.monotonic()))
-                logger.info(
-                    f"DAG state updated. dag_run_id={dag_run_id}, state={dag_run_state.state}, elapsed_seconds={elapsed}"
-                )
+                elapsed = int(time.monotonic() - start)
+                logger.info(f"DAG state updated: dag_run_id={dag_run_id}, state={dag_run_state.state}, elapsed={elapsed}s")
                 previous_state = dag_run_state.state
             time.sleep(poll_interval)
 
-        logger.warning(f"DAG polling timed out. dag_run_id={dag_run_id}, timeout_seconds={timeout_seconds}")
+        logger.warning(f"DAG polling timed out: dag_run_id={dag_run_id}, timeout={timeout_seconds}s")
         return DagRunResult(
             run_id=dag_run_id,
             dag_id=self.client.dag_id(),
@@ -84,10 +84,10 @@ class AirflowDagRunner(DagRunnerPort):
         payload = self.build_payload(run_id, publications)
 
         logger.info(
-            f"DAG trigger requested. dag_id={self.client.dag_id()}, dag_run_id={dag_run_id}, tables_count={len(publications)}"
+            f"DAG trigger requested: dag_id={self.client.dag_id()}, dag_run_id={dag_run_id}, tables_count={len(publications)}"
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
-        logger.info(f"DAG trigger accepted. dag_id={self.client.dag_id()}, dag_run_id={dag_run_id}")
+        logger.info(f"DAG trigger accepted: dag_run_id={dag_run_id}")
 
         return self.poll_until_terminal(
             dag_run_id=dag_run_id,

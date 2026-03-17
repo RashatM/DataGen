@@ -70,7 +70,7 @@ class DataGenerationService:
                 )
             )
             logger.info(
-                f"Table generated. table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
+                f"Table generated: table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
             )
 
         return table_data_results

@@ -31,9 +31,9 @@ class ArtifactPublicationService:
         return payloads
 
     def cleanup_run_artifacts(self, run_id: str) -> None:
-        logger.info(f"Artifact cleanup started. run_id={run_id}")
+        logger.info(f"Artifact cleanup started: run_id={run_id}")
         self.repository.cleanup_run_artifacts(run_id=run_id)
-        logger.info(f"Artifact cleanup completed. run_id={run_id}")
+        logger.info(f"Artifact cleanup completed: run_id={run_id}")
 
     def read_latest_table_data(
             self,
@@ -69,7 +69,7 @@ class ArtifactPublicationService:
             table_publications.append(table_publication)
             table = table_data.table
             logger.info(
-                f"Artifacts uploaded. table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
+                f"Artifacts uploaded: table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
             )
 
         return table_publications
@@ -82,7 +82,7 @@ class ArtifactPublicationService:
         try:
             table_publications = self.stage_tables(run_id, generated_tables)
         except Exception:
-            logger.exception(f"Artifact upload failed. run_id={run_id}")
+            logger.exception(f"Artifact upload failed: run_id={run_id}")
             self.cleanup_run_artifacts(run_id=run_id)
             raise
 
@@ -92,6 +92,6 @@ class ArtifactPublicationService:
                 table_name=publication.table_name,
                 run_id=publication.run_id,
             )
-            logger.info(f"Pointer updated. table={publication.schema_name}.{publication.table_name}, run_id={publication.run_id}")
+            logger.info(f"Pointer updated: table={publication.schema_name}.{publication.table_name}, run_id={publication.run_id}")
 
         return table_publications
