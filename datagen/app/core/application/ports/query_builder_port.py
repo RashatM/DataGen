@@ -9,5 +9,5 @@ class IQueryBuilder(ABC):
         pass
 
     @abstractmethod
-    def generate_table_ddl(self, table: TableSpec) -> str:
+    def generate_table_ddl(self, table: TableSpec, target_table_name: str) -> str:
         pass

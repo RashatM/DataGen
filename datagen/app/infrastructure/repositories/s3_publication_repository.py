@@ -8,7 +8,6 @@ from app.core.application.dto import EngineLoadArtifact, EngineLoadPayload, Publ
 from app.core.application.ports.object_storage_port import IObjectStorage
 from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
 from app.core.domain.entities import GeneratedTableData
-from app.infrastructure.constants import StorageType
 from app.infrastructure.errors import ObjectNotFoundError, RunStateCorruptedError
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 
@@ -50,16 +49,19 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         table = pq.read_table(pa.BufferReader(payload))
         return table.to_pydict()
 
-    def stage_table_artifacts(
-            self, table_data: GeneratedTableData,
-            run_id: str,
-            engine_load_payloads: Dict[str, EngineLoadPayload],
-    ) -> TablePublication:
+    def stage_data_artifact(self, table_data: GeneratedTableData, run_id: str) -> str:
         table = table_data.table
         data_key = self.build_data_key(run_id, table.schema_name, table.table_name)
         parquet_bytes = self.serialize_parquet(table_data)
-        data_uri = self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
+        return self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
+    def stage_engine_artifacts(
+            self,
+            table_data: GeneratedTableData,
+            run_id: str,
+            engine_load_payloads: Dict[str, EngineLoadPayload],
+    ) -> Dict[str, EngineLoadArtifact]:
+        table = table_data.table
         engines: Dict[str, EngineLoadArtifact] = {}
         for engine_name, load_payload in engine_load_payloads.items():
             ddl_key = self.build_ddl_key(run_id, table.schema_name, table.table_name, engine_name)
@@ -68,18 +70,26 @@ class S3PublicationRepository(IArtifactPublicationRepository):
                 ddl_uri=ddl_uri,
                 target_table_name=load_payload.target_table_name,
             )
+        return engines
 
-        publication = TablePublication(
+    def stage_table_artifacts(
+            self,
+            table_data: GeneratedTableData,
+            run_id: str,
+            engine_load_payloads: Dict[str, EngineLoadPayload],
+    ) -> TablePublication:
+        data_uri = self.stage_data_artifact(table_data, run_id)
+        engines = self.stage_engine_artifacts(table_data, run_id, engine_load_payloads)
+        table = table_data.table
+        return TablePublication(
             schema_name=table.schema_name,
             table_name=table.table_name,
             run_id=run_id,
-            storage_type=StorageType.S3.value,
             artifacts=PublicationArtifacts(
                 data_uri=data_uri,
                 engines=engines,
             ),
         )
-        return publication
 
     def commit_pointer(self, schema_name: str, table_name: str, run_id: str) -> None:
         pointer_key = self.build_pointer_key(schema_name, table_name)

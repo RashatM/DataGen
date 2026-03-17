@@ -121,7 +121,7 @@ with DAG(
         config_callable=get_iceberg_spark_config,
         retries=0,
         application=ICEBERG_LOADER_SCRIPT,
-        py_files=[BASE_LOADER_SCRIPT],
+        py_files=BASE_LOADER_SCRIPT,
         application_args=[
             "--run_id", "{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
@@ -134,7 +134,7 @@ with DAG(
         conn_id="spark_k8s",
         config_callable=get_hadoop_spark_config,
         application=HADOOP_LOADER_SCRIPT,
-        py_files=[BASE_LOADER_SCRIPT],
+        py_files=BASE_LOADER_SCRIPT,
         application_args=[
             "--run_id", "{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",

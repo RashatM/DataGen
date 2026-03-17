@@ -27,7 +27,6 @@ class TablePublication:
     schema_name: str
     table_name: str
     run_id: str
-    storage_type: str
     artifacts: PublicationArtifacts
 
 

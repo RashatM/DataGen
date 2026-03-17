@@ -19,13 +19,16 @@ class ArtifactPublicationService:
         self.query_builders = query_builders
 
     def build_engine_load_payloads(self, table_data: GeneratedTableData) -> Dict[str, EngineLoadPayload]:
-        return {
-            engine_name: EngineLoadPayload(
-                ddl_query=builder.generate_table_ddl(table_data.table),
-                target_table_name=builder.build_target_table_name(table_data.table),
+        table = table_data.table
+        payloads = {}
+        for engine_name, builder in self.query_builders.items():
+            target_table_name = builder.build_target_table_name(table)
+            ddl_query = builder.generate_table_ddl(table, target_table_name)
+            payloads[engine_name] = EngineLoadPayload(
+                ddl_query=ddl_query,
+                target_table_name=target_table_name,
             )
-            for engine_name, builder in self.query_builders.items()
-        }
+        return payloads
 
     def cleanup_run_artifacts(self, run_id: str) -> None:
         logger.info(f"Artifact cleanup started. run_id={run_id}")

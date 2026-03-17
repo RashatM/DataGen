@@ -15,7 +15,8 @@ class IcebergQueryBuilder(BaseSqlQueryBuilder):
         DataType.FLOAT: "double",
     }
 
-    def build_table_properties_definition(self, write_meta_num: int) -> str:
+    @staticmethod
+    def build_table_properties_definition(write_meta_num: int) -> str:
         table_properties = [
             "'format' = 'iceberg/parquet'",
             "'format-version' = '2'",
@@ -36,9 +37,8 @@ class IcebergQueryBuilder(BaseSqlQueryBuilder):
         ]
         return ",\n  ".join(table_properties)
 
-    def generate_table_ddl(self, table: TableSpec) -> str:
+    def generate_table_ddl(self, table: TableSpec, target_table_name: str) -> str:
         columns_definition = self.build_columns_definition(table.columns)
-        target_table_name = self.build_target_table_name(table)
         write_meta_num = len(table.columns)
         table_properties_definition = self.build_table_properties_definition(write_meta_num)
         return (
@@ -50,4 +50,3 @@ class IcebergQueryBuilder(BaseSqlQueryBuilder):
             f"  {table_properties_definition}\n"
             f")"
         )
-

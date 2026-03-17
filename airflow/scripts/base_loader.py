@@ -2,7 +2,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List
+from typing import Any, Dict, List
 from pyspark.sql import SparkSession
 
 LOGGER_FORMAT = "[%(name)s] %(asctime)s %(levelname)s: %(message)s"
@@ -51,6 +51,24 @@ class TableContract:
         self.old_name = f"{self.target_table_name}_old"
 
 
+def extract_table_artifacts(table: Dict[str, Any]) -> Dict[str, Any]:
+    artifacts = table.get("artifacts")
+    if artifacts is not None:
+        return artifacts
+    return table["storage"]
+
+
+def build_table_contract(table: Dict[str, Any], ddl_target: str) -> TableContract:
+    artifacts = extract_table_artifacts(table)
+    return TableContract(
+        schema_name=table["schema_name"],
+        table_name=table["table_name"],
+        data_uri=artifacts["data_uri"],
+        ddl_uri=artifacts["engines"][ddl_target]["ddl_uri"],
+        target_table_name=artifacts["engines"][ddl_target]["target_table_name"],
+    )
+
+
 def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableContract]:
     """
     Парсит JSON-контракт от DataGen и извлекает из него список TableContract для указанного движка.
@@ -62,8 +80,7 @@ def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableCont
         {
           "schema_name": "analytics",
           "table_name": "company_groups",
-          "storage_type": "s3",
-          "storage": {
+          "artifacts": {
             "data_uri": "s3a://bucket/runs/{run_id}/analytics/company_groups/data/data.parquet",
             "engines": {
               "hive": {
@@ -85,16 +102,7 @@ def parse_table_contracts(contract_json: str, ddl_target: str) -> List[TableCont
         ddl_target: ключ движка в engines ("hive" или "iceberg")
     """
     contract = json.loads(contract_json)
-    return [
-        TableContract(
-            schema_name=table["schema_name"],
-            table_name=table["table_name"],
-            data_uri=table["storage"]["data_uri"],
-            ddl_uri=table["storage"]["engines"][ddl_target]["ddl_uri"],
-            target_table_name=table["storage"]["engines"][ddl_target]["target_table_name"],
-        )
-        for table in contract["tables"]
-    ]
+    return [build_table_contract(table, ddl_target) for table in contract["tables"]]
 
 
 class BaseSynthLoader(ABC):

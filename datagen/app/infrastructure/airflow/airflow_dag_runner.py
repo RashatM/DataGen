@@ -22,18 +22,17 @@ class AirflowDagRunner(DagRunnerPort):
         return {
             "schema_name": pub.schema_name,
             "table_name": pub.table_name,
-            "storage_type": pub.storage_type,
-            "storage": asdict(pub.artifacts),
+            "artifacts": asdict(pub.artifacts),
         }
 
-    @staticmethod
     def build_payload(
-        run_id: str,
-        publications: List[TablePublication],
+            self,
+            run_id: str,
+            publications: List[TablePublication],
     ) -> Dict[str, Any]:
         return {
             "run_id": run_id,
-            "tables": [AirflowDagRunner.build_table_entry(pub) for pub in publications],
+            "tables": [self.build_table_entry(pub) for pub in publications],
         }
 
     def to_dag_run_result(self, dag_run_state: DagRunState) -> DagRunResult:
