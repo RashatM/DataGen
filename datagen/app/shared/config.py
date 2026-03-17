@@ -19,7 +19,7 @@ class S3Config:
 
 @dataclass(slots=True)
 class AirflowConfig:
-    base_url: str
+    url: str
     dag_id: str
     username: str
     password: str
@@ -105,12 +105,12 @@ def parse_airflow_env_config(config_data: Dict[str, Any], env_name: str) -> Airf
 
     data = merge(defaults, environment_data)
 
-    base_url = data.get("base_url", "")
+    base_url = data.get("url", "")
     if not base_url:
-        raise ConfigurationError(f"Airflow environment '{env_name}' missing 'base_url'")
+        raise ConfigurationError(f"Airflow environment '{env_name}' missing 'url'")
 
     return AirflowConfig(
-        base_url=base_url,
+        url=base_url,
         dag_id=data.get("dag_id", ""),
         dag_run_id_prefix=data.get("dag_run_id_prefix", "datagen"),
         poll_interval_seconds=data.get("poll_interval_seconds", 10),

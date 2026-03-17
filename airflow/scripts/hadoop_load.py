@@ -55,7 +55,7 @@ class HadoopSynthLoader(BaseSynthLoader):
 
 if __name__ == "__main__":
     args = parse_args()
-    tables = parse_table_contracts(args.contract, ddl_target="hive")
+    tables = parse_table_contracts(args.contract, engine="hive")
 
     with open_spark_session(args.app_name) as spark:
         loader = HadoopSynthLoader(spark, run_id=args.run_id)

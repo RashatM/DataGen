@@ -54,13 +54,13 @@ class AirflowClient:
             dag_run_id: str,
             payload: Dict[str, Any],
     ) -> None:
-        url = f"{self.config.base_url}/api/v1/dags/{self.config.dag_id}/dagRuns"
+        url = f"{self.config.url}/api/v1/dags/{self.config.dag_id}/dagRuns"
         body = {"dag_run_id": dag_run_id, "conf": payload}
         self.request_with_retry("POST", url=url, json=body)
 
     def get_dag_run_state(self, dag_run_id: str) -> DagRunState:
         url = (
-            f"{self.config.base_url}/api/v1/dags/"
+            f"{self.config.url}/api/v1/dags/"
             f"{self.config.dag_id}/dagRuns/{dag_run_id}"
         )
         raw = self.request_with_retry("GET", url=url)

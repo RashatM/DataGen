@@ -47,7 +47,7 @@ class IcebergSynthLoader(BaseSynthLoader):
 
 if __name__ == "__main__":
     args = parse_args()
-    tables = parse_table_contracts(args.contract, ddl_target="iceberg")
+    tables = parse_table_contracts(args.contract, engine="iceberg")
 
     with open_spark_session(args.app_name) as spark:
         loader = IcebergSynthLoader(spark, run_id=args.run_id)
