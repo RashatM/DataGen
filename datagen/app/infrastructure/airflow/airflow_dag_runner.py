@@ -36,10 +36,18 @@ class AirflowDagRunner(DagRunnerPort):
         }
 
     def to_dag_run_result(self, dag_run_state: DagRunState) -> DagRunResult:
+        if dag_run_state.is_success():
+            status = DagRunStatus.SUCCESS
+        else:
+            status = DagRunStatus.FAILED
+            logger.error(
+                f"DAG finished with error: dag_run_id={dag_run_state.dag_run_id}, "
+                f"state={dag_run_state.state}, raw_response={dag_run_state.raw}"
+            )
         return DagRunResult(
             run_id=dag_run_state.dag_run_id,
             dag_id=self.client.dag_id(),
-            status=DagRunStatus.SUCCESS if dag_run_state.is_success() else DagRunStatus.FAILED,
+            status=status,
             raw_response=dag_run_state.raw,
         )
 
@@ -58,16 +66,24 @@ class AirflowDagRunner(DagRunnerPort):
 
             if dag_run_state.is_terminal():
                 total = int(time.monotonic() - start)
-                logger.info(f"DAG reached terminal state: dag_run_id={dag_run_id}, state={dag_run_state.state}, total={total}s")
+                logger.info(
+                    f"DAG reached terminal state: dag_run_id={dag_run_id}, "
+                    f"state={dag_run_state.state}, total={total}s"
+                )
                 return self.to_dag_run_result(dag_run_state)
 
             if dag_run_state.state != previous_state:
                 elapsed = int(time.monotonic() - start)
-                logger.info(f"DAG state updated: dag_run_id={dag_run_id}, state={dag_run_state.state}, elapsed={elapsed}s")
+                logger.info(
+                    f"DAG state updated: dag_run_id={dag_run_id}, "
+                    f"state={dag_run_state.state}, elapsed={elapsed}s"
+                )
                 previous_state = dag_run_state.state
             time.sleep(poll_interval)
 
-        logger.warning(f"DAG polling timed out: dag_run_id={dag_run_id}, timeout={timeout_seconds}s")
+        logger.error(
+            f"DAG polling timed out: dag_run_id={dag_run_id}, timeout={timeout_seconds}s"
+        )
         return DagRunResult(
             run_id=dag_run_id,
             dag_id=self.client.dag_id(),
@@ -84,7 +100,8 @@ class AirflowDagRunner(DagRunnerPort):
         payload = self.build_payload(run_id, publications)
 
         logger.info(
-            f"DAG trigger requested: dag_id={self.client.dag_id()}, dag_run_id={dag_run_id}, tables_count={len(publications)}"
+            f"DAG trigger requested: dag_id={self.client.dag_id()}, "
+            f"dag_run_id={dag_run_id}, tables_count={len(publications)}"
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
         logger.info(f"DAG trigger accepted: dag_run_id={dag_run_id}")

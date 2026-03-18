@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, List
 from zoneinfo import ZoneInfo
 
+from app.core.application.constants import DagRunStatus
 from app.core.application.dto import DagRunResult, TablePublication
 from app.core.application.ports.dag_runner_port import DagRunnerPort
 from app.core.application.services.publication_service import ArtifactPublicationService
@@ -14,7 +15,6 @@ from app.providers import provide_artifact_publication_service, provide_dag_runn
 from app.shared.config import load_app_settings
 from app.shared.logger import pipeline_logger
 
-DEFAULT_DAG_TIMEOUT_SECONDS = 600
 logger = pipeline_logger
 
 
@@ -25,7 +25,7 @@ class DataPipelineExecutor:
         generation_service: DataGenerationService,
         artifact_publication_service: ArtifactPublicationService,
         dag_runner: DagRunnerPort,
-        dag_timeout_seconds: int = DEFAULT_DAG_TIMEOUT_SECONDS,
+        dag_timeout_seconds: int,
     ) -> None:
         self.generation_service = generation_service
         self.artifact_publication_service = artifact_publication_service
@@ -77,7 +77,18 @@ class DataPipelineExecutor:
         dag_result = self.trigger_dag(run_id, publications)
 
         total = int(time.monotonic() - start)
-        logger.info(f"Pipeline completed: run_id={run_id}, status={dag_result.status.value}, total={total}s")
+
+        if dag_result.status == DagRunStatus.SUCCESS:
+            logger.info(
+                f"Pipeline completed: run_id={run_id}, "
+                f"status={dag_result.status.value}, total={total}s"
+            )
+        else:
+            logger.error(
+                f"Pipeline failed: run_id={run_id}, "
+                f"status={dag_result.status.value}, total={total}s"
+            )
+
         return dag_result
 
 
@@ -89,9 +100,17 @@ def run_app(env_name: str, raw_tables: List[Any]) -> None:
         generation_service=provide_generation_service(),
         artifact_publication_service=provide_artifact_publication_service(config.s3, config.target_storage),
         dag_runner=provide_dag_runner(config.airflow),
+        dag_timeout_seconds=config.airflow.dag_timeout_seconds,
     )
     dag_result = pipeline.execute(raw_tables)
 
-    logger.info(
-        f"Application finished: environment={env_name}, status={dag_result.status.value}"
-    )
+    if dag_result.status == DagRunStatus.SUCCESS:
+        logger.info(
+            f"Application finished: environment={env_name}, "
+            f"status={dag_result.status.value}"
+        )
+    else:
+        logger.error(
+            f"Application finished with error: environment={env_name}, "
+            f"status={dag_result.status.value}"
+        )

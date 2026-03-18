@@ -25,6 +25,7 @@ class AirflowConfig:
     password: str
     dag_run_id_prefix: str
     poll_interval_seconds: int
+    dag_timeout_seconds: int
     max_retries: int
     retry_backoff_base: int
 
@@ -114,6 +115,7 @@ def parse_airflow_env_config(config_data: Dict[str, Any], env_name: str) -> Airf
         dag_id=data.get("dag_id", ""),
         dag_run_id_prefix=data.get("dag_run_id_prefix", "datagen"),
         poll_interval_seconds=data.get("poll_interval_seconds", 10),
+        dag_timeout_seconds=data.get("dag_timeout_seconds", 3600),
         max_retries=data.get("max_retries", 3),
         retry_backoff_base=data.get("retry_backoff_base", 2),
         username=require_env("AIRFLOW_USERNAME"),

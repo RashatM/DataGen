@@ -16,6 +16,7 @@ airflow:
     dag_id: "datagen_pipeline"
     dag_run_id_prefix: "datagen"
     poll_interval_seconds: 10
+    dag_timeout_seconds: 3600
     max_retries: 3
     retry_backoff_base: 2
   environments:
