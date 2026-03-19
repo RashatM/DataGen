@@ -4,6 +4,22 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 from pyspark.sql import SparkSession
+import pyspark.sql.functions as spark_functions
+from pyspark.sql import DataFrame
+from pyspark.sql.types import (
+    ArrayType,
+    BooleanType,
+    ByteType,
+    DecimalType,
+    DoubleType,
+    FloatType,
+    IntegerType,
+    LongType,
+    MapType,
+    ShortType,
+    StringType,
+    StructType,
+)
 
 
 def create_logger() -> logging.Logger:
@@ -192,6 +208,46 @@ class BaseSynthLoader(ABC):
     def read_query_from_s3(self, query_uri: str) -> str:
         return self.spark.sparkContext.wholeTextFiles(query_uri).values().first()
 
+    TIMESTAMP_OUTPUT_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
+    DATE_OUTPUT_FORMAT = "yyyy-MM-dd"
+    NORMALIZED_DECIMAL_TYPE = "decimal(38,18)"
+
+    @staticmethod
+    def normalize_for_comparison(df: DataFrame) -> DataFrame:
+        expressions = []
+        for field in df.schema.fields:
+            col = spark_functions.col(field.name)
+            dt = field.dataType
+
+            if isinstance(dt, (ArrayType, MapType, StructType)):
+                raise ValueError(
+                    f"Complex type is not supported for comparison: "
+                    f"column={field.name}, type={dt.simpleString()}"
+                )
+
+            if dt.typeName() in {"timestamp", "timestamp_ntz"}:
+                expressions.append(
+                    spark_functions.date_format(
+                        col.cast("timestamp"), BaseSynthLoader.TIMESTAMP_OUTPUT_FORMAT
+                    ).alias(field.name)
+                )
+            elif dt.typeName() == "date":
+                expressions.append(
+                    spark_functions.date_format(
+                        col.cast("date"), BaseSynthLoader.DATE_OUTPUT_FORMAT
+                    ).alias(field.name)
+                )
+            elif isinstance(dt, (ByteType, ShortType, IntegerType, LongType)):
+                expressions.append(col.cast("bigint").alias(field.name))
+            elif isinstance(dt, (FloatType, DoubleType, DecimalType)):
+                expressions.append(col.cast(BaseSynthLoader.NORMALIZED_DECIMAL_TYPE).alias(field.name))
+            elif isinstance(dt, BooleanType):
+                expressions.append(spark_functions.lower(col.cast("string")).alias(field.name))
+            else:
+                expressions.append(col)
+
+        return df.select(*expressions)
+
     def build_tmp_ddl(self, table: TableContract) -> str:
         ddl = self.read_ddl_from_s3(table.ddl_uri)
         return ddl.replace(table.full_table_name, table.tmp_name)
@@ -237,7 +293,8 @@ class BaseSynthLoader(ABC):
         )
         comparison_query = self.read_query_from_s3(engine_contract.query_uri)
         comparison_df = self.spark.sql(comparison_query)
-        comparison_df.write.mode("overwrite").parquet(engine_contract.result_uri)
+        normalized_df = self.normalize_for_comparison(comparison_df)
+        normalized_df.write.mode("overwrite").parquet(engine_contract.result_uri)
         airflow_logger.info(
             f"Comparison query execution completed. engine={engine}, run_id={self.run_id}, "
             f"result_uri={engine_contract.result_uri}"

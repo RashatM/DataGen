@@ -4,11 +4,11 @@ from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from app.core.application.dto import (
+from app.core.application.layouts.storage_layout import RunArtifactLayout, TableStateLayout
+from app.core.application.dto.publication import (
     EngineLoadArtifact,
     EngineLoadPayload,
     PublicationArtifacts,
-    RunArtifactLayout,
     TablePublication,
 )
 from app.core.application.ports.object_storage_port import IObjectStorage
@@ -22,13 +22,6 @@ class S3PublicationRepository(IArtifactPublicationRepository):
     def __init__(self, object_storage: IObjectStorage, schema_builder: ArrowSchemaBuilder):
         self.object_storage = object_storage
         self.schema_builder = schema_builder
-
-    def build_pointer_key(self, schema_name: str, table_name: str) -> str:
-        return f"tables/{schema_name.strip('/')}/{table_name.strip('/')}/pointer.json"
-
-    def build_data_key(self, run_id: str, schema_name: str, table_name: str) -> str:
-        run_prefix = f"runs/{run_id.strip('/')}"
-        return f"{run_prefix}/{schema_name.strip('/')}/{table_name.strip('/')}/data/data.parquet"
 
     def serialize_parquet(self, table_data: GeneratedTableData) -> bytes:
         schema = self.schema_builder.build_schema(table_data.table)
@@ -98,7 +91,8 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         return query_uris
 
     def commit_pointer(self, schema_name: str, table_name: str, run_id: str) -> None:
-        pointer_key = self.build_pointer_key(schema_name, table_name)
+        table_state_layout = TableStateLayout(schema_name=schema_name, table_name=table_name)
+        pointer_key = table_state_layout.pointer_key
         previous_run_id = self.get_latest_run_id(schema_name, table_name)
 
         self.object_storage.put_json(
@@ -111,7 +105,8 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         )
 
     def get_latest_run_id(self, schema_name: str, table_name: str) -> Optional[str]:
-        pointer_key = self.build_pointer_key(schema_name, table_name)
+        table_state_layout = TableStateLayout(schema_name=schema_name, table_name=table_name)
+        pointer_key = table_state_layout.pointer_key
         try:
             payload = self.object_storage.get_json(key=pointer_key)
         except ObjectNotFoundError:
@@ -123,7 +118,8 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         return run_id
 
     def read_table_data(self, schema_name: str, table_name: str, run_id: str) -> Dict[str, Any]:
-        key = self.build_data_key(run_id, schema_name, table_name)
+        layout = RunArtifactLayout(run_id=run_id)
+        key = layout.data_key(schema_name, table_name)
         payload = self.object_storage.get_bytes(key=key)
         return self.deserialize_parquet(payload)
 

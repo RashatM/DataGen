@@ -1,11 +1,8 @@
 from typing import Any, Dict, List, Optional
 
-from app.core.application.dto import (
-    ArtifactPublicationResult,
-    EngineLoadPayload,
-    RunArtifactLayout,
-    TablePublication,
-)
+from app.core.application.layouts.storage_layout import RunArtifactLayout
+from app.core.application.dto.publication import EngineLoadPayload, TablePublication
+from app.core.application.dto.run_artifacts import ArtifactPublicationResult
 from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
 from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
 from app.core.application.ports.query_builder_port import IQueryBuilder

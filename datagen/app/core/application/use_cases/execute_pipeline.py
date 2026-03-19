@@ -1,0 +1,77 @@
+import time
+
+from app.core.application.dto.pipeline import PipelineExecutionResult
+from app.core.application.layouts.storage_layout import RunArtifactLayout
+from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
+from app.core.application.services.comparison_service import ComparisonService
+from app.core.application.services.generation_service import DataGenerationService
+from app.core.application.services.publication_service import ArtifactPublicationService
+from app.core.domain.entities import GenerationRun
+from app.shared.logger import pipeline_logger
+
+logger = pipeline_logger
+
+
+class ExecutePipelineUseCase:
+    def __init__(
+        self,
+        generation_service: DataGenerationService,
+        artifact_publication_service: ArtifactPublicationService,
+        comparison_service: ComparisonService,
+        execution_runner: ExecutionRunnerPort,
+        execution_timeout_seconds: int,
+    ) -> None:
+        self.generation_service = generation_service
+        self.artifact_publication_service = artifact_publication_service
+        self.comparison_service = comparison_service
+        self.execution_runner = execution_runner
+        self.execution_timeout_seconds = execution_timeout_seconds
+
+    def execute(self, generation_run: GenerationRun) -> PipelineExecutionResult:
+        run_id = generation_run.run_id
+        layout = RunArtifactLayout(run_id=run_id)
+        start = time.monotonic()
+        logger.info(f"Pipeline started: run_id={run_id}")
+
+        generated_tables = self.generation_service.generate_table_data(generation_run)
+        publication_result = self.artifact_publication_service.publish(
+            layout=layout,
+            generated_tables=generated_tables,
+        )
+        execution_result = self.execution_runner.trigger_and_wait(
+            layout=layout,
+            publications=publication_result.table_publications,
+            comparison_query_uris=publication_result.comparison_query_uris,
+            timeout_seconds=self.execution_timeout_seconds,
+        )
+
+        total = int(time.monotonic() - start)
+        if not execution_result.is_success():
+            logger.error(
+                f"Pipeline failed: run_id={run_id}, "
+                f"status={execution_result.status.value}, total={total}s"
+            )
+            return PipelineExecutionResult(run_id=run_id, execution_result=execution_result)
+
+        comparison_report = self.comparison_service.read_report(
+            report_key=layout.comparison_report_key,
+            run_id=run_id,
+        )
+        comparison_summary = self.comparison_service.format_report_summary(comparison_report)
+
+        if comparison_report.is_match():
+            logger.info(
+                f"Pipeline completed: run_id={run_id}, "
+                f"execution_status={execution_result.status.value}, {comparison_summary}, total={total}s"
+            )
+        else:
+            logger.warning(
+                f"Pipeline completed with mismatch: run_id={run_id}, "
+                f"execution_status={execution_result.status.value}, {comparison_summary}, total={total}s"
+            )
+
+        return PipelineExecutionResult(
+            run_id=run_id,
+            execution_result=execution_result,
+            comparison_report=comparison_report,
+        )

@@ -3,7 +3,7 @@ from mypy_boto3_s3 import S3Client
 
 from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
 from app.core.application.ports.comparison_repository_port import IComparisonReportRepository
-from app.core.application.ports.dag_runner_port import DagRunnerPort
+from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
 from app.core.application.services.comparison_service import ComparisonService
 from app.core.application.services.publication_service import ArtifactPublicationService
@@ -120,10 +120,10 @@ def provide_artifact_publication_service(
     )
 
 
-def provide_dag_runner(
+def provide_execution_runner(
         airflow_config: AirflowConfig,
         object_storage: IObjectStorage,
-) -> DagRunnerPort:
+) -> ExecutionRunnerPort:
     return AirflowDagRunner(
         client=AirflowClient(airflow_config),
         payload_builder=AirflowDagPayloadBuilder(object_storage=object_storage),

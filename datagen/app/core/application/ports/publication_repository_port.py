@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-from app.core.application.dto import EngineLoadPayload, RunArtifactLayout, TablePublication
+from app.core.application.layouts.storage_layout import RunArtifactLayout
+from app.core.application.dto.publication import EngineLoadPayload, TablePublication
 from app.core.domain.entities import GeneratedTableData
 
 

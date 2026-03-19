@@ -1,5 +1,5 @@
 from app.core.application.constants import ComparisonStatus
-from app.core.application.dto import (
+from app.core.application.dto.comparison import (
     ComparisonReport,
     ComparisonReportArtifacts,
     ComparisonReportSummary,

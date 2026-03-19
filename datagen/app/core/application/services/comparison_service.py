@@ -1,5 +1,5 @@
 from app.core.application.constants import ComparisonStatus
-from app.core.application.dto import ComparisonReport, EngineCountSummary
+from app.core.application.dto.comparison import ComparisonReport, EngineCountSummary
 from app.core.application.ports.comparison_repository_port import IComparisonReportRepository
 from app.shared.logger import comparison_logger
 

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.core.application.dto import ComparisonReport
+from app.core.application.dto.comparison import ComparisonReport
 
 
 class IComparisonReportRepository(ABC):

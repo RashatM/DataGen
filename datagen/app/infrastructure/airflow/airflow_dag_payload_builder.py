@@ -1,7 +1,8 @@
 from dataclasses import asdict
 from typing import Any, Dict, List
 
-from app.core.application.dto import RunArtifactLayout, TablePublication
+from app.core.application.layouts.storage_layout import RunArtifactLayout
+from app.core.application.dto.publication import TablePublication
 from app.core.application.ports.object_storage_port import IObjectStorage
 
 
@@ -23,8 +24,8 @@ class AirflowDagPayloadBuilder:
         comparison_query_uris: Dict[str, str],
     ) -> Dict[str, Any]:
         return {
-            "query_uris": dict(comparison_query_uris),
-            "report_uri": self.object_storage.build_uri(layout.comparison_report_key()),
+            "query_uris": comparison_query_uris,
+            "report_uri": self.object_storage.build_uri(layout.comparison_report_key),
             "result_uris": {
                 engine_name: self.object_storage.build_uri(layout.engine_result_key(engine_name))
                 for engine_name in comparison_query_uris

@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class DagRunStatus(Enum):
+class ExecutionStatus(Enum):
     SUCCESS = "success"
     FAILED = "failed"
     TIMEOUT = "timeout"
