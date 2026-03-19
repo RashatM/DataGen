@@ -2,7 +2,7 @@ import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, Tuple
+from typing import Dict
 
 from pyspark.sql import DataFrame, SparkSession
 
