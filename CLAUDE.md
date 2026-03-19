@@ -214,9 +214,9 @@ query_result(hive) vs query_result(iceberg)
 ```
 
 Принятая схема:
-1. `hadoop_load.py` грузит таблицы в Hive и материализует query result в parquet.
-2. `iceberg_load.py` грузит таблицы в Iceberg и материализует query result в parquet.
-3. `compare_results.py` читает оба parquet, нормализует типы и сравнивает результаты.
+1. `hadoop_load.py` грузит таблицы в Hive, выполняет comparison query и нормализует результат в canonical типы перед записью в parquet.
+2. `iceberg_load.py` грузит таблицы в Iceberg, выполняет comparison query и нормализует результат в canonical типы перед записью в parquet.
+3. `compare_results.py` читает оба parquet (уже с идентичными схемами), валидирует схемы и сравнивает результаты.
 
 Основной метод:
 
@@ -234,18 +234,19 @@ iceberg_unmatched_row_count = iceberg_result.exceptAll(hive_result).count()
 
 ## Нормализация перед сравнением
 
-Сравнение идёт по именам колонок.
+Нормализация выполняется при записи (write-time) в `BaseSynthLoader.normalize_for_comparison()`, а не при чтении в `compare_results.py`. Каждый loader независимо приводит DataFrame к canonical типам перед записью в parquet.
 
-Поддерживаемые правила нормализации:
-- `timestamp` и `timestamp_ntz` приводятся к UTC string-form
-- `string <-> timestamp` приводятся к timestamp и затем к UTC string-form
-- `date` и `string <-> date` приводятся к `yyyy-MM-dd`
-- numeric типы приводятся к общему `decimal(38,18)` или `bigint`
-- `boolean <-> string` приводятся к lower-case string
+Canonical типы:
+- `timestamp` и `timestamp_ntz` → `date_format(col.cast("timestamp"), "yyyy-MM-dd HH:mm:ss.SSSSSS")`
+- `date` → `date_format(col.cast("date"), "yyyy-MM-dd")`
+- integral types (`byte`, `short`, `int`, `long`) → `bigint`
+- fractional types (`float`, `double`, `decimal`) → `decimal(38,18)`
+- `boolean` → `lower(col.cast("string"))`
+- `string` → без изменений
 
 Ограничения:
-- complex types (`array`, `map`, `struct`) не поддерживаются
-- если типы нельзя сопоставить безопасно, compare-task должна падать явно
+- complex types (`array`, `map`, `struct`) не поддерживаются — `normalize_for_comparison` падает с `ValueError`
+- `compare_results.py` валидирует что схемы обоих parquet идентичны после нормализации
 
 ## Статусы
 
