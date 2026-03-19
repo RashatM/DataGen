@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 
-from base_loader import BaseSynthLoader, airflow_logger, parse_table_contracts
+from base_loader import BaseSynthLoader, airflow_logger, parse_comparison_contract, parse_table_contracts
 
 
 @contextmanager
@@ -15,6 +15,7 @@ def open_spark_session(app_name: str):
         .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
         .config("spark.sql.sources.commitProtocolClass", "org.apache.iceberg.spark.SparkCommitProtocol")
         .config("spark.scheduler.mode", "FAIR")
+        .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
         .config("spark.sql.catalog.iceberg.type", "hive")
         .config("spark.sql.files.maxPartitionBytes", 536870912)
@@ -48,7 +49,8 @@ class IcebergSynthLoader(BaseSynthLoader):
 if __name__ == "__main__":
     args = parse_args()
     tables = parse_table_contracts(args.contract, engine="iceberg")
+    comparison_contract = parse_comparison_contract(args.contract)
 
     with open_spark_session(args.app_name) as spark:
         loader = IcebergSynthLoader(spark, run_id=args.run_id)
-        loader.load_all(tables)
+        loader.execute(tables=tables, comparison_contract=comparison_contract, engine="iceberg")

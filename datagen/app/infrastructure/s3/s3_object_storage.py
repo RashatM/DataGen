@@ -13,7 +13,7 @@ class S3StorageAdapter(IObjectStorage):
         self.bucket = bucket
         self.s3_client = s3_client
 
-    def generate_uri(self, key: str) -> str:
+    def build_uri(self, key: str) -> str:
         return f's3a://{self.bucket}/{key.strip("/")}'
 
     def put_text(self, key: str, content: str) -> str:
@@ -23,7 +23,7 @@ class S3StorageAdapter(IObjectStorage):
             Body=content.encode("utf-8"),
             ContentType="text/plain; charset=utf-8",
         )
-        return self.generate_uri(key)
+        return self.build_uri(key)
 
     def put_json(self, key: str, payload: Dict[str, Any]) -> str:
         content = json.dumps(payload, ensure_ascii=True, indent=2)
@@ -33,7 +33,7 @@ class S3StorageAdapter(IObjectStorage):
             Body=content.encode("utf-8"),
             ContentType="application/json; charset=utf-8",
         )
-        return self.generate_uri(key)
+        return self.build_uri(key)
 
     def put_bytes(self, key: str, body: bytes) -> str:
         self.s3_client.put_object(
@@ -42,7 +42,7 @@ class S3StorageAdapter(IObjectStorage):
             Body=body,
             ContentType="application/octet-stream",
         )
-        return self.generate_uri(key)
+        return self.build_uri(key)
 
     @staticmethod
     def is_not_found_error(error: ClientError) -> bool:

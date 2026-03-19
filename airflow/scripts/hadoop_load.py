@@ -2,7 +2,7 @@ import argparse
 from contextlib import contextmanager
 from pyspark.sql import SparkSession
 
-from base_loader import BaseSynthLoader, airflow_logger, parse_table_contracts
+from base_loader import BaseSynthLoader, airflow_logger, parse_comparison_contract, parse_table_contracts
 
 
 @contextmanager
@@ -26,7 +26,7 @@ def open_spark_session(app_name: str):
         .config("spark.sql.adaptive.coalescePartitions.enabled", True)
         .config("spark.sql.adaptive.advisoryPartitionSizeInBytes", "256MB")
         .config("spark.sql.adaptive.coalescePartitions.minPartitionNum", 1)
-        .config("spark.sql.session.timeZone", "Europe/Moscow")
+        .config("spark.sql.session.timeZone", "UTC")
         .enableHiveSupport()
         .getOrCreate()
     )
@@ -56,7 +56,8 @@ class HadoopSynthLoader(BaseSynthLoader):
 if __name__ == "__main__":
     args = parse_args()
     tables = parse_table_contracts(args.contract, engine="hive")
+    comparison_contract = parse_comparison_contract(args.contract)
 
     with open_spark_session(args.app_name) as spark:
         loader = HadoopSynthLoader(spark, run_id=args.run_id)
-        loader.load_all(tables)
+        loader.execute(tables=tables, comparison_contract=comparison_contract, engine="hive")

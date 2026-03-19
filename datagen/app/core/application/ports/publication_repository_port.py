@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-from app.core.application.dto import EngineLoadPayload, TablePublication
+from app.core.application.dto import EngineLoadPayload, RunArtifactLayout, TablePublication
 from app.core.domain.entities import GeneratedTableData
 
 
@@ -10,9 +10,17 @@ class IArtifactPublicationRepository(ABC):
     def stage_table_artifacts(
         self,
         table_data: GeneratedTableData,
-        run_id: str,
+        layout: RunArtifactLayout,
         engine_load_payloads: Dict[str, EngineLoadPayload],
     ) -> TablePublication:
+        pass
+
+    @abstractmethod
+    def stage_comparison_queries(
+        self,
+        layout: RunArtifactLayout,
+        rendered_queries: Dict[str, str],
+    ) -> Dict[str, str]:
         pass
 
     @abstractmethod
@@ -42,5 +50,5 @@ class IArtifactPublicationRepository(ABC):
         pass
 
     @abstractmethod
-    def cleanup_run_artifacts(self, run_id: str) -> None:
+    def cleanup_run_artifacts(self, layout: RunArtifactLayout) -> None:
         pass

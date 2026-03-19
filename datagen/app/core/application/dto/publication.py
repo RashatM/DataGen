@@ -1,7 +1,5 @@
-from dataclasses import dataclass, field
-from typing import Any, Dict
-
-from app.core.application.constants import DagRunStatus
+from dataclasses import dataclass
+from typing import Dict
 
 
 @dataclass(slots=True)
@@ -28,14 +26,3 @@ class TablePublication:
     table_name: str
     run_id: str
     artifacts: PublicationArtifacts
-
-
-@dataclass
-class DagRunResult:
-    run_id: str
-    dag_id: str
-    status: DagRunStatus
-    raw_response: Dict[str, Any] = field(default_factory=dict)
-
-    def is_success(self) -> bool:
-        return self.status == DagRunStatus.SUCCESS

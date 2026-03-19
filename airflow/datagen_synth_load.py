@@ -17,14 +17,14 @@ EMAIL_LIST = []
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/base_loader.py"
 ICEBERG_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/iceberg_load.py"
 HADOOP_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/hadoop_load.py"
+COMPARE_RESULTS_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/compare_results.py"
 HADOOP_CLUSTER_CONFIG_VARIABLE = "datagen_hadoop_cluster_config"
 
 SPARK_CONF_DIRS = {
     "BDA51": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda51/spark-conf",
     "BDA61": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda61/spark-conf",
-    "BDA71": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda71/spark-conf",
+    "BDA71": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda71/spark-conf"
 }
-
 
 def validate_contract(**context) -> None:
     conf = context["dag_run"].conf or {}
@@ -34,11 +34,30 @@ def validate_contract(**context) -> None:
     if not conf.get("tables"):
         raise ValueError("Contract is missing 'tables'")
 
+    comparison = conf.get("comparison")
+    if not isinstance(comparison, dict):
+        raise ValueError("Contract is missing 'comparison'")
+    query_uris = comparison.get("query_uris")
+    if not isinstance(query_uris, dict):
+        raise ValueError("Contract is missing 'comparison.query_uris'")
+    for engine in ("hive", "iceberg"):
+        if not query_uris.get(engine):
+            raise ValueError(f"Contract is missing 'comparison.query_uris.{engine}'")
+    if not comparison.get("report_uri"):
+        raise ValueError("Contract is missing 'comparison.report_uri'")
+    result_uris = comparison.get("result_uris")
+    if not isinstance(result_uris, dict):
+        raise ValueError("Contract is missing 'comparison.result_uris'")
+    for engine in ("hive", "iceberg"):
+        if not result_uris.get(engine):
+            raise ValueError(f"Contract is missing 'comparison.result_uris.{engine}'")
+
 
 def get_iceberg_spark_config(**context) -> Dict[str, str]:
     return {
         **Variable.get("load_table_test", deserialize_json=True),
         **Variable.get("yc_keys", deserialize_json=True),
+        "spark.sql.session.timeZone": "UTC",
         "spark.dynamicAllocation.enabled": "false",
         "spark.executor.instances": "2",
         "spark.executor.cores": "4",
@@ -50,8 +69,8 @@ def get_iceberg_spark_config(**context) -> Dict[str, str]:
 def get_hadoop_cluster_config() -> Dict[str, Any]:
     # cluster_config = Variable.get(HADOOP_CLUSTER_CONFIG_VARIABLE, deserialize_json=True)
     cluster_config = {
-        "cluster_name": "BDA51",
-        "kerberos_principal": "t_bdp_bda_repl@MOSCOW.ALFAINTRA.NET",
+        "cluster_name": "BDA71",
+        "kerberos_principal": "t_bdp_bda_repl@MSK.AD2012.LOC",
         "kerberos_keytab_path": "/tmp/t_bdp_bda_repl.keytab"
     }
     required_keys = ["cluster_name", "kerberos_principal", "kerberos_keytab_path"]
@@ -83,6 +102,7 @@ def get_hadoop_spark_config(**context) -> Dict[str, str]:
     return {
         **Variable.get("load_table_test", deserialize_json=True),
         **Variable.get("yc_keys", deserialize_json=True),
+        "spark.dynamicAllocation.shuffleTracking.enabled": "true",
         "spark.dynamicAllocation.enabled": "true",
         "spark.dynamicAllocation.initialExecutors": "2",
         "spark.dynamicAllocation.minExecutors": "1",
@@ -90,9 +110,23 @@ def get_hadoop_spark_config(**context) -> Dict[str, str]:
         "spark.driver.memory": "16G",
         "spark.executor.memory": "20G",
         "spark.executor.cores": "5",
+        "spark.executor.maxNumFailures": "5",
         "spark.kerberos.principal": cluster_config["kerberos_principal"],
         "spark.kerberos.keytab": cluster_config["kerberos_keytab_path"],
         "spark.kubernetes.kerberos.krb5.path": krb5_conf,
+    }
+
+
+def get_compare_spark_config(**context) -> Dict[str, str]:
+    return {
+        **Variable.get("load_table_test", deserialize_json=True),
+        **Variable.get("yc_keys", deserialize_json=True),
+        "spark.sql.session.timeZone": "UTC",
+        "spark.dynamicAllocation.enabled": "false",
+        "spark.executor.instances": "2",
+        "spark.executor.cores": "2",
+        "spark.driver.memory": "4G",
+        "spark.executor.memory": "4G",
     }
 
 
@@ -148,6 +182,21 @@ with DAG(
         ],
     )
 
+    compare_results_task = PlatformTemplatedSparkOperator(
+        task_id="compare_results",
+        name="datagen_compare_results",
+        conn_id="spark_k8s",
+        config_callable=get_compare_spark_config,
+        retries=0,
+        application=COMPARE_RESULTS_SCRIPT,
+        py_files=BASE_LOADER_SCRIPT,
+        application_args=[
+            "--app_name", "datagen_compare_{{ dag_run.conf['run_id'] }}",
+            "--run_id", "{{ dag_run.conf['run_id'] }}",
+            "--contract", "{{ dag_run.conf | tojson }}",
+        ],
+    )
+
     job_succeeded = EmptyOperator(
         task_id="sys_job_succeeded",
         trigger_rule="all_success",
@@ -160,5 +209,5 @@ with DAG(
 
     # iceberg и hadoop параллельно после валидации
     start_task >> validate_contract_task >> [iceberg_load_task, hadoop_load_task]
-    [iceberg_load_task, hadoop_load_task] >> job_succeeded
-    [iceberg_load_task, hadoop_load_task] >> job_failed
+    [iceberg_load_task, hadoop_load_task] >> compare_results_task >> job_succeeded
+    [iceberg_load_task, hadoop_load_task, compare_results_task] >> job_failed

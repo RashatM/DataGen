@@ -6,6 +6,11 @@ class IObjectStorage(ABC):
     """Интерфейс объекта для записи данных в объектное хранилище."""
 
     @abstractmethod
+    def build_uri(self, key: str) -> str:
+        """Строит URI объекта по ключу без выполнения записи."""
+        pass
+
+    @abstractmethod
     def put_text(self, key: str, content: str) -> str:
         """Сохраняет текстовый контент, возвращает URI."""
         pass

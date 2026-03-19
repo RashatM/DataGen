@@ -2,14 +2,11 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List
+from typing import Any, Dict, List
 from pyspark.sql import SparkSession
 
 
 def create_logger() -> logging.Logger:
-    LOGGER_FORMAT = "[DL_PLATFORM] %(asctime)s %(levelname)s: %(message)s"
-    LOGGER_DATE_FORMAT = "%d-%m-%y %H:%M:%S"
-
     custom_logger = logging.getLogger("logger")
     if custom_logger.handlers:
         return custom_logger
@@ -17,8 +14,8 @@ def create_logger() -> logging.Logger:
 
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
-        fmt=LOGGER_FORMAT,
-        datefmt=LOGGER_DATE_FORMAT
+        fmt="[DL_PLATFORM] %(asctime)s %(levelname)s: %(message)s",
+        datefmt="%d-%m-%y %H:%M:%S"
     )
     handler.setFormatter(formatter)
 
@@ -32,6 +29,7 @@ airflow_logger = create_logger()
 
 @dataclass
 class TableContract:
+    logical_table_name: str
     full_table_name: str
     data_uri: str
     ddl_uri: str
@@ -42,6 +40,69 @@ class TableContract:
     def __post_init__(self):
         self.tmp_name = f"{self.full_table_name}_tmp"
         self.old_name = f"{self.full_table_name}_old"
+
+
+@dataclass
+class EngineComparisonContract:
+    query_uri: str
+    result_uri: str
+
+
+@dataclass
+class ComparisonContract:
+    query_uris: Dict[str, str]
+    result_uris: Dict[str, str]
+    report_uri: str
+
+    def for_engine(self, engine: str) -> EngineComparisonContract:
+        query_uri = self.query_uris.get(engine)
+        if not isinstance(query_uri, str) or not query_uri.strip():
+            raise ValueError(f"Comparison contract is missing query_uri for engine={engine}")
+
+        result_uri = self.result_uris.get(engine)
+        if not isinstance(result_uri, str) or not result_uri.strip():
+            raise ValueError(f"Comparison contract is missing result_uri for engine={engine}")
+
+        return EngineComparisonContract(
+            query_uri=query_uri,
+            result_uri=result_uri,
+        )
+
+
+def load_contract(contract_json: str) -> Dict[str, Any]:
+    contract = json.loads(contract_json)
+    if not isinstance(contract, dict):
+        raise ValueError("Contract must be a JSON object")
+    return contract
+
+
+def validate_comparison_contract(contract: Dict[str, Any]) -> Dict[str, Any]:
+    comparison = contract.get("comparison")
+    if not isinstance(comparison, dict):
+        raise ValueError("Contract is missing 'comparison' object")
+
+    query_uris = comparison.get("query_uris")
+    if not isinstance(query_uris, dict):
+        raise ValueError("Contract is missing 'comparison.query_uris'")
+    for engine in ("hive", "iceberg"):
+        query_uri = query_uris.get(engine)
+        if not isinstance(query_uri, str) or not query_uri.strip():
+            raise ValueError(f"Contract is missing non-empty 'comparison.query_uris.{engine}'")
+
+    report_uri = comparison.get("report_uri")
+    if not isinstance(report_uri, str) or not report_uri.strip():
+        raise ValueError("Contract is missing non-empty 'comparison.report_uri'")
+
+    result_uris = comparison.get("result_uris")
+    if not isinstance(result_uris, dict):
+        raise ValueError("Contract is missing 'comparison.result_uris'")
+
+    for engine in ("hive", "iceberg"):
+        result_uri = result_uris.get(engine)
+        if not isinstance(result_uri, str) or not result_uri.strip():
+            raise ValueError(f"Contract is missing non-empty 'comparison.result_uris.{engine}'")
+
+    return comparison
 
 
 def parse_table_contracts(contract_json: str, engine: str) -> List[TableContract]:
@@ -76,15 +137,43 @@ def parse_table_contracts(contract_json: str, engine: str) -> List[TableContract
         contract_json: JSON-строка с контрактом
         engine: ключ движка в engines ("hive" или "iceberg")
     """
-    contract = json.loads(contract_json)
+    contract = load_contract(contract_json)
     return [
         TableContract(
+            logical_table_name=f"{table['schema_name']}.{table['table_name']}",
             full_table_name=table["artifacts"]["engines"][engine]["target_table_name"],
             data_uri=table["artifacts"]["data_uri"],
             ddl_uri=table["artifacts"]["engines"][engine]["ddl_uri"],
         )
         for table in contract["tables"]
     ]
+
+
+def parse_comparison_contract(contract_json: str) -> ComparisonContract:
+    contract = load_contract(contract_json)
+    comparison = validate_comparison_contract(contract)
+    return ComparisonContract(
+        query_uris=dict(comparison["query_uris"]),
+        result_uris=dict(comparison["result_uris"]),
+        report_uri=comparison["report_uri"],
+    )
+
+
+def write_json_to_uri(spark: SparkSession, uri: str, payload: Dict[str, Any]) -> None:
+    content = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+
+    jvm = spark.sparkContext._jvm
+    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+    path = jvm.org.apache.hadoop.fs.Path(uri)
+    file_system = path.getFileSystem(hadoop_conf)
+
+    output_stream = file_system.create(path, True)
+    try:
+        writer = jvm.java.io.OutputStreamWriter(output_stream, "UTF-8")
+        writer.write(content)
+        writer.flush()
+    finally:
+        output_stream.close()
 
 
 class BaseSynthLoader(ABC):
@@ -99,6 +188,9 @@ class BaseSynthLoader(ABC):
 
     def read_ddl_from_s3(self, ddl_uri: str) -> str:
         return self.spark.sparkContext.wholeTextFiles(ddl_uri).values().first()
+
+    def read_query_from_s3(self, query_uri: str) -> str:
+        return self.spark.sparkContext.wholeTextFiles(query_uri).values().first()
 
     def build_tmp_ddl(self, table: TableContract) -> str:
         ddl = self.read_ddl_from_s3(table.ddl_uri)
@@ -137,6 +229,20 @@ class BaseSynthLoader(ABC):
             except Exception as error:
                 airflow_logger.error(f"Failed to drop temporary table. table={table.tmp_name}, error={error}")
 
+    def materialize_comparison_result(self, comparison_contract: ComparisonContract, engine: str) -> None:
+        engine_contract = comparison_contract.for_engine(engine)
+        airflow_logger.info(
+            f"Comparison query execution started. engine={engine}, run_id={self.run_id}, "
+            f"query_uri={engine_contract.query_uri}, result_uri={engine_contract.result_uri}"
+        )
+        comparison_query = self.read_query_from_s3(engine_contract.query_uri)
+        comparison_df = self.spark.sql(comparison_query)
+        comparison_df.write.mode("overwrite").parquet(engine_contract.result_uri)
+        airflow_logger.info(
+            f"Comparison query execution completed. engine={engine}, run_id={self.run_id}, "
+            f"result_uri={engine_contract.result_uri}"
+        )
+
     def load_all(self, tables: List[TableContract]) -> None:
         airflow_logger.info(f"Loader execution started. run_id={self.run_id}, tables_count={len(tables)}")
         try:
@@ -151,3 +257,7 @@ class BaseSynthLoader(ABC):
             self.commit_table(table)
             airflow_logger.info(f"Table committed. table={table.full_table_name}, run_id={self.run_id}")
         airflow_logger.info(f"Loader execution completed. run_id={self.run_id}, tables_count={len(tables)}")
+
+    def execute(self, tables: List[TableContract], comparison_contract: ComparisonContract, engine: str) -> None:
+        self.load_all(tables)
+        self.materialize_comparison_result(comparison_contract, engine)

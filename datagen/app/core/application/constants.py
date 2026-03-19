@@ -6,3 +6,8 @@ class DagRunStatus(Enum):
     FAILED = "failed"
     TIMEOUT = "timeout"
     UNKNOWN = "unknown"
+
+
+class ComparisonStatus(Enum):
+    MATCH = "MATCH"
+    MISMATCH = "MISMATCH"

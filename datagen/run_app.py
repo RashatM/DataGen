@@ -5,13 +5,21 @@ from typing import Any, List
 from zoneinfo import ZoneInfo
 
 from app.core.application.constants import DagRunStatus
-from app.core.application.dto import DagRunResult, TablePublication
+from app.core.application.dto import PipelineExecutionResult, RunArtifactLayout
 from app.core.application.ports.dag_runner_port import DagRunnerPort
+from app.core.application.services.comparison_service import ComparisonService
 from app.core.application.services.publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
-from app.providers import provide_artifact_publication_service, provide_dag_runner, provide_generation_service
+from app.providers import (
+    provide_artifact_publication_service,
+    provide_comparison_service,
+    provide_dag_runner,
+    provide_generation_service,
+    provide_s3_client,
+    provide_s3_object_storage,
+)
 from app.shared.config import load_app_settings
 from app.shared.logger import pipeline_logger
 
@@ -24,11 +32,13 @@ class DataPipelineExecutor:
         self,
         generation_service: DataGenerationService,
         artifact_publication_service: ArtifactPublicationService,
+        comparison_service: ComparisonService,
         dag_runner: DagRunnerPort,
         dag_timeout_seconds: int,
     ) -> None:
         self.generation_service = generation_service
         self.artifact_publication_service = artifact_publication_service
+        self.comparison_service = comparison_service
         self.dag_runner = dag_runner
         self.dag_timeout_seconds = dag_timeout_seconds
 
@@ -46,71 +56,90 @@ class DataPipelineExecutor:
         generation_run = convert_to_generation_run(run_id=run_id, raw_tables=raw_tables)
         return self.generation_service.generate_table_data(generation_run)
 
-    def publish(
+    def execute(
         self,
-        run_id: str,
-        generated_tables: List[GeneratedTableData],
-    ) -> List[TablePublication]:
-        return self.artifact_publication_service.publish(
-            run_id=run_id,
-            generated_tables=generated_tables,
-        )
-
-    def trigger_dag(
-        self,
-        run_id: str,
-        publications: List[TablePublication],
-    ) -> DagRunResult:
-        return self.dag_runner.trigger_and_wait(
-            run_id=run_id,
-            publications=publications,
-            timeout_seconds=self.dag_timeout_seconds,
-        )
-
-    def execute(self, raw_tables: List[Any]) -> DagRunResult:
+        raw_tables: List[Any],
+    ) -> PipelineExecutionResult:
         run_id = self.generate_run_id()
+        layout = RunArtifactLayout(run_id=run_id)
         start = time.monotonic()
         logger.info(f"Pipeline started: run_id={run_id}")
 
         generated_tables = self.generate(run_id, raw_tables)
-        publications = self.publish(run_id, generated_tables)
-        dag_result = self.trigger_dag(run_id, publications)
+        publication_result = self.artifact_publication_service.publish(
+            layout=layout,
+            generated_tables=generated_tables
+        )
+        dag_result = self.dag_runner.trigger_and_wait(
+            layout=layout,
+            publications=publication_result.table_publications,
+            comparison_query_uris=publication_result.comparison_query_uris,
+            timeout_seconds=self.dag_timeout_seconds,
+        )
 
         total = int(time.monotonic() - start)
 
-        if dag_result.status == DagRunStatus.SUCCESS:
-            logger.info(
-                f"Pipeline completed: run_id={run_id}, "
-                f"status={dag_result.status.value}, total={total}s"
-            )
-        else:
+        if dag_result.status != DagRunStatus.SUCCESS:
             logger.error(
                 f"Pipeline failed: run_id={run_id}, "
                 f"status={dag_result.status.value}, total={total}s"
             )
+            return PipelineExecutionResult(run_id=run_id, dag_result=dag_result)
 
-        return dag_result
+        comparison_report = self.comparison_service.read_report(
+            report_key=layout.comparison_report_key(),
+            run_id=layout.run_id,
+        )
+
+        comparison_summary = self.comparison_service.format_report_summary(comparison_report)
+
+        if comparison_report.is_match():
+            logger.info(
+                f"Pipeline completed: run_id={run_id}, "
+                f"dag_status={dag_result.status.value}, {comparison_summary}, total={total}s"
+            )
+        else:
+            logger.warning(
+                f"Pipeline completed with mismatch: run_id={run_id}, "
+                f"dag_status={dag_result.status.value}, {comparison_summary}, total={total}s"
+            )
+
+        return PipelineExecutionResult(
+            run_id=run_id,
+            dag_result=dag_result,
+            comparison_report=comparison_report,
+        )
 
 
-def run_app(env_name: str, raw_tables: List[Any]) -> None:
+def run_app(
+    env_name: str,
+    raw_tables: List[Any],
+) -> None:
     logger.info(f"Application started: environment={env_name}")
     config = load_app_settings(env_name)
+    s3_client = provide_s3_client(config.s3)
+    object_storage = provide_s3_object_storage(
+        bucket=config.s3.bucket,
+        s3_client=s3_client,
+    )
 
     pipeline = DataPipelineExecutor(
         generation_service=provide_generation_service(),
-        artifact_publication_service=provide_artifact_publication_service(config.s3, config.target_storage),
-        dag_runner=provide_dag_runner(config.airflow),
+        artifact_publication_service=provide_artifact_publication_service(object_storage, config.target_storage),
+        comparison_service=provide_comparison_service(object_storage),
+        dag_runner=provide_dag_runner(config.airflow, object_storage),
         dag_timeout_seconds=config.airflow.dag_timeout_seconds,
     )
-    dag_result = pipeline.execute(raw_tables)
-
+    execution_result = pipeline.execute(raw_tables=raw_tables)
+    dag_result = execution_result.dag_result
     if dag_result.status == DagRunStatus.SUCCESS:
         logger.info(
             f"Application finished: environment={env_name}, "
-            f"status={dag_result.status.value}"
+            f"run_id={execution_result.run_id}, status={dag_result.status.value}"
         )
-    else:
-        logger.error(
-            f"Application finished with error: environment={env_name}, "
-            f"status={dag_result.status.value}"
-        )
+        return
+
+    logger.error(
+        f"Application finished with error: environment={env_name}, "
+        f"run_id={execution_result.run_id}, status={dag_result.status.value}"
+    )
