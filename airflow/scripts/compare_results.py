@@ -158,7 +158,16 @@ class ComparisonJob:
             )
 
     @staticmethod
+    def align_columns(hive_df: DataFrame, iceberg_df: DataFrame) -> tuple[DataFrame, DataFrame]:
+        ordered_columns = sorted(hive_df.columns)
+        return (
+            hive_df.select(*ordered_columns),
+            iceberg_df.select(*ordered_columns),
+        )
+
+    @staticmethod
     def calculate_metrics(hive_df: DataFrame, iceberg_df: DataFrame) -> ComparisonMetrics:
+        hive_df, iceberg_df = ComparisonJob.align_columns(hive_df, iceberg_df)
         hive_df.persist()
         iceberg_df.persist()
         try:
