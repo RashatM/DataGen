@@ -50,6 +50,7 @@ def run_app(
     )
     pipeline_result = use_case.execute(generation_run=generation_run)
     execution_result = pipeline_result.execution_result
+
     if execution_result.is_success():
         logger.info(
             f"Application finished: environment={env_name}, "
