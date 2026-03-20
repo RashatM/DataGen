@@ -17,6 +17,13 @@ class S3ComparisonReportRepository(IComparisonReportRepository):
         self.object_storage = object_storage
 
     @staticmethod
+    def require_object(payload: dict, key: str) -> dict:
+        value = payload.get(key)
+        if not isinstance(value, dict):
+            raise ObjectPayloadFormatError(f"Comparison report field '{key}' must be object")
+        return value
+
+    @staticmethod
     def require_string(payload: dict, key: str) -> str:
         value = payload.get(key)
         if not isinstance(value, str) or not value:
@@ -26,7 +33,7 @@ class S3ComparisonReportRepository(IComparisonReportRepository):
     @staticmethod
     def require_int(payload: dict, key: str) -> int:
         value = payload.get(key)
-        if not isinstance(value, int):
+        if isinstance(value, bool) or not isinstance(value, int):
             raise ObjectPayloadFormatError(f"Comparison report field '{key}' must be int")
         return value
 
@@ -38,18 +45,14 @@ class S3ComparisonReportRepository(IComparisonReportRepository):
         return float(value)
 
     def parse_engine_count_summary(self, payload: dict, section_name: str) -> EngineCountSummary:
-        section = payload.get(section_name)
-        if not isinstance(section, dict):
-            raise ObjectPayloadFormatError(f"Comparison report field '{section_name}' must be object")
+        section = self.require_object(payload, section_name)
         return EngineCountSummary(
             hive=self.require_int(section, "hive"),
             iceberg=self.require_int(section, "iceberg"),
         )
 
     def parse_engine_ratio_summary(self, payload: dict, section_name: str) -> EngineRatioSummary:
-        section = payload.get(section_name)
-        if not isinstance(section, dict):
-            raise ObjectPayloadFormatError(f"Comparison report field '{section_name}' must be object")
+        section = self.require_object(payload, section_name)
         return EngineRatioSummary(
             hive=self.require_number(section, "hive"),
             iceberg=self.require_number(section, "iceberg"),
@@ -62,13 +65,8 @@ class S3ComparisonReportRepository(IComparisonReportRepository):
                 f"Comparison report run_id mismatch: expected={expected_run_id}, actual={run_id}"
             )
 
-        summary = payload.get("summary")
-        if not isinstance(summary, dict):
-            raise ObjectPayloadFormatError("Comparison report field 'summary' must be object")
-
-        artifacts = payload.get("artifacts")
-        if not isinstance(artifacts, dict):
-            raise ObjectPayloadFormatError("Comparison report field 'artifacts' must be object")
+        summary = self.require_object(payload, "summary")
+        artifacts = self.require_object(payload, "artifacts")
 
         try:
             status = ComparisonStatus(self.require_string(payload, "status"))
