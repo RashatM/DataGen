@@ -13,7 +13,7 @@ class EnginePair(Generic[T]):
     hive: T
     iceberg: T
 
-    def value_for(self, engine: EngineName) -> T:
+    def get_value(self, engine: EngineName) -> T:
         if engine == EngineName.HIVE:
             return self.hive
         return self.iceberg

@@ -12,7 +12,8 @@ class AirflowDagPayloadBuilder:
     def __init__(self, object_storage: IObjectStorage) -> None:
         self.object_storage = object_storage
 
-    def build_table_entry(self, publication: TablePublication) -> Dict[str, Any]:
+    @staticmethod
+    def build_table_entry(publication: TablePublication) -> Dict[str, Any]:
         return {
             "schema_name": publication.schema_name,
             "table_name": publication.table_name,
@@ -26,15 +27,15 @@ class AirflowDagPayloadBuilder:
     ) -> Dict[str, Any]:
         return {
             "query_uris": {
-                EngineName.HIVE.value: comparison_query_uris.hive,
-                EngineName.ICEBERG.value: comparison_query_uris.iceberg,
+                engine_name.value: comparison_query_uris.get_value(engine_name)
+                for engine_name in EngineName
             },
             "report_uri": self.object_storage.build_uri(artifact_layout.comparison_report_key),
             "result_uris": {
                 engine_name.value: self.object_storage.build_uri(
                     artifact_layout.engine_result_key(engine_name)
                 )
-                for engine_name in EngineName.all()
+                for engine_name in EngineName
             },
         }
 

@@ -6,7 +6,7 @@ from typing import Dict
 
 from pyspark.sql import DataFrame, SparkSession
 
-from base_loader import ComparisonContract, airflow_logger, parse_comparison_contract, write_json_to_uri
+from job_common import ComparisonContract, logger, parse_job_contract, write_json_to_uri
 
 
 @contextmanager
@@ -20,11 +20,11 @@ def open_spark_session(app_name: str):
     )
     try:
         spark.sparkContext.setLogLevel("INFO")
-        airflow_logger.info("Spark session opened.")
-        yield spark_session
+        logger.info("Spark session opened.")
+        yield spark
     finally:
         spark.stop()
-        airflow_logger.info("Spark session closed.")
+        logger.info("Spark session closed.")
 
 
 def parse_args() -> argparse.Namespace:
@@ -186,10 +186,10 @@ class ComparisonJob:
             iceberg_df.unpersist()
 
     def execute(self, run_id: str, comparison_contract: ComparisonContract) -> None:
-        hive_contract = comparison_contract.for_engine("hive")
-        iceberg_contract = comparison_contract.for_engine("iceberg")
+        hive_contract = comparison_contract.get_engine_contract("hive")
+        iceberg_contract = comparison_contract.get_engine_contract("iceberg")
 
-        airflow_logger.info(
+        logger.info(
             f"Comparison started. run_id={run_id}, hive_result_uri={hive_contract.result_uri}, "
             f"iceberg_result_uri={iceberg_contract.result_uri}"
         )
@@ -207,7 +207,7 @@ class ComparisonJob:
         )
         write_json_to_uri(self.spark, comparison_contract.report_uri, report)
 
-        airflow_logger.info(
+        logger.info(
             f"Comparison completed. run_id={run_id}, status={metrics.status()}, "
             f"report_uri={comparison_contract.report_uri}"
         )
@@ -215,11 +215,12 @@ class ComparisonJob:
 
 if __name__ == "__main__":
     args = parse_args()
+    contract = parse_job_contract(args.contract)
     with open_spark_session(args.app_name) as spark_session:
         ComparisonJob(
             spark=spark_session,
             report_builder=ComparisonReportBuilder(),
         ).execute(
             run_id=args.run_id,
-            comparison_contract=parse_comparison_contract(args.contract),
+            comparison_contract=contract.comparison,
         )

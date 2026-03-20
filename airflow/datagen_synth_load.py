@@ -15,6 +15,7 @@ SCHEDULE_INTERVAL = None
 EMAIL_LIST = []
 
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/base_loader.py"
+JOB_COMMON_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/job_common.py"
 ICEBERG_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/iceberg_load.py"
 HADOOP_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/hadoop_load.py"
 COMPARE_RESULTS_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/compare_results.py"
@@ -204,7 +205,7 @@ with DAG(
         config_callable=get_iceberg_spark_config,
         retries=0,
         application=ICEBERG_LOADER_SCRIPT,
-        py_files=BASE_LOADER_SCRIPT,
+        py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_iceberg_{{ dag_run.conf['run_id'] }}",
             "--run_id", "{{ dag_run.conf['run_id'] }}",
@@ -218,7 +219,7 @@ with DAG(
         conn_id="spark_k8s",
         config_callable=get_hadoop_spark_config,
         application=HADOOP_LOADER_SCRIPT,
-        py_files=BASE_LOADER_SCRIPT,
+        py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_hive_{{ dag_run.conf['run_id'] }}",
             "--run_id", "{{ dag_run.conf['run_id'] }}",
@@ -233,7 +234,7 @@ with DAG(
         config_callable=get_compare_spark_config,
         retries=0,
         application=COMPARE_RESULTS_SCRIPT,
-        py_files=BASE_LOADER_SCRIPT,
+        py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_compare_{{ dag_run.conf['run_id'] }}",
             "--run_id", "{{ dag_run.conf['run_id'] }}",

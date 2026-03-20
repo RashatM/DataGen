@@ -16,7 +16,3 @@ class ComparisonStatus(Enum):
 class EngineName(str, Enum):
     HIVE = "hive"
     ICEBERG = "iceberg"
-
-    @classmethod
-    def all(cls) -> tuple["EngineName", "EngineName"]:
-        return cls.HIVE, cls.ICEBERG

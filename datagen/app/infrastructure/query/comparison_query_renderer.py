@@ -28,7 +28,7 @@ class TargetTableComparisonQueryRenderer(ComparisonQueryRendererPort):
             rendered_query = self.replace_table_name(
                 query=rendered_query,
                 logical_table_name=logical_table_name,
-                target_table_name=publication.artifacts.engines.value_for(engine_name).target_table_name,
+                target_table_name=publication.artifacts.engines.get_value(engine_name).target_table_name,
             )
         return rendered_query
 

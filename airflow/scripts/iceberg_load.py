@@ -3,12 +3,13 @@ from contextlib import contextmanager
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 
-from base_loader import BaseSynthLoader, airflow_logger, parse_comparison_contract, parse_table_contracts
+from base_loader import BaseSynthLoader
+from job_common import logger, parse_job_contract
 
 
 @contextmanager
 def open_spark_session(app_name: str):
-    spark_session = (
+    spark = (
         SparkSession.builder
         .appName(app_name)
         .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
@@ -24,12 +25,12 @@ def open_spark_session(app_name: str):
         .getOrCreate()
     )
     try:
-        spark_session.sparkContext.setLogLevel("INFO")
-        airflow_logger.info("Spark session opened.")
-        yield spark_session
+        spark.sparkContext.setLogLevel("INFO")
+        logger.info("Spark session opened.")
+        yield spark
     finally:
-        spark_session.stop()
-        airflow_logger.info("Spark session closed.")
+        spark.stop()
+        logger.info("Spark session closed.")
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,9 +49,12 @@ class IcebergSynthLoader(BaseSynthLoader):
 
 if __name__ == "__main__":
     args = parse_args()
-    tables = parse_table_contracts(args.contract, engine="iceberg")
-    comparison_contract = parse_comparison_contract(args.contract)
+    contract = parse_job_contract(args.contract)
 
-    with open_spark_session(args.app_name) as spark:
-        loader = IcebergSynthLoader(spark, run_id=args.run_id)
-        loader.execute(tables=tables, comparison_contract=comparison_contract, engine="iceberg")
+    with open_spark_session(args.app_name) as spark_session:
+        loader = IcebergSynthLoader(spark_session, run_id=args.run_id)
+        loader.execute(
+            tables=contract.build_table_contracts("iceberg"),
+            comparison_contract=contract.comparison,
+            engine="iceberg",
+        )
