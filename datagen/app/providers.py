@@ -109,14 +109,12 @@ def provide_artifact_publication_service(
     return ArtifactPublicationService(
         repository=artifact_publication_repository,
         comparison_query_renderer=provide_comparison_query_renderer(),
-        query_builders={
-            "hive": HiveQueryBuilder(
-                database_name=target_storage.hive.database_name,
-            ),
-            "iceberg": IcebergQueryBuilder(
-                database_name=target_storage.iceberg.database_name,
-            ),
-        },
+        hive_load_payload_builder=HiveQueryBuilder(
+            database_name=target_storage.hive.database_name,
+        ),
+        iceberg_load_payload_builder=IcebergQueryBuilder(
+            database_name=target_storage.iceberg.database_name,
+        ),
     )
 
 

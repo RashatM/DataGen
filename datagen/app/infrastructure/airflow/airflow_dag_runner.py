@@ -1,10 +1,10 @@
 import time
-from typing import Dict, List
+from typing import List
 
 from app.core.application.constants import ExecutionStatus
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.execution import ExecutionResult
-from app.core.application.dto.publication import TablePublication
+from app.core.application.dto.publication import EnginePair, TablePublication
 from app.infrastructure.airflow.airflow_dag_payload_builder import AirflowDagPayloadBuilder
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.infrastructure.airflow.airflow_client import AirflowClient
@@ -87,7 +87,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         self,
         artifact_layout: RunArtifactKeyLayout,
         publications: List[TablePublication],
-        comparison_query_uris: Dict[str, str],
+        comparison_query_uris: EnginePair[str],
         timeout_seconds: int,
     ) -> ExecutionResult:
         dag_run_id = self.client.build_dag_run_id(artifact_layout.run_id)

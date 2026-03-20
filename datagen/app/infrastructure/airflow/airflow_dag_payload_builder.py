@@ -1,8 +1,9 @@
 from dataclasses import asdict
 from typing import Any, Dict, List
 
+from app.core.application.constants import EngineName
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
-from app.core.application.dto.publication import TablePublication
+from app.core.application.dto.publication import EnginePair, TablePublication
 from app.core.application.ports.object_storage_port import IObjectStorage
 
 
@@ -21,14 +22,19 @@ class AirflowDagPayloadBuilder:
     def build_comparison_entry(
         self,
         artifact_layout: RunArtifactKeyLayout,
-        comparison_query_uris: Dict[str, str],
+        comparison_query_uris: EnginePair[str],
     ) -> Dict[str, Any]:
         return {
-            "query_uris": comparison_query_uris,
+            "query_uris": {
+                EngineName.HIVE.value: comparison_query_uris.hive,
+                EngineName.ICEBERG.value: comparison_query_uris.iceberg,
+            },
             "report_uri": self.object_storage.build_uri(artifact_layout.comparison_report_key),
             "result_uris": {
-                engine_name: self.object_storage.build_uri(artifact_layout.engine_result_key(engine_name))
-                for engine_name in comparison_query_uris
+                engine_name.value: self.object_storage.build_uri(
+                    artifact_layout.engine_result_key(engine_name)
+                )
+                for engine_name in EngineName.all()
             },
         }
 
@@ -36,7 +42,7 @@ class AirflowDagPayloadBuilder:
         self,
         artifact_layout: RunArtifactKeyLayout,
         publications: List[TablePublication],
-        comparison_query_uris: Dict[str, str],
+        comparison_query_uris: EnginePair[str],
     ) -> Dict[str, Any]:
         return {
             "run_id": artifact_layout.run_id,

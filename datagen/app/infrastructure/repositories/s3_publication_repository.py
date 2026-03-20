@@ -4,10 +4,12 @@ from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from app.core.application.constants import EngineName
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout, TableStateKeyLayout
 from app.core.application.dto.publication import (
     EngineLoadArtifact,
     EngineLoadPayload,
+    EnginePair,
     PublicationArtifacts,
     TablePublication,
 )
@@ -41,28 +43,64 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         parquet_bytes = self.serialize_parquet(table_data)
         return self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
+    def stage_engine_artifact(
+        self,
+        schema_name: str,
+        table_name: str,
+        artifact_layout: RunArtifactKeyLayout,
+        engine_name: EngineName,
+        load_payload: EngineLoadPayload,
+    ) -> EngineLoadArtifact:
+        ddl_key = artifact_layout.ddl_key(schema_name, table_name, engine_name)
+        ddl_uri = self.object_storage.put_text(
+            key=ddl_key,
+            content=f"{load_payload.ddl_query.strip()}\n",
+        )
+        return EngineLoadArtifact(
+            ddl_uri=ddl_uri,
+            target_table_name=load_payload.target_table_name,
+        )
+
+    def stage_comparison_query(
+        self,
+        artifact_layout: RunArtifactKeyLayout,
+        engine_name: EngineName,
+        rendered_query: str,
+    ) -> str:
+        return self.object_storage.put_text(
+            key=artifact_layout.comparison_query_key(engine_name),
+            content=f"{rendered_query.strip()}\n",
+        )
+
     def stage_engine_artifacts(
             self,
             table_data: GeneratedTableData,
             artifact_layout: RunArtifactKeyLayout,
-            engine_load_payloads: Dict[str, EngineLoadPayload],
-    ) -> Dict[str, EngineLoadArtifact]:
+            engine_load_payloads: EnginePair[EngineLoadPayload],
+    ) -> EnginePair[EngineLoadArtifact]:
         table = table_data.table
-        engines: Dict[str, EngineLoadArtifact] = {}
-        for engine_name, load_payload in engine_load_payloads.items():
-            ddl_key = artifact_layout.ddl_key(table.schema_name, table.table_name, engine_name)
-            ddl_uri = self.object_storage.put_text(key=ddl_key, content=f"{load_payload.ddl_query.strip()}\n")
-            engines[engine_name] = EngineLoadArtifact(
-                ddl_uri=ddl_uri,
-                target_table_name=load_payload.target_table_name,
-            )
-        return engines
+        return EnginePair(
+            hive=self.stage_engine_artifact(
+                schema_name=table.schema_name,
+                table_name=table.table_name,
+                artifact_layout=artifact_layout,
+                engine_name=EngineName.HIVE,
+                load_payload=engine_load_payloads.hive,
+            ),
+            iceberg=self.stage_engine_artifact(
+                schema_name=table.schema_name,
+                table_name=table.table_name,
+                artifact_layout=artifact_layout,
+                engine_name=EngineName.ICEBERG,
+                load_payload=engine_load_payloads.iceberg,
+            ),
+        )
 
     def stage_table_artifacts(
             self,
             table_data: GeneratedTableData,
             artifact_layout: RunArtifactKeyLayout,
-            engine_load_payloads: Dict[str, EngineLoadPayload],
+            engine_load_payloads: EnginePair[EngineLoadPayload],
     ) -> TablePublication:
         data_uri = self.stage_data_artifact(table_data, artifact_layout)
         engines = self.stage_engine_artifacts(table_data, artifact_layout, engine_load_payloads)
@@ -80,15 +118,20 @@ class S3PublicationRepository(IArtifactPublicationRepository):
     def stage_comparison_queries(
         self,
         artifact_layout: RunArtifactKeyLayout,
-        rendered_queries: Dict[str, str],
-    ) -> Dict[str, str]:
-        query_uris: Dict[str, str] = {}
-        for engine_name, rendered_query in rendered_queries.items():
-            query_uris[engine_name] = self.object_storage.put_text(
-                key=artifact_layout.comparison_query_key(engine_name),
-                content=f"{rendered_query.strip()}\n",
-            )
-        return query_uris
+        rendered_queries: EnginePair[str],
+    ) -> EnginePair[str]:
+        return EnginePair(
+            hive=self.stage_comparison_query(
+                artifact_layout=artifact_layout,
+                engine_name=EngineName.HIVE,
+                rendered_query=rendered_queries.hive,
+            ),
+            iceberg=self.stage_comparison_query(
+                artifact_layout=artifact_layout,
+                engine_name=EngineName.ICEBERG,
+                rendered_query=rendered_queries.iceberg,
+            ),
+        )
 
     def commit_pointer(self, schema_name: str, table_name: str, run_id: str) -> None:
         state_layout = TableStateKeyLayout(schema_name=schema_name, table_name=table_name)

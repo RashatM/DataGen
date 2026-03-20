@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
-from app.core.application.dto.publication import EngineLoadPayload, TablePublication
+from app.core.application.dto.publication import EngineLoadPayload, EnginePair, TablePublication
 from app.core.domain.entities import GeneratedTableData
 
 
@@ -12,7 +12,7 @@ class IArtifactPublicationRepository(ABC):
         self,
         table_data: GeneratedTableData,
         artifact_layout: RunArtifactKeyLayout,
-        engine_load_payloads: Dict[str, EngineLoadPayload],
+        engine_load_payloads: EnginePair[EngineLoadPayload],
     ) -> TablePublication:
         pass
 
@@ -20,8 +20,8 @@ class IArtifactPublicationRepository(ABC):
     def stage_comparison_queries(
         self,
         artifact_layout: RunArtifactKeyLayout,
-        rendered_queries: Dict[str, str],
-    ) -> Dict[str, str]:
+        rendered_queries: EnginePair[str],
+    ) -> EnginePair[str]:
         pass
 
     @abstractmethod

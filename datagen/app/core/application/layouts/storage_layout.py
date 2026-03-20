@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from app.core.application.constants import EngineName
+
 
 @dataclass(slots=True)
 class RunArtifactKeyLayout:
@@ -15,14 +17,14 @@ class RunArtifactKeyLayout:
     def data_key(self, schema_name: str, table_name: str) -> str:
         return f"{self.run_prefix}/{schema_name.strip('/')}/{table_name.strip('/')}/data/data.parquet"
 
-    def ddl_key(self, schema_name: str, table_name: str, engine_name: str) -> str:
-        return f"{self.run_prefix}/{schema_name.strip('/')}/{table_name.strip('/')}/ddl/{engine_name}.sql"
+    def ddl_key(self, schema_name: str, table_name: str, engine_name: EngineName) -> str:
+        return f"{self.run_prefix}/{schema_name.strip('/')}/{table_name.strip('/')}/ddl/{engine_name.value}.sql"
 
-    def engine_result_key(self, engine_name: str) -> str:
-        return f"{self.run_prefix}/result/query/{engine_name}.parquet"
+    def engine_result_key(self, engine_name: EngineName) -> str:
+        return f"{self.run_prefix}/result/query/{engine_name.value}.parquet"
 
-    def comparison_query_key(self, engine_name: str) -> str:
-        return f"{self.run_prefix}/comparison/{engine_name}.sql"
+    def comparison_query_key(self, engine_name: EngineName) -> str:
+        return f"{self.run_prefix}/comparison/{engine_name.value}.sql"
 
 
 @dataclass(slots=True)

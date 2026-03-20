@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import List
 
-from app.core.application.dto.publication import TablePublication
+from app.core.application.dto.publication import EnginePair, TablePublication
 
 
 @dataclass(slots=True)
 class ArtifactPublicationResult:
     table_publications: List[TablePublication]
-    comparison_query_uris: Dict[str, str]
+    comparison_query_uris: EnginePair[str]

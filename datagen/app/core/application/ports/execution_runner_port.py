@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import List
 
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.execution import ExecutionResult
-from app.core.application.dto.publication import TablePublication
+from app.core.application.dto.publication import EnginePair, TablePublication
 
 
 class ExecutionRunnerPort(ABC):
@@ -13,7 +13,7 @@ class ExecutionRunnerPort(ABC):
         self,
         artifact_layout: RunArtifactKeyLayout,
         publications: List[TablePublication],
-        comparison_query_uris: Dict[str, str],
+        comparison_query_uris: EnginePair[str],
         timeout_seconds: int,
     ) -> ExecutionResult:
         ...

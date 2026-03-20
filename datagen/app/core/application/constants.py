@@ -11,3 +11,12 @@ class ExecutionStatus(Enum):
 class ComparisonStatus(Enum):
     MATCH = "MATCH"
     MISMATCH = "MISMATCH"
+
+
+class EngineName(str, Enum):
+    HIVE = "hive"
+    ICEBERG = "iceberg"
+
+    @classmethod
+    def all(cls) -> tuple["EngineName", "EngineName"]:
+        return cls.HIVE, cls.ICEBERG

@@ -1,13 +1,14 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Dict, List
 
-from app.core.application.ports.query_builder_port import IQueryBuilder
+from app.core.application.dto.publication import EngineLoadPayload
+from app.core.application.ports.table_load_payload_builder_port import ITableLoadPayloadBuilder
 from app.core.domain.entities import TableColumnSpec, TableSpec
 from app.core.domain.enums import DataType
 from app.infrastructure.errors import UnsupportedOutputDataTypeError
 
 
-class BaseSqlQueryBuilder(IQueryBuilder, ABC):
+class BaseSqlQueryBuilder(ITableLoadPayloadBuilder, ABC):
     type_mapping: Dict[DataType, str] = {}
 
     def __init__(self, database_name: str):
@@ -30,3 +31,15 @@ class BaseSqlQueryBuilder(IQueryBuilder, ABC):
 
     def build_target_table_name(self, table: TableSpec) -> str:
         return f"{self.database_name}.{table.schema_name}__{table.table_name}"
+
+    @abstractmethod
+    def generate_table_ddl(self, table: TableSpec, target_table_name: str) -> str:
+        pass
+
+    def build_load_payload(self, table: TableSpec) -> EngineLoadPayload:
+        target_table_name = self.build_target_table_name(table)
+        ddl_query = self.generate_table_ddl(table, target_table_name)
+        return EngineLoadPayload(
+            ddl_query=ddl_query,
+            target_table_name=target_table_name,
+        )

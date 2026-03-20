@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import List
 
-from app.core.application.dto.publication import TablePublication
+from app.core.application.dto.publication import EnginePair, TablePublication
 
 
 class ComparisonQueryRendererPort(ABC):
 
     @abstractmethod
-    def render(self, publications: List[TablePublication]) -> Dict[str, str]:
+    def render(self, publications: List[TablePublication]) -> EnginePair[str]:
         ...

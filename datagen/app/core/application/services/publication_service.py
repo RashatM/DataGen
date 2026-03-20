@@ -1,11 +1,11 @@
 from typing import Any, Dict, List, Optional
 
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
-from app.core.application.dto.publication import EngineLoadPayload, TablePublication
+from app.core.application.dto.publication import EngineLoadPayload, EnginePair, TablePublication
 from app.core.application.dto.run_artifacts import ArtifactPublicationResult
 from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
 from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
-from app.core.application.ports.query_builder_port import IQueryBuilder
+from app.core.application.ports.table_load_payload_builder_port import ITableLoadPayloadBuilder
 from app.core.domain.entities import GeneratedTableData
 from app.shared.logger import publication_logger
 
@@ -16,25 +16,20 @@ class ArtifactPublicationService:
     def __init__(
             self,
             repository: IArtifactPublicationRepository,
-            query_builders: Dict[str, IQueryBuilder],
+            hive_load_payload_builder: ITableLoadPayloadBuilder,
+            iceberg_load_payload_builder: ITableLoadPayloadBuilder,
             comparison_query_renderer: ComparisonQueryRendererPort,
     ):
         self.repository = repository
-        self.query_builders = query_builders
+        self.hive_load_payload_builder = hive_load_payload_builder
+        self.iceberg_load_payload_builder = iceberg_load_payload_builder
         self.comparison_query_renderer = comparison_query_renderer
 
-    def build_engine_load_payloads(self, table_data: GeneratedTableData) -> Dict[str, EngineLoadPayload]:
-        table = table_data.table
-        payloads = {}
-        for engine_name, builder in self.query_builders.items():
-            target_table_name = builder.build_target_table_name(table)
-            ddl_query = builder.generate_table_ddl(table, target_table_name)
-
-            payloads[engine_name] = EngineLoadPayload(
-                ddl_query=ddl_query,
-                target_table_name=target_table_name,
-            )
-        return payloads
+    def build_engine_load_payloads(self, table_data: GeneratedTableData) -> EnginePair[EngineLoadPayload]:
+        return EnginePair(
+            hive=self.hive_load_payload_builder.build_load_payload(table_data.table),
+            iceberg=self.iceberg_load_payload_builder.build_load_payload(table_data.table),
+        )
 
     def cleanup_run_artifacts(self, artifact_layout: RunArtifactKeyLayout) -> None:
         logger.info(f"Artifact cleanup started: run_id={artifact_layout.run_id}")
@@ -84,7 +79,7 @@ class ArtifactPublicationService:
         self,
         artifact_layout: RunArtifactKeyLayout,
         table_publications: List[TablePublication]
-    ) -> Dict[str, str]:
+    ) -> EnginePair[str]:
         rendered_queries = self.comparison_query_renderer.render(table_publications)
         comparison_query_uris = self.repository.stage_comparison_queries(
             artifact_layout=artifact_layout,

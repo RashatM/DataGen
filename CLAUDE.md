@@ -127,10 +127,11 @@ DataGen не создаёт базы данных.
 {database_name}.{schema_name}__{table_name}
 ```
 
-Источник истины: `IQueryBuilder.build_target_table_name()`.
+Источник истины для имени target table: `BaseSqlQueryBuilder.build_target_table_name()`.
 
-Повторно `build_target_table_name()` для comparison renderer вызываться не должен.
-Renderer должен использовать уже рассчитанные `publication.artifacts.engines[engine].target_table_name`.
+`ITableLoadPayloadBuilder` должен отдавать уже готовый `EngineLoadPayload`, а повторно `build_target_table_name()` для comparison renderer вызываться не должен.
+Renderer должен использовать уже рассчитанные `publication.artifacts.engines.hive.target_table_name` и
+`publication.artifacts.engines.iceberg.target_table_name`.
 
 ## Runtime-contract для DAG
 
@@ -174,6 +175,7 @@ Renderer должен использовать уже рассчитанные `
 - `comparison.query_uris.hive` и `.iceberg` обязательны
 - `comparison.report_uri` обязателен
 - `comparison.result_uris.hive` и `.iceberg` обязательны
+- в application model engines зафиксированы как пара `hive/iceberg`, а не произвольный словарь
 - в runtime-contract передаются URI на pre-rendered engine-specific queries
 - пути к `metadata.json` Iceberg в контракт не передаются
 - отдельный файл schema для compare не вводится
