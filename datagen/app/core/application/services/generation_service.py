@@ -1,8 +1,8 @@
 import random
 from typing import Any, List
 
-from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
 from app.core.application.ports.generator_factory_port import IDataGeneratorFactory
+from app.core.application.ports.table_dependency_planner_port import ITableDependencyPlanner
 from app.core.application.ports.value_converter_port import IValueConverter
 from app.core.domain.entities import TableColumnSpec, GeneratedTableData, GenerationRun
 from app.core.domain.enums import RelationType
@@ -16,38 +16,41 @@ logger = generation_logger
 class DataGenerationService:
     def __init__(
         self,
-        dependency_order_builder: IDependencyGraphBuilder,
+        table_dependency_planner: ITableDependencyPlanner,
         data_generator_factory: IDataGeneratorFactory,
         value_converter: IValueConverter,
-    ):
-        self.dependency_order_builder = dependency_order_builder
+        rng: random.Random,
+    ) -> None:
+        self.table_dependency_planner = table_dependency_planner
         self.data_generator_factory = data_generator_factory
         self.value_converter = value_converter
+        self.rng = rng
 
     def generate_column_values(self, total_rows: int, table_column: TableColumnSpec) -> List[Any]:
-        total_nulls = int(total_rows * (table_column.constraints.null_ratio / 100))
+        total_nulls = int(total_rows * (table_column.output_constraints.null_ratio / 100))
         total_non_nulls = total_rows - total_nulls
 
-        values = self.data_generator_factory.get(table_column.gen_data_type).generate_values(
+        values = self.data_generator_factory.get(table_column.generator_data_type).generate_values(
             total_rows=total_non_nulls,
-            constraints=table_column.constraints,
+            constraints=table_column.generator_constraints,
+            output_constraints=table_column.output_constraints,
         )
         values = self.value_converter.convert(values=values, table_column=table_column)
 
-        if table_column.constraints.null_ratio > 0:
-            values = shuffle_values_with_nulls(target_count=total_nulls, values=values)
+        if table_column.output_constraints.null_ratio > 0:
+            values = shuffle_values_with_nulls(target_count=total_nulls, values=values, rng=self.rng)
 
         return values
 
-    @staticmethod
     def generate_foreign_key_values(
+        self,
         total_rows: int,
         table_column: TableColumnSpec,
         referenced_values: List[Any],
     ) -> List[Any]:
-        total_nulls = int(total_rows * (table_column.constraints.null_ratio / 100))
+        total_nulls = int(total_rows * (table_column.output_constraints.null_ratio / 100))
         total_non_nulls = total_rows - total_nulls
-        reference_pool = [value for value in referenced_values if value]
+        reference_pool = [value for value in referenced_values if value is not None]
 
         if not reference_pool and total_non_nulls > 0:
             raise UnsatisfiableConstraintsError(
@@ -55,34 +58,34 @@ class DataGenerationService:
             )
 
         if table_column.foreign_key.relation_type == RelationType.ONE_TO_MANY:
-            values = random.choices(reference_pool, k=total_non_nulls)
+            values = self.rng.choices(reference_pool, k=total_non_nulls)
         else:
             if total_non_nulls > len(reference_pool):
                 raise UnsatisfiableConstraintsError(
                     f"Foreign key column {table_column.name} requires {total_non_nulls} unique referenced values, "
                     f"but only {len(reference_pool)} are available"
                 )
-            values = random.sample(reference_pool, total_non_nulls)
+            values = self.rng.sample(reference_pool, total_non_nulls)
 
         if total_nulls > 0:
-            values = shuffle_values_with_nulls(target_count=total_nulls, values=values)
+            values = shuffle_values_with_nulls(target_count=total_nulls, values=values, rng=self.rng)
 
         return values
 
     @staticmethod
     def validate_generated_values(table_column: TableColumnSpec, values: List[Any]) -> None:
-        non_null_values = [value for value in values if value]
+        non_null_values = [value for value in values if value is not None]
 
         if table_column.is_primary_key and len(non_null_values) != len(values):
             raise InvalidConstraintsError(f"Primary key column {table_column.name} cannot contain null values")
 
-        if getattr(table_column.constraints, "is_unique", False) and len(set(non_null_values)) != len(non_null_values):
+        if table_column.output_constraints.is_unique and len(set(non_null_values)) != len(non_null_values):
             raise UnsatisfiableConstraintsError(
                 f"Generated values for column {table_column.name} are not unique in final output"
             )
 
     def generate(self, generation_run: GenerationRun) -> List[GeneratedTableData]:
-        ordered_tables = self.dependency_order_builder.build_graph(generation_run.tables)
+        ordered_tables = self.table_dependency_planner.plan(generation_run.tables)
 
         generated_table_data = {}
         table_data_results = []

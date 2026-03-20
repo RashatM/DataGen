@@ -1,4 +1,5 @@
 import boto3
+import random
 from mypy_boto3_s3 import S3Client
 
 from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
@@ -30,7 +31,7 @@ from app.infrastructure.generators.int_generator import IntDataGenerator
 from app.infrastructure.generators.generator_factory import DataGeneratorFactory
 from app.infrastructure.generators.string_generator import StringDataGenerator
 from app.infrastructure.generators.timestamp_generator import TimestampDataGenerator
-from app.infrastructure.graph.networkx_dependency_graph_builder import NetworkXDependencyGraphBuilder
+from app.infrastructure.graph.networkx_table_dependency_planner import NetworkXTableDependencyPlanner
 from app.infrastructure.query.comparison_query_renderer import TargetTableComparisonQueryRenderer
 from app.core.application.ports.object_storage_port import IObjectStorage
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
@@ -41,14 +42,14 @@ from app.core.application.ports.value_converter_port import IValueConverter
 from app.shared.config import S3Config, AirflowConfig, TargetStorageConfig
 
 
-def provide_generator_factory() -> DataGeneratorFactory:
+def provide_generator_factory(rng: random.Random) -> DataGeneratorFactory:
     factory = DataGeneratorFactory()
-    factory.register(DataType.STRING, StringDataGenerator())
-    factory.register(DataType.INT, IntDataGenerator())
-    factory.register(DataType.FLOAT, FloatDataGenerator())
-    factory.register(DataType.DATE, DateDataGenerator())
-    factory.register(DataType.TIMESTAMP, TimestampDataGenerator())
-    factory.register(DataType.BOOLEAN, BooleanDataGenerator())
+    factory.register(DataType.STRING, StringDataGenerator(rng))
+    factory.register(DataType.INT, IntDataGenerator(rng))
+    factory.register(DataType.FLOAT, FloatDataGenerator(rng))
+    factory.register(DataType.DATE, DateDataGenerator(rng))
+    factory.register(DataType.TIMESTAMP, TimestampDataGenerator(rng))
+    factory.register(DataType.BOOLEAN, BooleanDataGenerator(rng))
     return factory
 
 
@@ -64,11 +65,13 @@ def provide_value_converter() -> IValueConverter:
 
 
 def provide_generation_service() -> DataGenerationService:
-    data_generator_factory = provide_generator_factory()
+    rng = random.Random()
+    data_generator_factory = provide_generator_factory(rng)
     return DataGenerationService(
         data_generator_factory=data_generator_factory,
-        dependency_order_builder=NetworkXDependencyGraphBuilder(),
+        table_dependency_planner=NetworkXTableDependencyPlanner(),
         value_converter=provide_value_converter(),
+        rng=rng,
     )
 
 

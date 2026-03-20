@@ -22,7 +22,7 @@ class ArrowSchemaBuilder:
                 pa.field(
                     column.name,
                     arrow_type,
-                    nullable=column.constraints.null_ratio > 0,
+                    nullable=column.output_constraints.null_ratio > 0,
                 )
             )
         return pa.schema(fields)

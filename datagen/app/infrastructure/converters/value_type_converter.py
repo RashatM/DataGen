@@ -11,7 +11,7 @@ class ValueTypeConverter(IValueConverter):
         self.converter_by_source_type = converter_by_source_type
 
     def convert(self, values: List[Any], table_column: TableColumnSpec) -> List[Any]:
-        source_type = table_column.gen_data_type
+        source_type = table_column.generator_data_type
         target_type = table_column.output_data_type
 
         if source_type == target_type:
@@ -25,7 +25,7 @@ class ValueTypeConverter(IValueConverter):
 
         return converter.convert(
             values=values,
-            constraints=table_column.constraints,
+            constraints=table_column.generator_constraints,
             target_type=target_type,
             column_name=table_column.name,
         )

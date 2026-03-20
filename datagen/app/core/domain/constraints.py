@@ -1,18 +1,23 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from app.core.domain.enums import CaseMode, CharacterSet
 
 
 @dataclass
 class Constraints:
-    null_ratio: int
-    allowed_values: Optional[List[Any]]
+    allowed_values: Optional[tuple[Any, ...]]
 
 
 @dataclass
 class ValueConstraints(Constraints):
+    pass
+
+
+@dataclass
+class OutputConstraints:
+    null_ratio: int
     is_unique: bool
 
 

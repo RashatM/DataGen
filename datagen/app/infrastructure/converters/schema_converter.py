@@ -8,10 +8,11 @@ from app.core.domain.constraints import (
     DateConstraints,
     FloatConstraints,
     IntConstraints,
+    OutputConstraints,
     StringConstraints,
     TimestampConstraints,
 )
-from app.core.domain.conversion_rules import ensure_conversion_supported
+from app.core.domain.conversion_rules import ensure_conversion_supported, ensure_final_uniqueness_supported
 from app.core.domain.entities import (
     TableColumnSpec,
     TableSpec,
@@ -29,7 +30,7 @@ FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
 
 
 def resolve_data_types(column_data: Dict, constraints_data: Dict) -> Tuple[DataType, DataType]:
-    generator_raw = column_data.get("gen_data_type")
+    generator_raw = column_data.get("generator_data_type", column_data.get("gen_data_type"))
     output_raw = column_data.get("output_data_type")
 
     if not generator_raw:
@@ -102,6 +103,16 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
             else is_primary_key
         )
         allowed_values = constraints_data.get("allowed_values")
+        normalized_allowed_values = tuple(allowed_values) if allowed_values else None
+        output_constraints = OutputConstraints(
+            null_ratio=null_ratio,
+            is_unique=is_unique,
+        )
+        ensure_final_uniqueness_supported(
+            source_type=generator_data_type,
+            target_type=output_data_type,
+            requires_unique_output=is_primary_key or output_constraints.is_unique,
+        )
 
         if generator_data_type == DataType.STRING:
             case_mode_raw = constraints_data.get("case_mode")
@@ -123,9 +134,7 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
                     character_set_raw = "letters"
 
             constraints = StringConstraints(
-                null_ratio=null_ratio,
-                is_unique=is_unique,
-                allowed_values=allowed_values,
+                allowed_values=normalized_allowed_values,
                 length=constraints_data.get("length", 10),
                 character_set=CharacterSet(character_set_raw.lower()),
                 case_mode=CaseMode(case_mode_raw.lower()),
@@ -134,18 +143,14 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
 
         elif generator_data_type == DataType.INT:
             constraints = IntConstraints(
-                null_ratio=null_ratio,
-                is_unique=is_unique,
-                allowed_values=allowed_values,
+                allowed_values=normalized_allowed_values,
                 min_value=constraints_data.get("min_value", 0),
                 max_value=constraints_data.get("max_value", 1000),
             )
 
         elif generator_data_type == DataType.FLOAT:
             constraints = FloatConstraints(
-                null_ratio=null_ratio,
-                is_unique=is_unique,
-                allowed_values=allowed_values,
+                allowed_values=normalized_allowed_values,
                 min_value=constraints_data.get("min_value", 0),
                 max_value=constraints_data.get("max_value", 1000),
                 precision=constraints_data.get("precision", 2),
@@ -154,11 +159,9 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
         elif generator_data_type == DataType.DATE:
             min_date = constraints_data.get("min_value")
             max_date = constraints_data.get("max_value")
-            normalized_allowed_values = [parse(v).date() for v in allowed_values] if allowed_values else None
+            normalized_date_values = tuple(parse(v).date() for v in allowed_values) if allowed_values else None
             constraints = DateConstraints(
-                null_ratio=null_ratio,
-                is_unique=is_unique,
-                allowed_values=normalized_allowed_values,
+                allowed_values=normalized_date_values,
                 min_date=parse(min_date).date() if min_date else date(date.today().year, 1, 1),
                 max_date=parse(max_date).date() if max_date else date(date.today().year, 12, 31),
                 date_format=constraints_data.get("date_format", "%Y-%m-%d"),
@@ -167,18 +170,16 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
         elif generator_data_type == DataType.TIMESTAMP:
             min_timestamp = constraints_data.get("min_timestamp")
             max_timestamp = constraints_data.get("max_timestamp")
-            normalized_allowed_values = [parse(v) for v in allowed_values] if allowed_values else None
+            normalized_timestamp_values = tuple(parse(v) for v in allowed_values) if allowed_values else None
             constraints = TimestampConstraints(
-                null_ratio=null_ratio,
-                is_unique=is_unique,
-                allowed_values=normalized_allowed_values,
+                allowed_values=normalized_timestamp_values,
                 min_timestamp=parse(min_timestamp) if min_timestamp else datetime(datetime.now().year, 1, 1, 0, 0, 0),
                 max_timestamp=parse(max_timestamp) if max_timestamp else datetime(datetime.now().year, 12, 31, 0, 0, 0),
                 timestamp_format=constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
             )
 
         elif generator_data_type == DataType.BOOLEAN:
-            constraints = BooleanConstraints(null_ratio=null_ratio, allowed_values=allowed_values)
+            constraints = BooleanConstraints(allowed_values=normalized_allowed_values)
 
         else:
             raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
@@ -200,11 +201,12 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
         table_columns.append(
             TableColumnSpec(
                 name=column_name,
-                gen_data_type=generator_data_type,
+                generator_data_type=generator_data_type,
+                generator_constraints=constraints,
+                output_constraints=output_constraints,
                 output_data_type=output_data_type,
                 is_primary_key=is_primary_key,
                 foreign_key=foreign_key,
-                constraints=constraints,
             )
         )
 

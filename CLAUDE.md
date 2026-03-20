@@ -115,14 +115,22 @@ domain <- application <- infrastructure
 
 ## Семантика генерации
 
-- `gen_data_type` описывает, как значение генерируется.
+- `generator_data_type` описывает generator domain, в котором значение сначала создаётся.
 - `output_data_type` описывает тип финального значения, которое попадёт в parquet и target tables.
+- В `TableColumnSpec` это разделено явно:
+  - `generator_constraints`: `allowed_values`, `regular_expr`, `length`, `character_set`, `case_mode`, `min/max`, `precision`, а также `date/timestamp_format` как type-local параметры conversion/rendering для generator domain
+  - `output_constraints`: `null_ratio`, `is_unique`
+- `date_format` и `timestamp_format` не надо переносить в `output_constraints`: это не cross-column output invariants, а настройки `DATE/TIMESTAMP` conversion pipeline.
 - Для обычных колонок критичные инварианты должны выдерживаться на финальном output, а не только на промежуточном generator-value.
 - `primary key` всегда не nullable: `null_ratio=0` обязателен.
 - `foreign key` колонка считается derived from parent column, а не independently generated.
-- Для `foreign key` сейчас разрешён только `null_ratio`; остальные generator constraints (`allowed_values`, `min/max`, `regular_expr`, `is_unique`) запрещены.
+- Для `foreign key` сейчас разрешён только `null_ratio`; остальные generator constraints запрещены.
 - `foreign key` должен ссылаться на non-null unique/primary-key column с тем же `output_data_type`.
 - Для `ONE_TO_ONE` число non-null child rows не может превышать число parent rows.
+- Явно lossy conversions для final unique semantics валидируются заранее, сейчас это:
+  - `INT -> BOOLEAN`
+  - `FLOAT -> INT`
+  - `TIMESTAMP -> DATE`
 
 ## Имена целевых таблиц
 

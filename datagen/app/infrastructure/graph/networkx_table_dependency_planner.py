@@ -1,15 +1,15 @@
 from typing import Dict, List
 import networkx as nx
 
-from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
+from app.core.application.ports.table_dependency_planner_port import ITableDependencyPlanner
 from app.core.domain.entities import TableColumnSpec, TableSpec
 from app.core.domain.enums import RelationType
 from app.core.domain.validation_errors import InvalidForeignKeyError
 
 
-class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
+class NetworkXTableDependencyPlanner(ITableDependencyPlanner):
     @staticmethod
-    def can_skip_graph_build(tables: List[TableSpec]) -> bool:
+    def can_skip_planning(tables: List[TableSpec]) -> bool:
         return len(tables) == 1 and all(column.foreign_key is None for column in tables[0].columns)
 
     @staticmethod
@@ -50,7 +50,7 @@ class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
 
                 ref_column = table_column_specs[ref_table_name][fk_info.column_name]
                 if not getattr(ref_column, "is_primary_key", False) and not getattr(
-                    ref_column.constraints, "is_unique", False
+                    ref_column.output_constraints, "is_unique", False
                 ):
                     invalid_references.append(
                         f"{source_column_name} -> {referenced_column_name} "
@@ -58,7 +58,7 @@ class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
                     )
                     continue
 
-                if ref_column.constraints.null_ratio != 0:
+                if ref_column.output_constraints.null_ratio != 0:
                     invalid_references.append(
                         f"{source_column_name} -> {referenced_column_name} "
                         f"(referenced column must be non-nullable)"
@@ -75,7 +75,7 @@ class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
 
                 if fk_info.relation_type == RelationType.ONE_TO_ONE:
                     non_null_child_rows = table.total_rows - int(
-                        table.total_rows * (column.constraints.null_ratio / 100)
+                        table.total_rows * (column.output_constraints.null_ratio / 100)
                     )
                     if non_null_child_rows > ref_table.total_rows:
                         invalid_references.append(
@@ -89,8 +89,8 @@ class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
 
         return invalid_references
 
-    def build_graph(self, tables: List[TableSpec]) -> List[TableSpec]:
-        if self.can_skip_graph_build(tables):
+    def plan(self, tables: List[TableSpec]) -> List[TableSpec]:
+        if self.can_skip_planning(tables):
             return tables
 
         table_by_name: Dict[str, TableSpec] = {table.full_table_name: table for table in tables}

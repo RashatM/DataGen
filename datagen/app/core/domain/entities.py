@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Generic, List, Optional
 
+from app.core.domain.constraints import OutputConstraints
 from app.core.domain.enums import DataType, RelationType
 from app.core.domain.typevars import TConstraints
 
@@ -21,15 +22,16 @@ class TableForeignKeySpec:
 @dataclass
 class TableColumnSpec(Generic[TConstraints]):
     name: str
-    gen_data_type: DataType
+    generator_data_type: DataType
     is_primary_key: bool
-    constraints: TConstraints
+    generator_constraints: TConstraints
+    output_constraints: OutputConstraints
     foreign_key: Optional[TableForeignKeySpec]
     output_data_type: Optional[DataType] = None
 
     def __post_init__(self):
         if not self.output_data_type:
-            self.output_data_type = self.gen_data_type
+            self.output_data_type = self.generator_data_type
 
 
 @dataclass
