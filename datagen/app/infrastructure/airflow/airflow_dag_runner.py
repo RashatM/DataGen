@@ -2,7 +2,7 @@ import time
 from typing import Dict, List
 
 from app.core.application.constants import ExecutionStatus
-from app.core.application.layouts.storage_layout import RunArtifactLayout
+from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.execution import ExecutionResult
 from app.core.application.dto.publication import TablePublication
 from app.infrastructure.airflow.airflow_dag_payload_builder import AirflowDagPayloadBuilder
@@ -85,14 +85,14 @@ class AirflowDagRunner(ExecutionRunnerPort):
 
     def trigger_and_wait(
         self,
-        layout: RunArtifactLayout,
+        artifact_layout: RunArtifactKeyLayout,
         publications: List[TablePublication],
         comparison_query_uris: Dict[str, str],
         timeout_seconds: int,
     ) -> ExecutionResult:
-        dag_run_id = self.client.build_dag_run_id(layout.run_id)
+        dag_run_id = self.client.build_dag_run_id(artifact_layout.run_id)
         payload = self.payload_builder.build(
-            layout=layout,
+            artifact_layout=artifact_layout,
             publications=publications,
             comparison_query_uris=comparison_query_uris,
         )
@@ -105,7 +105,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         logger.info(f"DAG trigger accepted: dag_run_id={dag_run_id}")
 
         return self.poll_until_terminal(
-            run_id=layout.run_id,
+            run_id=artifact_layout.run_id,
             dag_run_id=dag_run_id,
             timeout_seconds=timeout_seconds,
         )

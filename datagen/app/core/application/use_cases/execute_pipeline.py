@@ -1,7 +1,7 @@
 import time
 
 from app.core.application.dto.pipeline import PipelineExecutionResult
-from app.core.application.layouts.storage_layout import RunArtifactLayout
+from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.core.application.services.comparison_report_service import ComparisonReportService
 from app.core.application.services.generation_service import DataGenerationService
@@ -29,17 +29,17 @@ class ExecutePipelineUseCase:
 
     def execute(self, generation_run: GenerationRun) -> PipelineExecutionResult:
         run_id = generation_run.run_id
-        artifact_layout = RunArtifactLayout(run_id=run_id)
+        artifact_layout = RunArtifactKeyLayout(run_id=run_id)
         start = time.monotonic()
         logger.info(f"Pipeline started: run_id={run_id}")
 
         generated_tables = self.generation_service.generate(generation_run)
         publication_result = self.artifact_publication_service.publish(
-            layout=artifact_layout,
+            artifact_layout=artifact_layout,
             generated_tables=generated_tables,
         )
         execution_result = self.execution_runner.trigger_and_wait(
-            layout=artifact_layout,
+            artifact_layout=artifact_layout,
             publications=publication_result.table_publications,
             comparison_query_uris=publication_result.comparison_query_uris,
             timeout_seconds=self.execution_timeout_seconds,

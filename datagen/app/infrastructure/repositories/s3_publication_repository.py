@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from app.core.application.layouts.storage_layout import RunArtifactLayout, TableStateLayout
+from app.core.application.layouts.storage_layout import RunArtifactKeyLayout, TableStateKeyLayout
 from app.core.application.dto.publication import (
     EngineLoadArtifact,
     EngineLoadPayload,
@@ -35,22 +35,22 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         table = pq.read_table(pa.BufferReader(payload))
         return table.to_pydict()
 
-    def stage_data_artifact(self, table_data: GeneratedTableData, layout: RunArtifactLayout) -> str:
+    def stage_data_artifact(self, table_data: GeneratedTableData, artifact_layout: RunArtifactKeyLayout) -> str:
         table = table_data.table
-        data_key = layout.data_key(table.schema_name, table.table_name)
+        data_key = artifact_layout.data_key(table.schema_name, table.table_name)
         parquet_bytes = self.serialize_parquet(table_data)
         return self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
 
     def stage_engine_artifacts(
             self,
             table_data: GeneratedTableData,
-            layout: RunArtifactLayout,
+            artifact_layout: RunArtifactKeyLayout,
             engine_load_payloads: Dict[str, EngineLoadPayload],
     ) -> Dict[str, EngineLoadArtifact]:
         table = table_data.table
         engines: Dict[str, EngineLoadArtifact] = {}
         for engine_name, load_payload in engine_load_payloads.items():
-            ddl_key = layout.ddl_key(table.schema_name, table.table_name, engine_name)
+            ddl_key = artifact_layout.ddl_key(table.schema_name, table.table_name, engine_name)
             ddl_uri = self.object_storage.put_text(key=ddl_key, content=f"{load_payload.ddl_query.strip()}\n")
             engines[engine_name] = EngineLoadArtifact(
                 ddl_uri=ddl_uri,
@@ -61,16 +61,16 @@ class S3PublicationRepository(IArtifactPublicationRepository):
     def stage_table_artifacts(
             self,
             table_data: GeneratedTableData,
-            layout: RunArtifactLayout,
+            artifact_layout: RunArtifactKeyLayout,
             engine_load_payloads: Dict[str, EngineLoadPayload],
     ) -> TablePublication:
-        data_uri = self.stage_data_artifact(table_data, layout)
-        engines = self.stage_engine_artifacts(table_data, layout, engine_load_payloads)
+        data_uri = self.stage_data_artifact(table_data, artifact_layout)
+        engines = self.stage_engine_artifacts(table_data, artifact_layout, engine_load_payloads)
         table = table_data.table
         return TablePublication(
             schema_name=table.schema_name,
             table_name=table.table_name,
-            run_id=layout.run_id,
+            run_id=artifact_layout.run_id,
             artifacts=PublicationArtifacts(
                 data_uri=data_uri,
                 engines=engines,
@@ -79,20 +79,20 @@ class S3PublicationRepository(IArtifactPublicationRepository):
 
     def stage_comparison_queries(
         self,
-        layout: RunArtifactLayout,
+        artifact_layout: RunArtifactKeyLayout,
         rendered_queries: Dict[str, str],
     ) -> Dict[str, str]:
         query_uris: Dict[str, str] = {}
         for engine_name, rendered_query in rendered_queries.items():
             query_uris[engine_name] = self.object_storage.put_text(
-                key=layout.comparison_query_key(engine_name),
+                key=artifact_layout.comparison_query_key(engine_name),
                 content=f"{rendered_query.strip()}\n",
             )
         return query_uris
 
     def commit_pointer(self, schema_name: str, table_name: str, run_id: str) -> None:
-        table_state_layout = TableStateLayout(schema_name=schema_name, table_name=table_name)
-        pointer_key = table_state_layout.pointer_key
+        state_layout = TableStateKeyLayout(schema_name=schema_name, table_name=table_name)
+        pointer_key = state_layout.pointer_key
         previous_run_id = self.get_latest_run_id(schema_name, table_name)
 
         self.object_storage.put_json(
@@ -105,8 +105,8 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         )
 
     def get_latest_run_id(self, schema_name: str, table_name: str) -> Optional[str]:
-        table_state_layout = TableStateLayout(schema_name=schema_name, table_name=table_name)
-        pointer_key = table_state_layout.pointer_key
+        state_layout = TableStateKeyLayout(schema_name=schema_name, table_name=table_name)
+        pointer_key = state_layout.pointer_key
         try:
             payload = self.object_storage.get_json(key=pointer_key)
         except ObjectNotFoundError:
@@ -118,10 +118,10 @@ class S3PublicationRepository(IArtifactPublicationRepository):
         return run_id
 
     def read_table_data(self, schema_name: str, table_name: str, run_id: str) -> Dict[str, Any]:
-        layout = RunArtifactLayout(run_id=run_id)
-        key = layout.data_key(schema_name, table_name)
+        artifact_layout = RunArtifactKeyLayout(run_id=run_id)
+        key = artifact_layout.data_key(schema_name, table_name)
         payload = self.object_storage.get_bytes(key=key)
         return self.deserialize_parquet(payload)
 
-    def cleanup_run_artifacts(self, layout: RunArtifactLayout) -> None:
-        self.object_storage.delete_prefix(layout.run_prefix)
+    def cleanup_run_artifacts(self, artifact_layout: RunArtifactKeyLayout) -> None:
+        self.object_storage.delete_prefix(artifact_layout.run_prefix)

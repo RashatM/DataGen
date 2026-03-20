@@ -39,7 +39,7 @@ DataGen не ходит напрямую в Hive или Iceberg. Доступ к
 |---|---|
 | `datagen/app/core/application/constants.py` | `ExecutionStatus`, `ComparisonStatus` |
 | `datagen/app/core/application/dto/` | DTO package: publication, execution, comparison, pipeline, run_artifacts |
-| `datagen/app/core/application/layouts/storage_layout.py` | key/layout policy for run artifacts and table pointer state |
+| `datagen/app/core/application/layouts/storage_layout.py` | storage key policy for run artifacts and table pointer state |
 | `datagen/app/core/application/ports/comparison_query_provider_port.py` | seam для будущего источника comparison query, сейчас не участвует в execute-path |
 | `datagen/app/core/application/ports/comparison_query_renderer_port.py` | рендеринг engine-specific comparison queries |
 | `datagen/app/core/application/ports/execution_runner_port.py` | запуск и ожидание внешнего execution workflow |
@@ -102,7 +102,7 @@ domain <- application <- infrastructure
 ## Текущий pipeline
 
 1. `DataGenerationService.generate_table_data()` генерирует `GeneratedTableData`.
-2. `ExecutePipelineUseCase` создаёт `RunArtifactLayout(run_id)`.
+2. `ExecutePipelineUseCase` создаёт `RunArtifactKeyLayout(run_id)`.
 3. `ArtifactPublicationService.publish()` пишет parquet, DDL и engine-specific comparison queries в S3.
 4. `AirflowDagRunner.trigger_and_wait()` собирает runtime-contract и запускает DAG.
 5. DAG:
@@ -315,7 +315,7 @@ Canonical типы:
 - `ComparisonStatus`
 - `ComparisonReport` и `PipelineExecutionResult`
 - `ComparisonReportService`
-- `RunArtifactLayout`
+- `RunArtifactKeyLayout`
 - `ComparisonQueryRendererPort`
 - `TargetTableComparisonQueryRenderer`
 - `IComparisonReportRepository`

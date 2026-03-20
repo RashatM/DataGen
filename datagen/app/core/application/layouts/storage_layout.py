@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
-class RunArtifactLayout:
+class RunArtifactKeyLayout:
     run_id: str
     run_prefix: str = field(init=False)
     comparison_report_key: str = field(init=False)
@@ -26,7 +26,7 @@ class RunArtifactLayout:
 
 
 @dataclass(slots=True)
-class TableStateLayout:
+class TableStateKeyLayout:
     schema_name: str
     table_name: str
     pointer_key: str = field(init=False)
