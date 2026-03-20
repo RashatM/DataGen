@@ -5,7 +5,7 @@ from app.core.application.ports.comparison_query_renderer_port import Comparison
 from app.core.application.ports.comparison_repository_port import IComparisonReportRepository
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
-from app.core.application.services.comparison_service import ComparisonService
+from app.core.application.services.comparison_report_service import ComparisonReportService
 from app.core.application.services.publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.domain.enums import DataType
@@ -130,6 +130,6 @@ def provide_execution_runner(
     )
 
 
-def provide_comparison_service(object_storage: IObjectStorage) -> ComparisonService:
+def provide_comparison_report_service(object_storage: IObjectStorage) -> ComparisonReportService:
     comparison_report_repository = provide_comparison_report_repository(object_storage)
-    return ComparisonService(repository=comparison_report_repository)
+    return ComparisonReportService(repository=comparison_report_repository)

@@ -38,7 +38,7 @@ class DataGenerationService:
 
         return values
 
-    def generate_table_data(self, generation_run: GenerationRun) -> List[GeneratedTableData]:
+    def generate(self, generation_run: GenerationRun) -> List[GeneratedTableData]:
         ordered_tables = self.dependency_order_builder.build_graph(generation_run.tables)
 
         generated_table_data = {}

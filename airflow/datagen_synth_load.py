@@ -26,13 +26,57 @@ SPARK_CONF_DIRS = {
     "BDA71": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda71/spark-conf"
 }
 
+
+def require_non_empty_string(value: Any, field_name: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Contract is missing non-empty '{field_name}'")
+
+
+def validate_table_contracts(conf: Dict[str, Any]) -> None:
+    tables = conf.get("tables")
+    if not isinstance(tables, list) or not tables:
+        raise ValueError("Contract is missing non-empty 'tables'")
+
+    for index, table in enumerate(tables):
+        if not isinstance(table, dict):
+            raise ValueError(f"Contract table at index={index} must be an object")
+
+        require_non_empty_string(table.get("schema_name"), f"tables[{index}].schema_name")
+        require_non_empty_string(table.get("table_name"), f"tables[{index}].table_name")
+
+        artifacts = table.get("artifacts")
+        if not isinstance(artifacts, dict):
+            raise ValueError(f"Contract is missing 'tables[{index}].artifacts'")
+
+        require_non_empty_string(artifacts.get("data_uri"), f"tables[{index}].artifacts.data_uri")
+
+        engines = artifacts.get("engines")
+        if not isinstance(engines, dict):
+            raise ValueError(f"Contract is missing 'tables[{index}].artifacts.engines'")
+
+        for engine in ("hive", "iceberg"):
+            engine_artifacts = engines.get(engine)
+            if not isinstance(engine_artifacts, dict):
+                raise ValueError(
+                    f"Contract is missing 'tables[{index}].artifacts.engines.{engine}'"
+                )
+
+            require_non_empty_string(
+                engine_artifacts.get("ddl_uri"),
+                f"tables[{index}].artifacts.engines.{engine}.ddl_uri",
+            )
+            require_non_empty_string(
+                engine_artifacts.get("target_table_name"),
+                f"tables[{index}].artifacts.engines.{engine}.target_table_name",
+            )
+
+
 def validate_contract(**context) -> None:
     conf = context["dag_run"].conf or {}
 
     if not conf.get("run_id"):
         raise ValueError("Contract is missing 'run_id'")
-    if not conf.get("tables"):
-        raise ValueError("Contract is missing 'tables'")
+    validate_table_contracts(conf)
 
     comparison = conf.get("comparison")
     if not isinstance(comparison, dict):

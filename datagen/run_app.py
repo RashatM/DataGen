@@ -7,7 +7,7 @@ from app.core.application.use_cases.execute_pipeline import ExecutePipelineUseCa
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
 from app.providers import (
     provide_artifact_publication_service,
-    provide_comparison_service,
+    provide_comparison_report_service,
     provide_execution_runner,
     provide_generation_service,
     provide_s3_client,
@@ -44,7 +44,7 @@ def run_app(
     use_case = ExecutePipelineUseCase(
         generation_service=provide_generation_service(),
         artifact_publication_service=provide_artifact_publication_service(object_storage, config.target_storage),
-        comparison_service=provide_comparison_service(object_storage),
+        comparison_report_service=provide_comparison_report_service(object_storage),
         execution_runner=provide_execution_runner(config.airflow, object_storage),
         execution_timeout_seconds=config.airflow.dag_timeout_seconds,
     )

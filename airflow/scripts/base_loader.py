@@ -193,6 +193,9 @@ def write_json_to_uri(spark: SparkSession, uri: str, payload: Dict[str, Any]) ->
 
 
 class BaseSynthLoader(ABC):
+    TIMESTAMP_OUTPUT_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
+    DATE_OUTPUT_FORMAT = "yyyy-MM-dd"
+    NORMALIZED_DECIMAL_TYPE = "decimal(38,18)"
 
     def __init__(self, spark: SparkSession, run_id: str) -> None:
         self.run_id = run_id
@@ -207,10 +210,6 @@ class BaseSynthLoader(ABC):
 
     def read_query_from_s3(self, query_uri: str) -> str:
         return self.spark.sparkContext.wholeTextFiles(query_uri).values().first()
-
-    TIMESTAMP_OUTPUT_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
-    DATE_OUTPUT_FORMAT = "yyyy-MM-dd"
-    NORMALIZED_DECIMAL_TYPE = "decimal(38,18)"
 
     @staticmethod
     def normalize_for_comparison(df: DataFrame) -> DataFrame:
@@ -237,9 +236,7 @@ class BaseSynthLoader(ABC):
                         col.cast("date"), BaseSynthLoader.DATE_OUTPUT_FORMAT
                     ).alias(field.name)
                 )
-            elif isinstance(dt, (ByteType, ShortType, IntegerType, LongType)):
-                expressions.append(col.cast("bigint").alias(field.name))
-            elif isinstance(dt, (FloatType, DoubleType, DecimalType)):
+            elif isinstance(dt, (ByteType, ShortType, IntegerType, LongType, FloatType, DoubleType, DecimalType)):
                 expressions.append(col.cast(BaseSynthLoader.NORMALIZED_DECIMAL_TYPE).alias(field.name))
             elif isinstance(dt, BooleanType):
                 expressions.append(spark_functions.lower(col.cast("string")).alias(field.name))

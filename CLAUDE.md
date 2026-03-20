@@ -47,7 +47,7 @@ DataGen не ходит напрямую в Hive или Iceberg. Доступ к
 | `datagen/app/core/application/ports/comparison_repository_port.py` | чтение report сверки |
 | `datagen/app/core/application/services/generation_service.py` | генерация данных |
 | `datagen/app/core/application/services/publication_service.py` | публикация артефактов |
-| `datagen/app/core/application/services/comparison_service.py` | чтение и интерпретация comparison report |
+| `datagen/app/core/application/services/comparison_report_service.py` | чтение и интерпретация comparison report |
 | `datagen/app/core/application/use_cases/execute_pipeline.py` | orchestration use case |
 
 ### Infrastructure layer
@@ -111,7 +111,7 @@ domain <- application <- infrastructure
    - выполняет comparison-query отдельно в каждой системе
    - пишет `hive.parquet` и `iceberg.parquet`
    - отдельной compare-task сравнивает результаты и пишет report
-6. `ComparisonService` читает report из S3 по `report_key` и возвращает application-level результат.
+6. `ComparisonReportService` читает report из S3 по `report_key` и возвращает application-level результат.
 
 ## Имена целевых таблиц
 
@@ -221,8 +221,8 @@ query_result(hive) vs query_result(iceberg)
 Основной метод:
 
 ```python
-hive_unmatched_row_count = hive_result.exceptAll(iceberg_result).count()
-iceberg_unmatched_row_count = iceberg_result.exceptAll(hive_result).count()
+hive_exclusive_row_count = hive_result.exceptAll(iceberg_result).count()
+iceberg_exclusive_row_count = iceberg_result.exceptAll(hive_result).count()
 ```
 
 Правила:
@@ -273,9 +273,14 @@ Canonical типы:
       "hive": 10000,
       "iceberg": 10000
     },
-    "unmatched_row_count": {
+    "row_count_delta": 0,
+    "exclusive_row_count": {
       "hive": 0,
       "iceberg": 0
+    },
+    "exclusive_row_ratio": {
+      "hive": 0.0,
+      "iceberg": 0.0
     }
   },
   "artifacts": {
@@ -285,9 +290,17 @@ Canonical типы:
 }
 ```
 
-Смысл `unmatched_row_count`:
+Смысл `exclusive_row_count`:
 - `hive`: сколько строк осталось только в результате Hive после `exceptAll`
 - `iceberg`: сколько строк осталось только в результате Iceberg после `exceptAll`
+
+Смысл `row_count_delta`:
+- абсолютная разница между `row_count.hive` и `row_count.iceberg`
+
+Смысл `exclusive_row_ratio`:
+- `hive`: доля exclusive-строк в результате Hive: `exclusive_row_count.hive / row_count.hive`
+- `iceberg`: доля exclusive-строк в результате Iceberg: `exclusive_row_count.iceberg / row_count.iceberg`
+- если `row_count == 0`, доля считается `0.0`
 
 В `v1`:
 - checksum не используется
@@ -301,7 +314,7 @@ Canonical типы:
 - `compare_results.py`
 - `ComparisonStatus`
 - `ComparisonReport` и `PipelineExecutionResult`
-- `ComparisonService`
+- `ComparisonReportService`
 - `RunArtifactLayout`
 - `ComparisonQueryRendererPort`
 - `TargetTableComparisonQueryRenderer`

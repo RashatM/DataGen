@@ -11,7 +11,7 @@ from base_loader import ComparisonContract, airflow_logger, parse_comparison_con
 
 @contextmanager
 def open_spark_session(app_name: str):
-    spark_session = (
+    spark = (
         SparkSession.builder
         .appName(app_name)
         .config("spark.sql.sources.partitionOverwriteMode", "static")
@@ -19,11 +19,11 @@ def open_spark_session(app_name: str):
         .getOrCreate()
     )
     try:
-        spark_session.sparkContext.setLogLevel("INFO")
+        spark.sparkContext.setLogLevel("INFO")
         airflow_logger.info("Spark session opened.")
         yield spark_session
     finally:
-        spark_session.stop()
+        spark.stop()
         airflow_logger.info("Spark session closed.")
 
 
@@ -42,12 +42,20 @@ class EngineCounts:
 
 
 @dataclass(frozen=True, slots=True)
+class EngineRatios:
+    hive: float
+    iceberg: float
+
+
+@dataclass(frozen=True, slots=True)
 class ComparisonMetrics:
     row_count: EngineCounts
-    unmatched_row_count: EngineCounts
+    row_count_delta: int
+    exclusive_row_count: EngineCounts
+    exclusive_row_ratio: EngineRatios
 
     def status(self) -> str:
-        if self.unmatched_row_count.hive == 0 and self.unmatched_row_count.iceberg == 0:
+        if self.exclusive_row_count.hive == 0 and self.exclusive_row_count.iceberg == 0:
             return "MATCH"
         return "MISMATCH"
 
@@ -58,6 +66,12 @@ class ComparisonReportBuilder:
     def to_checked_at() -> str:
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
+    @staticmethod
+    def calculate_ratio(exclusive_count: int, total_count: int) -> float:
+        if total_count == 0:
+            return 0.0
+        return round(exclusive_count / total_count, 6)
+
     def build(
         self,
         run_id: str,
@@ -65,6 +79,29 @@ class ComparisonReportBuilder:
         iceberg_result_uri: str,
         metrics: ComparisonMetrics,
     ) -> Dict[str, object]:
+        """Build comparison_result.json payload.
+
+        Example:
+        {
+            "run_id": "...",
+            "checked_at": "...",
+            "status": "MATCH | MISMATCH",
+            "summary": {
+                "row_count": {"hive": 10000, "iceberg": 10000},
+                "row_count_delta": 0,
+                "exclusive_row_count": {"hive": 0, "iceberg": 0},
+                "exclusive_row_ratio": {"hive": 0.0, "iceberg": 0.0}
+            },
+            "artifacts": {
+                "hive_result_uri": "...",
+                "iceberg_result_uri": "..."
+            }
+        }
+
+        row_count_delta is abs(row_count.hive - row_count.iceberg).
+        exclusive_row_count is the bilateral exceptAll residual per engine.
+        exclusive_row_ratio is exclusive_row_count / row_count for each engine.
+        """
         return {
             "run_id": run_id,
             "checked_at": self.to_checked_at(),
@@ -74,9 +111,14 @@ class ComparisonReportBuilder:
                     "hive": metrics.row_count.hive,
                     "iceberg": metrics.row_count.iceberg,
                 },
-                "unmatched_row_count": {
-                    "hive": metrics.unmatched_row_count.hive,
-                    "iceberg": metrics.unmatched_row_count.iceberg,
+                "row_count_delta": metrics.row_count_delta,
+                "exclusive_row_count": {
+                    "hive": metrics.exclusive_row_count.hive,
+                    "iceberg": metrics.exclusive_row_count.iceberg,
+                },
+                "exclusive_row_ratio": {
+                    "hive": metrics.exclusive_row_ratio.hive,
+                    "iceberg": metrics.exclusive_row_ratio.iceberg,
                 },
             },
             "artifacts": {
@@ -120,14 +162,23 @@ class ComparisonJob:
         hive_df.persist()
         iceberg_df.persist()
         try:
+            hive_row_count = hive_df.count()
+            iceberg_row_count = iceberg_df.count()
+            hive_exclusive_row_count = hive_df.exceptAll(iceberg_df).count()
+            iceberg_exclusive_row_count = iceberg_df.exceptAll(hive_df).count()
             return ComparisonMetrics(
                 row_count=EngineCounts(
-                    hive=hive_df.count(),
-                    iceberg=iceberg_df.count(),
+                    hive=hive_row_count,
+                    iceberg=iceberg_row_count,
                 ),
-                unmatched_row_count=EngineCounts(
-                    hive=hive_df.exceptAll(iceberg_df).count(),
-                    iceberg=iceberg_df.exceptAll(hive_df).count(),
+                row_count_delta=abs(hive_row_count - iceberg_row_count),
+                exclusive_row_count=EngineCounts(
+                    hive=hive_exclusive_row_count,
+                    iceberg=iceberg_exclusive_row_count,
+                ),
+                exclusive_row_ratio=EngineRatios(
+                    hive=ComparisonReportBuilder.calculate_ratio(hive_exclusive_row_count, hive_row_count),
+                    iceberg=ComparisonReportBuilder.calculate_ratio(iceberg_exclusive_row_count, iceberg_row_count),
                 ),
             )
         finally:
