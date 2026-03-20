@@ -25,6 +25,8 @@ LEGACY_MAPPING = {
     "TIMESTAMP_STRING": DataType.TIMESTAMP,
 }
 
+FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
+
 
 def resolve_data_types(column_data: Dict, constraints_data: Dict) -> Tuple[DataType, DataType]:
     generator_raw = column_data.get("gen_data_type")
@@ -89,6 +91,11 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
                 ) from exc
 
         null_ratio = constraints_data.get("null_ratio", 0)
+        if not isinstance(null_ratio, (int, float)):
+            raise SchemaValidationError(f"Column {column_name} has invalid null_ratio: {null_ratio!r}")
+        if not 0 <= null_ratio <= 100:
+            raise SchemaValidationError(f"Column {column_name} has null_ratio outside [0, 100]: {null_ratio}")
+        null_ratio = int(null_ratio)
         is_unique = (
             constraints_data.get("is_unique", constraints_data.get("unique", False))
             if not is_primary_key
@@ -175,6 +182,20 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
 
         else:
             raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
+
+        if is_primary_key and null_ratio != 0:
+            raise SchemaValidationError(f"Primary key column {column_name} must have null_ratio=0")
+
+        if foreign_key_data:
+            unsupported_constraint_fields = sorted(
+                set(constraints_data.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS
+            )
+            if unsupported_constraint_fields:
+                unsupported_fields = ", ".join(unsupported_constraint_fields)
+                raise SchemaValidationError(
+                    f"Foreign key column {column_name} supports only null_ratio constraint, "
+                    f"got: {unsupported_fields}"
+                )
 
         table_columns.append(
             TableColumnSpec(

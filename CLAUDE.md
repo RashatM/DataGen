@@ -8,7 +8,7 @@
 - Думай как архитектор: clean architecture, низкая связность, минимум лишних сущностей.
 - Не соглашайся автоматически с идеями пользователя. Ищи слабые места и противоречия.
 - Перед изменением контракта или orchestration сначала проверь все точки стыка: `run_app -> AirflowDagRunner -> DAG -> Spark scripts -> S3 report`.
-- Не добавляй новые файлы, если можно расширить существующую структуру.
+
 
 ## Что делает проект
 
@@ -40,11 +40,11 @@ DataGen не ходит напрямую в Hive или Iceberg. Доступ к
 | `datagen/app/core/application/constants.py` | `ExecutionStatus`, `ComparisonStatus` |
 | `datagen/app/core/application/dto/` | DTO package: publication, execution, comparison, pipeline, run_artifacts |
 | `datagen/app/core/application/layouts/storage_layout.py` | storage key policy for run artifacts and table pointer state |
-| `datagen/app/core/application/ports/comparison_query_provider_port.py` | seam для будущего источника comparison query, сейчас не участвует в execute-path |
 | `datagen/app/core/application/ports/comparison_query_renderer_port.py` | рендеринг engine-specific comparison queries |
 | `datagen/app/core/application/ports/execution_runner_port.py` | запуск и ожидание внешнего execution workflow |
 | `datagen/app/core/application/ports/publication_repository_port.py` | публикация parquet/DDL/pointer |
 | `datagen/app/core/application/ports/comparison_repository_port.py` | чтение report сверки |
+| `datagen/app/core/application/ports/table_load_payload_builder_port.py` | сборка `EngineLoadPayload` для целевого engine |
 | `datagen/app/core/application/services/generation_service.py` | генерация данных |
 | `datagen/app/core/application/services/publication_service.py` | публикация артефактов |
 | `datagen/app/core/application/services/comparison_report_service.py` | чтение и интерпретация comparison report |
@@ -70,10 +70,11 @@ DataGen не ходит напрямую в Hive или Iceberg. Доступ к
 | Путь | Назначение |
 |---|---|
 | `airflow/datagen_synth_load.py` | DAG |
-| `airflow/scripts/base_loader.py` | общий код для engine loaders |
+| `airflow/scripts/job_common.py` | полный runtime-contract Spark jobs, parser, logger, JSON writer |
+| `airflow/scripts/base_loader.py` | общий код для engine loaders + `ComparisonDataNormalizer` |
 | `airflow/scripts/hadoop_load.py` | загрузка в Hive + materialize query result |
 | `airflow/scripts/iceberg_load.py` | загрузка в Iceberg + materialize query result |
-| `airflow/scripts/compare_results.py` | чтение parquet-результатов, нормализация и сверка |
+| `airflow/scripts/compare_results.py` | чтение parquet-результатов, schema check, выравнивание колонок и сверка |
 
 ### Входные артефакты
 
@@ -81,7 +82,6 @@ DataGen не ходит напрямую в Hive или Iceberg. Доступ к
 |---|---|
 | `datagen/params/data_schema.json` | пример входной схемы |
 | `datagen/params/dag_run_config.template.json` | шаблон DAG runtime-contract |
-| `datagen/params/comparison_query.sql` | временный файл для будущего source query provider, сейчас execute-path его не использует |
 
 ## Архитектурные границы
 
@@ -101,7 +101,7 @@ domain <- application <- infrastructure
 
 ## Текущий pipeline
 
-1. `DataGenerationService.generate_table_data()` генерирует `GeneratedTableData`.
+1. `DataGenerationService.generate()` генерирует `GeneratedTableData`.
 2. `ExecutePipelineUseCase` создаёт `RunArtifactKeyLayout(run_id)`.
 3. `ArtifactPublicationService.publish()` пишет parquet, DDL и engine-specific comparison queries в S3.
 4. `AirflowDagRunner.trigger_and_wait()` собирает runtime-contract и запускает DAG.
@@ -112,6 +112,17 @@ domain <- application <- infrastructure
    - пишет `hive.parquet` и `iceberg.parquet`
    - отдельной compare-task сравнивает результаты и пишет report
 6. `ComparisonReportService` читает report из S3 по `report_key` и возвращает application-level результат.
+
+## Семантика генерации
+
+- `gen_data_type` описывает, как значение генерируется.
+- `output_data_type` описывает тип финального значения, которое попадёт в parquet и target tables.
+- Для обычных колонок критичные инварианты должны выдерживаться на финальном output, а не только на промежуточном generator-value.
+- `primary key` всегда не nullable: `null_ratio=0` обязателен.
+- `foreign key` колонка считается derived from parent column, а не independently generated.
+- Для `foreign key` сейчас разрешён только `null_ratio`; остальные generator constraints (`allowed_values`, `min/max`, `regular_expr`, `is_unique`) запрещены.
+- `foreign key` должен ссылаться на non-null unique/primary-key column с тем же `output_data_type`.
+- Для `ONE_TO_ONE` число non-null child rows не может превышать число parent rows.
 
 ## Имена целевых таблиц
 
@@ -134,6 +145,10 @@ Renderer должен использовать уже рассчитанные `
 `publication.artifacts.engines.iceberg.target_table_name`.
 
 ## Runtime-contract для DAG
+
+Spark scripts получают один полный runtime-contract и парсят его целиком через `job_common.parse_job_contract()`.
+Loader jobs затем строят `TableContract` для нужного engine через `JobContract.build_table_contracts(engine)`,
+а compare-job использует `contract.comparison`.
 
 ```json
 {
@@ -175,6 +190,7 @@ Renderer должен использовать уже рассчитанные `
 - `comparison.query_uris.hive` и `.iceberg` обязательны
 - `comparison.report_uri` обязателен
 - `comparison.result_uris.hive` и `.iceberg` обязательны
+- `tables[*].artifacts.data_uri`, `tables[*].artifacts.engines.hive.*`, `tables[*].artifacts.engines.iceberg.*` обязательны
 - в application model engines зафиксированы как пара `hive/iceberg`, а не произвольный словарь
 - в runtime-contract передаются URI на pre-rendered engine-specific queries
 - пути к `metadata.json` Iceberg в контракт не передаются
@@ -206,7 +222,6 @@ hive.sql + iceberg.sql -> query_uris
 Текущее временное состояние:
 - source query пока не приходит ни от пользователя, ни из repo
 - текущий stub живёт в `TargetTableComparisonQueryRenderer`
-- `ComparisonQueryProviderPort` и `datagen/params/comparison_query.sql` сохранены как seam на будущее, но сейчас не участвуют в `execute()`
 - DAG contract при этом уже финализирован вокруг `comparison.query_uris`
 
 Сравниваются не physical tables, а результаты этих двух эквивалентных запросов:
@@ -218,7 +233,7 @@ query_result(hive) vs query_result(iceberg)
 Принятая схема:
 1. `hadoop_load.py` грузит таблицы в Hive, выполняет comparison query и нормализует результат в canonical типы перед записью в parquet.
 2. `iceberg_load.py` грузит таблицы в Iceberg, выполняет comparison query и нормализует результат в canonical типы перед записью в parquet.
-3. `compare_results.py` читает оба parquet (уже с идентичными схемами), валидирует схемы и сравнивает результаты.
+3. `compare_results.py` читает оба parquet, валидирует схемы, выравнивает порядок колонок и сравнивает результаты.
 
 Основной метод:
 
@@ -233,10 +248,11 @@ iceberg_exclusive_row_count = iceberg_result.exceptAll(hive_result).count()
 - используется `exceptAll`, а не checksum
 - дубликаты учитываются
 - порядок строк не влияет
+- перед `exceptAll` оба DataFrame приводятся к одному порядку колонок, потому что `exceptAll` сравнивает по позиции, а не по имени
 
 ## Нормализация перед сравнением
 
-Нормализация выполняется при записи (write-time) в `BaseSynthLoader.normalize_for_comparison()`, а не при чтении в `compare_results.py`. Каждый loader независимо приводит DataFrame к canonical типам перед записью в parquet.
+Нормализация выполняется при записи (write-time) в `ComparisonDataNormalizer.normalize()` внутри `BaseSynthLoader`, а не при чтении в `compare_results.py`. Каждый loader независимо приводит DataFrame к canonical типам перед записью в parquet.
 
 Canonical типы:
 - `timestamp` и `timestamp_ntz` → `date_format(col.cast("timestamp"), "yyyy-MM-dd HH:mm:ss.SSSSSS")`
@@ -247,7 +263,7 @@ Canonical типы:
 - `string` → без изменений
 
 Ограничения:
-- complex types (`array`, `map`, `struct`) не поддерживаются — `normalize_for_comparison` падает с `ValueError`
+- complex types (`array`, `map`, `struct`) не поддерживаются — `ComparisonDataNormalizer.normalize()` падает с `ValueError`
 - `compare_results.py` валидирует что схемы обоих parquet идентичны после нормализации
 
 ## Статусы
@@ -312,8 +328,10 @@ Canonical типы:
 ## Что уже реализовано
 
 - `comparison` секция в DAG runtime-contract
+- `job_common.parse_job_contract()` как единый parser полного Spark runtime-contract
 - materialize query result в `hadoop_load.py` и `iceberg_load.py`
 - `compare_results.py`
+- `ComparisonDataNormalizer`
 - `ComparisonStatus`
 - `ComparisonReport` и `PipelineExecutionResult`
 - `ComparisonReportService`
@@ -342,3 +360,9 @@ Canonical типы:
   - `datagen/app/infrastructure/repositories/s3_comparison_repository.py`
   - `datagen/app/core/application/dto/`
   - `datagen/run_app.py`
+- Если меняется DAG runtime-contract, синхронно проверь:
+  - `airflow/scripts/job_common.py`
+  - `airflow/scripts/base_loader.py`
+  - `airflow/scripts/compare_results.py`
+  - `airflow/datagen_synth_load.py`
+  - `datagen/app/infrastructure/airflow/airflow_dag_payload_builder.py`

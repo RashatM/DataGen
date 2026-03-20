@@ -2,7 +2,8 @@ from typing import Dict, List
 import networkx as nx
 
 from app.core.application.ports.dependency_graph_builder_port import IDependencyGraphBuilder
-from app.core.domain.entities import TableSpec
+from app.core.domain.entities import TableColumnSpec, TableSpec
+from app.core.domain.enums import RelationType
 from app.core.domain.validation_errors import InvalidForeignKeyError
 
 
@@ -16,6 +17,7 @@ class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
         tables: List[TableSpec],
         table_by_name: Dict[str, TableSpec],
         table_columns_map: Dict[str, set[str]],
+        table_column_specs: Dict[str, Dict[str, TableColumnSpec]],
         graph: nx.DiGraph,
     ) -> List[str]:
         invalid_references: List[str] = []
@@ -46,6 +48,43 @@ class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
                     )
                     continue
 
+                ref_column = table_column_specs[ref_table_name][fk_info.column_name]
+                if not getattr(ref_column, "is_primary_key", False) and not getattr(
+                    ref_column.constraints, "is_unique", False
+                ):
+                    invalid_references.append(
+                        f"{source_column_name} -> {referenced_column_name} "
+                        f"(referenced column must be unique or primary key)"
+                    )
+                    continue
+
+                if ref_column.constraints.null_ratio != 0:
+                    invalid_references.append(
+                        f"{source_column_name} -> {referenced_column_name} "
+                        f"(referenced column must be non-nullable)"
+                    )
+                    continue
+
+                if column.output_data_type != ref_column.output_data_type:
+                    invalid_references.append(
+                        f"{source_column_name} -> {referenced_column_name} "
+                        f"(output type mismatch: {column.output_data_type.value} != "
+                        f"{ref_column.output_data_type.value})"
+                    )
+                    continue
+
+                if fk_info.relation_type == RelationType.ONE_TO_ONE:
+                    non_null_child_rows = table.total_rows - int(
+                        table.total_rows * (column.constraints.null_ratio / 100)
+                    )
+                    if non_null_child_rows > ref_table.total_rows:
+                        invalid_references.append(
+                            f"{source_column_name} -> {referenced_column_name} "
+                            f"(one-to-one requires child non-null rows <= parent rows: "
+                            f"{non_null_child_rows} > {ref_table.total_rows})"
+                        )
+                        continue
+
                 graph.add_edge(ref_table, table)
 
         return invalid_references
@@ -58,11 +97,15 @@ class NetworkXDependencyGraphBuilder(IDependencyGraphBuilder):
         table_columns_map = {
             table.full_table_name: {column.name for column in table.columns} for table in tables
         }
+        table_column_specs = {
+            table.full_table_name: {column.name: column for column in table.columns} for table in tables
+        }
         graph = nx.DiGraph()
         invalid_references = self.collect_invalid_references(
             tables=tables,
             table_by_name=table_by_name,
             table_columns_map=table_columns_map,
+            table_column_specs=table_column_specs,
             graph=graph,
         )
 
