@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, List
+from typing import Any, Generic
 
 from app.core.domain.constraints import OutputConstraints
 from app.core.domain.typevars import TConstraints
@@ -12,5 +12,5 @@ class DataGeneratorPort(ABC, Generic[TConstraints]):
         total_rows: int,
         constraints: TConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[Any]:
+    ) -> list[Any]:
         pass

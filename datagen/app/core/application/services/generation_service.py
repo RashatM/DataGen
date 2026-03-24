@@ -1,5 +1,5 @@
 import random
-from typing import Any, List
+from typing import Any
 
 from app.core.application.ports.generator_factory_port import DataGeneratorFactoryPort
 from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
@@ -26,7 +26,7 @@ class DataGenerationService:
         self.value_converter = value_converter
         self.rng = rng
 
-    def generate_column_values(self, total_rows: int, table_column: TableColumnSpec) -> List[Any]:
+    def generate_column_values(self, total_rows: int, table_column: TableColumnSpec) -> list[Any]:
         total_nulls = int(total_rows * (table_column.output_constraints.null_ratio / 100))
         total_non_nulls = total_rows - total_nulls
 
@@ -46,8 +46,8 @@ class DataGenerationService:
         self,
         total_rows: int,
         table_column: TableColumnSpec,
-        referenced_values: List[Any],
-    ) -> List[Any]:
+        referenced_values: list[Any],
+    ) -> list[Any]:
         total_nulls = int(total_rows * (table_column.output_constraints.null_ratio / 100))
         total_non_nulls = total_rows - total_nulls
         reference_pool = [value for value in referenced_values if value is not None]
@@ -73,7 +73,7 @@ class DataGenerationService:
         return values
 
     @staticmethod
-    def validate_generated_values(table_column: TableColumnSpec, values: List[Any]) -> None:
+    def validate_generated_values(table_column: TableColumnSpec, values: list[Any]) -> None:
         non_null_values = [value for value in values if value is not None]
 
         if table_column.is_primary_key and len(non_null_values) != len(values):
@@ -84,7 +84,7 @@ class DataGenerationService:
                 f"Generated values for column {table_column.name} are not unique in final output"
             )
 
-    def generate(self, generation_run: GenerationRun) -> List[GeneratedTableData]:
+    def generate(self, generation_run: GenerationRun) -> list[GeneratedTableData]:
         ordered_tables = self.table_dependency_planner.plan(generation_run.tables)
 
         generated_table_data = {}

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, List
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.core.application.use_cases.execute_pipeline import ExecutePipelineUseCase
@@ -27,7 +27,7 @@ def generate_run_id() -> str:
 
 def run_app(
     env_name: str,
-    raw_tables: List[Any],
+    raw_tables: list[Any],
 ) -> None:
     logger.info(f"Application started: environment={env_name}")
     config = load_app_settings(env_name)

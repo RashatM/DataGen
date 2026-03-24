@@ -1,7 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
@@ -81,8 +81,8 @@ class EngineComparisonContract:
 
 @dataclass
 class ComparisonContract:
-    query_uris: Dict[str, str]
-    result_uris: Dict[str, str]
+    query_uris: dict[str, str]
+    result_uris: dict[str, str]
     report_uri: str
 
     def get_engine_contract(self, engine: str) -> EngineComparisonContract:
@@ -110,14 +110,14 @@ class JobContract:
         return [table.build_table_contract(engine) for table in self.tables]
 
 
-def load_contract(contract_json: str) -> Dict[str, Any]:
+def load_contract(contract_json: str) -> dict[str, Any]:
     contract = json.loads(contract_json)
     if not isinstance(contract, dict):
         raise ValueError("Contract must be a JSON object")
     return contract
 
 
-def parse_contract_tables(tables_payload: list[Dict[str, Any]]) -> list[ContractTable]:
+def parse_contract_tables(tables_payload: list[dict[str, Any]]) -> list[ContractTable]:
     return [
         ContractTable(
             schema_name=table["schema_name"],
@@ -154,7 +154,7 @@ def parse_job_contract(contract_json: str) -> JobContract:
         raise ValueError(f"Trusted DAG contract has invalid structure: {error}") from error
 
 
-def write_json_to_uri(spark: "SparkSession", uri: str, payload: Dict[str, Any]) -> None:
+def write_json_to_uri(spark: "SparkSession", uri: str, payload: dict[str, Any]) -> None:
     content = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
 
     jvm = spark.sparkContext._jvm

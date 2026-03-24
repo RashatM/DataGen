@@ -1,6 +1,5 @@
 import random
 from datetime import datetime, timedelta
-from typing import List
 
 from app.core.application.ports.generator_port import DataGeneratorPort
 from app.core.domain.constraints import OutputConstraints, TimestampConstraints
@@ -17,7 +16,7 @@ class TimestampDataGenerator(DataGeneratorPort[TimestampConstraints]):
         total_rows: int,
         constraints: TimestampConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[datetime]:
+    ) -> list[datetime]:
         start_ts = constraints.min_timestamp
         end_ts = constraints.max_timestamp
         if end_ts < start_ts:

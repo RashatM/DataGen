@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -33,7 +33,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         return sink.getvalue().to_pybytes()
 
     @staticmethod
-    def deserialize_parquet(payload: bytes) -> Dict[str, List[Any]]:
+    def deserialize_parquet(payload: bytes) -> dict[str, list[Any]]:
         table = pq.read_table(pa.BufferReader(payload))
         return table.to_pydict()
 
@@ -147,7 +147,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
             },
         )
 
-    def get_latest_run_id(self, schema_name: str, table_name: str) -> Optional[str]:
+    def get_latest_run_id(self, schema_name: str, table_name: str) -> str | None:
         state_layout = TableStateKeyLayout(schema_name=schema_name, table_name=table_name)
         pointer_key = state_layout.pointer_key
         try:
@@ -160,7 +160,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
             raise RunStateCorruptedError(f"latest_generated pointer is corrupted for key={pointer_key}: invalid run_id")
         return run_id
 
-    def read_table_data(self, schema_name: str, table_name: str, run_id: str) -> Dict[str, Any]:
+    def read_table_data(self, schema_name: str, table_name: str, run_id: str) -> dict[str, Any]:
         artifact_layout = RunArtifactKeyLayout(run_id=run_id)
         key = artifact_layout.data_key(schema_name, table_name)
         payload = self.object_storage.get_bytes(key=key)

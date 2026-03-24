@@ -1,6 +1,5 @@
 import random
 import string
-from typing import List
 from rstr import Rstr
 
 from app.core.application.ports.generator_port import DataGeneratorPort
@@ -63,7 +62,7 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         total_rows: int,
         constraints: StringConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[str]:
+    ) -> list[str]:
         values = list(dict.fromkeys(map(str, constraints.allowed_values)))
 
         if output_constraints.is_unique:
@@ -73,7 +72,7 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
 
         return self.rng.choices(values, k=total_rows)
 
-    def generate_regex_values(self, total_rows: int, constraints: StringConstraints) -> List[str]:
+    def generate_regex_values(self, total_rows: int, constraints: StringConstraints) -> list[str]:
         if total_rows > 10000:
             logger.warning(f"Regex generation may be slow: rows={total_rows}")
 
@@ -99,7 +98,7 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         constraints: StringConstraints,
         output_constraints: OutputConstraints,
         rng: random.Random,
-    ) -> List[str]:
+    ) -> list[str]:
         length = constraints.length
         min_value = 0 if length == 1 else 10 ** (length - 1)
         max_value = 10 ** length - 1
@@ -118,7 +117,7 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         total_rows: int,
         constraints: StringConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[str]:
+    ) -> list[str]:
         pool = self.build_char_pool(constraints)
         length = constraints.length
         max_unique_values = len(pool) ** length
@@ -136,7 +135,7 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         total_rows: int,
         constraints: StringConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[str]:
+    ) -> list[str]:
         self.validate(constraints, output_constraints)
 
         if constraints.allowed_values:

@@ -1,12 +1,12 @@
 import random
-from typing import Any, List
+from typing import Any
 
 
-def random_choices_from_constants(constants: List[Any], length: int, rng: random.Random) -> List[Any]:
+def random_choices_from_constants(constants: list[Any], length: int, rng: random.Random) -> list[Any]:
     return rng.choices(constants, k=length) if len(constants) > 1 else [constants[0] for _ in range(length)]
 
 
-def shuffle_values_with_nulls(target_count: int, values: List[Any], rng: random.Random) -> List[Any]:
+def shuffle_values_with_nulls(target_count: int, values: list[Any], rng: random.Random) -> list[Any]:
     values = [None] * target_count + values
     rng.shuffle(values)
     return values

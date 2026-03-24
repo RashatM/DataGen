@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 from app.core.application.ports.generator_factory_port import DataGeneratorFactoryPort
 from app.core.application.ports.generator_port import DataGeneratorPort
@@ -9,7 +9,7 @@ from app.infrastructure.errors import DataGeneratorNotRegisteredError
 
 class DataGeneratorFactory(DataGeneratorFactoryPort):
     def __init__(self):
-        self.data_generators: Dict[DataType, DataGeneratorPort[Any]] = {}
+        self.data_generators: dict[DataType, DataGeneratorPort[Any]] = {}
 
     def register(self, data_type: DataType, data_generator: DataGeneratorPort[Any]) -> None:
         self.data_generators[data_type] = data_generator

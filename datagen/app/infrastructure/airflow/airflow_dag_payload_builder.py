@@ -1,5 +1,5 @@
 from dataclasses import asdict
-from typing import Any, Dict, List
+from typing import Any
 
 from app.core.application.constants import EngineName
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
@@ -13,7 +13,7 @@ class AirflowDagPayloadBuilder:
         self.object_storage = object_storage
 
     @staticmethod
-    def build_table_entry(publication: TablePublication) -> Dict[str, Any]:
+    def build_table_entry(publication: TablePublication) -> dict[str, Any]:
         return {
             "schema_name": publication.schema_name,
             "table_name": publication.table_name,
@@ -24,7 +24,7 @@ class AirflowDagPayloadBuilder:
         self,
         artifact_layout: RunArtifactKeyLayout,
         comparison_query_uris: EnginePair[str],
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {
             "query_uris": {
                 engine_name.value: comparison_query_uris.get_value(engine_name)
@@ -42,9 +42,9 @@ class AirflowDagPayloadBuilder:
     def build(
         self,
         artifact_layout: RunArtifactKeyLayout,
-        publications: List[TablePublication],
+        publications: list[TablePublication],
         comparison_query_uris: EnginePair[str],
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {
             "run_id": artifact_layout.run_id,
             "tables": [self.build_table_entry(publication) for publication in publications],

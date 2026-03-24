@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import List
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 from pyspark.sql import DataFrame
@@ -106,7 +105,7 @@ class BaseSynthLoader(ABC):
         self.write_to_tmp(table.data_uri, table.tmp_name)
         logger.info(f"Table prepared. table={table.full_table_name}, run_id={self.run_id}")
 
-    def cleanup_tmp_tables(self, tables: List[TableContract]) -> None:
+    def cleanup_tmp_tables(self, tables: list[TableContract]) -> None:
         for table in tables:
             try:
                 self.drop_table(table.tmp_name)
@@ -128,7 +127,7 @@ class BaseSynthLoader(ABC):
             f"result_uri={engine_contract.result_uri}"
         )
 
-    def load_all(self, tables: List[TableContract]) -> None:
+    def load_all(self, tables: list[TableContract]) -> None:
         logger.info(f"Loader execution started. run_id={self.run_id}, tables_count={len(tables)}")
         try:
             for table in tables:
@@ -143,6 +142,6 @@ class BaseSynthLoader(ABC):
             logger.info(f"Table committed. table={table.full_table_name}, run_id={self.run_id}")
         logger.info(f"Loader execution completed. run_id={self.run_id}, tables_count={len(tables)}")
 
-    def execute(self, tables: List[TableContract], comparison_contract: ComparisonContract, engine: str) -> None:
+    def execute(self, tables: list[TableContract], comparison_contract: ComparisonContract, engine: str) -> None:
         self.load_all(tables)
         self.materialize_comparison_result(comparison_contract, engine)

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from app.core.domain.constraints import FloatConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
@@ -14,11 +14,11 @@ class FloatSourceValueConverter(SourceTypeValueConverter[FloatConstraints]):
 
     def convert(
         self,
-        values: List[Any],
+        values: list[Any],
         constraints: FloatConstraints,
         target_type: DataType,
         column_name: str,
-    ) -> List[Any]:
+    ) -> list[Any]:
         if not isinstance(constraints, FloatConstraints):
             raise InvalidConstraintsError(f"Invalid float constraints for column {column_name}")
 

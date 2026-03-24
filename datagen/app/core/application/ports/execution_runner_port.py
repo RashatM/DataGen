@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import List
 
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.execution import ExecutionResult
@@ -12,7 +11,7 @@ class ExecutionRunnerPort(ABC):
     def trigger_and_wait(
         self,
         artifact_layout: RunArtifactKeyLayout,
-        publications: List[TablePublication],
+        publications: list[TablePublication],
         comparison_query_uris: EnginePair[str],
         timeout_seconds: int,
     ) -> ExecutionResult:

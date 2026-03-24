@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List
 
 from app.core.application.dto.publication import EngineLoadPayload
 from app.core.application.ports.table_load_payload_builder_port import TableLoadPayloadBuilderPort
@@ -9,7 +8,7 @@ from app.infrastructure.errors import UnsupportedOutputDataTypeError
 
 
 class BaseSqlQueryBuilder(TableLoadPayloadBuilderPort, ABC):
-    type_mapping: Dict[DataType, str] = {}
+    type_mapping: dict[DataType, str] = {}
 
     def __init__(self, database_name: str):
         self.database_name = database_name
@@ -22,8 +21,8 @@ class BaseSqlQueryBuilder(TableLoadPayloadBuilderPort, ABC):
             )
         return column_type
 
-    def build_columns_definition(self, columns: List[TableColumnSpec]) -> str:
-        columns_sql: List[str] = []
+    def build_columns_definition(self, columns: list[TableColumnSpec]) -> str:
+        columns_sql: list[str] = []
         for column in columns:
             column_type = self.map_column_type(column)
             columns_sql.append(f"{column.name} {column_type}")

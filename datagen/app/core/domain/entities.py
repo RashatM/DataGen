@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generic, List, Optional
+from typing import Any, Generic
 
 from app.core.domain.constraints import OutputConstraints
 from app.core.domain.enums import DataType, RelationType
@@ -26,8 +26,8 @@ class TableColumnSpec(Generic[TConstraints]):
     is_primary_key: bool
     generator_constraints: TConstraints
     output_constraints: OutputConstraints
-    foreign_key: Optional[TableForeignKeySpec]
-    output_data_type: Optional[DataType] = None
+    foreign_key: TableForeignKeySpec | None
+    output_data_type: DataType | None = None
 
     def __post_init__(self):
         if not self.output_data_type:
@@ -38,7 +38,7 @@ class TableColumnSpec(Generic[TConstraints]):
 class TableSpec:
     schema_name: str
     table_name: str
-    columns: List[TableColumnSpec]
+    columns: list[TableColumnSpec]
     total_rows: int
     full_table_name: str = field(init=False)
 
@@ -55,7 +55,7 @@ class TableSpec:
 @dataclass
 class GeneratedTableData:
     table: TableSpec
-    generated_data: Dict[str, List[Any]]
+    generated_data: dict[str, list[Any]]
 
 
 class DuplicateTableSpecInRunError(ValueError):
@@ -65,7 +65,7 @@ class DuplicateTableSpecInRunError(ValueError):
 @dataclass
 class GenerationRun:
     run_id: str
-    tables: List[TableSpec]
+    tables: list[TableSpec]
 
     def __post_init__(self) -> None:
         if not self.run_id.strip():

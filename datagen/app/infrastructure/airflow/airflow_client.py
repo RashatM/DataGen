@@ -1,5 +1,5 @@
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 import urllib3
 import requests
 from requests.auth import HTTPBasicAuth
@@ -30,8 +30,8 @@ class AirflowClient:
             method: str,
             url: str,
             **kwargs,
-    ) -> Dict[str, Any]:
-        last_error: Optional[Exception] = None
+    ) -> dict[str, Any]:
+        last_error: Exception | None = None
 
         for attempt in range(1, self.config.max_retries + 1):
             try:
@@ -52,7 +52,7 @@ class AirflowClient:
     def trigger_dag(
             self,
             dag_run_id: str,
-            payload: Dict[str, Any],
+            payload: dict[str, Any],
     ) -> None:
         url = f"{self.config.url}/api/v1/dags/{self.config.dag_id}/dagRuns"
         body = {"dag_run_id": dag_run_id, "conf": payload}

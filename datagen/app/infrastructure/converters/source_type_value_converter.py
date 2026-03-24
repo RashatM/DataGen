@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, List
+from typing import Any, Generic
 
 from app.core.domain.enums import DataType
 from app.core.domain.typevars import TConstraints
@@ -16,9 +16,9 @@ class SourceTypeValueConverter(ABC, Generic[TConstraints]):
     @abstractmethod
     def convert(
         self,
-        values: List[Any],
+        values: list[Any],
         constraints: TConstraints,
         target_type: DataType,
         column_name: str,
-    ) -> List[Any]:
+    ) -> list[Any]:
         pass

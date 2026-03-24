@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any
 
 from app.core.application.ports.value_converter_port import ValueConverterPort
 from app.core.domain.entities import TableColumnSpec
@@ -8,10 +8,10 @@ from app.infrastructure.errors import SourceTypeValueConverterNotRegisteredError
 
 
 class ColumnValueConverter(ValueConverterPort):
-    def __init__(self, converter_by_source_type: Dict[DataType, SourceTypeValueConverter[Any]]):
+    def __init__(self, converter_by_source_type: dict[DataType, SourceTypeValueConverter[Any]]):
         self.converter_by_source_type = converter_by_source_type
 
-    def convert(self, values: List[Any], table_column: TableColumnSpec) -> List[Any]:
+    def convert(self, values: list[Any], table_column: TableColumnSpec) -> list[Any]:
         source_type = table_column.generator_data_type
         target_type = table_column.output_data_type
 

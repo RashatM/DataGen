@@ -1,5 +1,4 @@
 import random
-from typing import List
 
 from app.core.application.ports.generator_port import DataGeneratorPort
 from app.core.domain.constraints import IntConstraints, OutputConstraints
@@ -16,7 +15,7 @@ class IntDataGenerator(DataGeneratorPort[IntConstraints]):
         total_rows: int,
         constraints: IntConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[int]:
+    ) -> list[int]:
         min_value = constraints.min_value
         max_value = constraints.max_value
         if max_value < min_value:

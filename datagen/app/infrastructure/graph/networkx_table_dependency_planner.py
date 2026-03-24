@@ -1,4 +1,3 @@
-from typing import Dict, List
 import networkx as nx
 
 from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
@@ -9,18 +8,18 @@ from app.core.domain.validation_errors import InvalidForeignKeyError
 
 class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
     @staticmethod
-    def can_skip_planning(tables: List[TableSpec]) -> bool:
+    def can_skip_planning(tables: list[TableSpec]) -> bool:
         return len(tables) == 1 and all(column.foreign_key is None for column in tables[0].columns)
 
     @staticmethod
     def collect_invalid_references(
-        tables: List[TableSpec],
-        table_by_name: Dict[str, TableSpec],
-        table_columns_map: Dict[str, set[str]],
-        table_column_specs: Dict[str, Dict[str, TableColumnSpec]],
+        tables: list[TableSpec],
+        table_by_name: dict[str, TableSpec],
+        table_columns_map: dict[str, set[str]],
+        table_column_specs: dict[str, dict[str, TableColumnSpec]],
         graph: nx.DiGraph,
-    ) -> List[str]:
-        invalid_references: List[str] = []
+    ) -> list[str]:
+        invalid_references: list[str] = []
 
         for table in tables:
             graph.add_node(table)
@@ -89,11 +88,11 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
 
         return invalid_references
 
-    def plan(self, tables: List[TableSpec]) -> List[TableSpec]:
+    def plan(self, tables: list[TableSpec]) -> list[TableSpec]:
         if self.can_skip_planning(tables):
             return tables
 
-        table_by_name: Dict[str, TableSpec] = {table.full_table_name: table for table in tables}
+        table_by_name: dict[str, TableSpec] = {table.full_table_name: table for table in tables}
         table_columns_map = {
             table.full_table_name: {column.name for column in table.columns} for table in tables
         }

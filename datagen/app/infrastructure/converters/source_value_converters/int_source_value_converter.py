@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from app.core.domain.constraints import IntConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
@@ -14,11 +14,11 @@ class IntSourceValueConverter(SourceTypeValueConverter[IntConstraints]):
 
     def convert(
         self,
-        values: List[Any],
+        values: list[Any],
         constraints: IntConstraints,
         target_type: DataType,
         column_name: str,
-    ) -> List[Any]:
+    ) -> list[Any]:
         if not isinstance(constraints, IntConstraints):
             raise InvalidConstraintsError(f"Invalid int constraints for column {column_name}")
 

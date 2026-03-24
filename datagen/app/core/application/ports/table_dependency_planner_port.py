@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import List
 
 from app.core.domain.entities import TableSpec
 
 
 class TableDependencyPlannerPort(ABC):
     @abstractmethod
-    def plan(self, tables: List[TableSpec]) -> List[TableSpec]:
+    def plan(self, tables: list[TableSpec]) -> list[TableSpec]:
         pass

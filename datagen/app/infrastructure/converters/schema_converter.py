@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Dict, Tuple, List, Any
+from typing import Any
 
 from dateutil.parser import parse
 
@@ -29,7 +29,7 @@ LEGACY_MAPPING = {
 FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
 
 
-def resolve_data_types(column_data: Dict, constraints_data: Dict) -> Tuple[DataType, DataType]:
+def resolve_data_types(column_data: dict, constraints_data: dict) -> tuple[DataType, DataType]:
     generator_raw = column_data.get("generator_data_type", column_data.get("gen_data_type"))
     output_raw = column_data.get("output_data_type")
 
@@ -64,7 +64,7 @@ def resolve_data_types(column_data: Dict, constraints_data: Dict) -> Tuple[DataT
     return generator_data_type, output_data_type
 
 
-def convert_to_table_spec(table_data: Dict) -> TableSpec:
+def convert_to_table_spec(table_data: dict) -> TableSpec:
     schema_name = table_data["schema_name"]
     table_name = table_data["table_name"]
     total_rows = table_data["total_rows"]
@@ -218,6 +218,6 @@ def convert_to_table_spec(table_data: Dict) -> TableSpec:
     )
 
 
-def convert_to_generation_run(run_id: str, raw_tables: List[Dict[str, Any]]) -> GenerationRun:
+def convert_to_generation_run(run_id: str, raw_tables: list[dict[str, Any]]) -> GenerationRun:
     tables = [convert_to_table_spec(table_data) for table_data in raw_tables]
     return GenerationRun(run_id=run_id, tables=tables)

@@ -1,5 +1,4 @@
 import random
-from typing import List
 
 from app.core.application.ports.generator_port import DataGeneratorPort
 from app.core.domain.constraints import BooleanConstraints, OutputConstraints
@@ -16,7 +15,7 @@ class BooleanDataGenerator(DataGeneratorPort[BooleanConstraints]):
         total_rows: int,
         constraints: BooleanConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[bool]:
+    ) -> list[bool]:
         if constraints.allowed_values:
             values = list(dict.fromkeys(constraints.allowed_values))
         else:

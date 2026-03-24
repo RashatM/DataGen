@@ -1,12 +1,10 @@
-from typing import Dict
-
 from app.core.domain.entities import TableSpec
 from app.core.domain.enums import DataType
 from app.infrastructure.ddl.base_sql_query_builder import BaseSqlQueryBuilder
 
 
 class HiveQueryBuilder(BaseSqlQueryBuilder):
-    type_mapping: Dict[DataType, str] = {
+    type_mapping: dict[DataType, str] = {
         DataType.STRING: "string",
         DataType.BOOLEAN: "boolean",
         DataType.DATE: "date",

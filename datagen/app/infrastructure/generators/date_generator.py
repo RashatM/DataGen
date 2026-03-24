@@ -1,6 +1,5 @@
 import random
 from datetime import date, timedelta
-from typing import List
 
 from app.core.application.ports.generator_port import DataGeneratorPort
 from app.core.domain.constraints import DateConstraints, OutputConstraints
@@ -17,7 +16,7 @@ class DateDataGenerator(DataGeneratorPort[DateConstraints]):
         total_rows: int,
         constraints: DateConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[date]:
+    ) -> list[date]:
         start_date = constraints.min_date
         end_date = constraints.max_date
         if end_date < start_date:

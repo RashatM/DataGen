@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from app.core.domain.constraints import BooleanConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
@@ -14,11 +14,11 @@ class BooleanSourceValueConverter(SourceTypeValueConverter[BooleanConstraints]):
 
     def convert(
         self,
-        values: List[Any],
+        values: list[Any],
         constraints: BooleanConstraints,
         target_type: DataType,
         column_name: str,
-    ) -> List[Any]:
+    ) -> list[Any]:
         if not isinstance(constraints, BooleanConstraints):
             raise InvalidConstraintsError(f"Invalid boolean constraints for column {column_name}")
 

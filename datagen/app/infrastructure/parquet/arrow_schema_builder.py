@@ -1,11 +1,10 @@
-from typing import Dict
 import pyarrow as pa
 from app.core.domain.entities import TableSpec
 from app.core.domain.enums import DataType
 
 
 class ArrowSchemaBuilder:
-    ARROW_MAPPING: Dict[DataType, pa.DataType] = {
+    ARROW_MAPPING: dict[DataType, pa.DataType] = {
         DataType.INT: pa.int64(),
         DataType.STRING: pa.string(),
         DataType.FLOAT: pa.float64(),

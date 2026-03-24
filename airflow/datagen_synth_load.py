@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
@@ -33,7 +33,7 @@ def require_non_empty_string(value: Any, field_name: str) -> None:
         raise ValueError(f"Contract is missing non-empty '{field_name}'")
 
 
-def validate_table_contracts(conf: Dict[str, Any]) -> None:
+def validate_table_contracts(conf: dict[str, Any]) -> None:
     tables = conf.get("tables")
     if not isinstance(tables, list) or not tables:
         raise ValueError("Contract is missing non-empty 'tables'")
@@ -103,7 +103,7 @@ def validate_contract(**context) -> None:
         )
 
 
-def get_iceberg_spark_config(**context) -> Dict[str, str]:
+def get_iceberg_spark_config(**context) -> dict[str, str]:
     return {
         **Variable.get("load_table_test", deserialize_json=True),
         **Variable.get("yc_keys", deserialize_json=True),
@@ -116,7 +116,7 @@ def get_iceberg_spark_config(**context) -> Dict[str, str]:
     }
 
 
-def get_hadoop_cluster_config() -> Dict[str, Any]:
+def get_hadoop_cluster_config() -> dict[str, Any]:
     # cluster_config = Variable.get(HADOOP_CLUSTER_CONFIG_VARIABLE, deserialize_json=True)
     cluster_config = {
         "cluster_name": "BDA71",
@@ -134,7 +134,7 @@ def get_hadoop_cluster_config() -> Dict[str, Any]:
     return cluster_config
 
 
-def get_hadoop_spark_config(**context) -> Dict[str, str]:
+def get_hadoop_spark_config(**context) -> dict[str, str]:
     cluster_config = get_hadoop_cluster_config()
     cluster_name = cluster_config["cluster_name"]
 
@@ -167,7 +167,7 @@ def get_hadoop_spark_config(**context) -> Dict[str, str]:
     }
 
 
-def get_compare_spark_config(**context) -> Dict[str, str]:
+def get_compare_spark_config(**context) -> dict[str, str]:
     return {
         **Variable.get("load_table_test", deserialize_json=True),
         **Variable.get("yc_keys", deserialize_json=True),

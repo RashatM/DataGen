@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict
+from typing import Any
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 
@@ -24,7 +24,7 @@ class S3StorageAdapter:
         )
         return self.build_uri(key)
 
-    def put_json(self, key: str, payload: Dict[str, Any]) -> str:
+    def put_json(self, key: str, payload: dict[str, Any]) -> str:
         content = json.dumps(payload, ensure_ascii=True, indent=2)
         self.s3_client.put_object(
             Bucket=self.bucket,
@@ -58,7 +58,7 @@ class S3StorageAdapter:
         body = response["Body"].read()
         return body
 
-    def get_json(self, key: str) -> Dict[str, Any]:
+    def get_json(self, key: str) -> dict[str, Any]:
         body = self.get_bytes(key)
         loaded = json.loads(body.decode("utf-8"))
         if not isinstance(loaded, dict):

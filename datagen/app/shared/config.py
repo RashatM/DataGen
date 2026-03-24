@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -59,18 +59,18 @@ def require_env(name: str) -> str:
     return value
 
 
-def merge(defaults: Dict[str, Any], env_data: Dict[str, Any]) -> Dict[str, Any]:
+def merge(defaults: dict[str, Any], env_data: dict[str, Any]) -> dict[str, Any]:
     return {**defaults, **env_data}
 
 
-def load_yaml_file(config_path: Path) -> Dict[str, Any]:
+def load_yaml_file(config_path: Path) -> dict[str, Any]:
     if not config_path.exists():
         raise ConfigurationError(f"Config file not found: {config_path}")
     with config_path.open(encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
-def parse_s3_config(config_data: Dict[str, Any]) -> S3Config:
+def parse_s3_config(config_data: dict[str, Any]) -> S3Config:
     s3 = config_data.get("s3", {})
     if not s3:
         raise ConfigurationError("Missing 's3' section in config.yaml")
@@ -90,7 +90,7 @@ def parse_s3_config(config_data: Dict[str, Any]) -> S3Config:
     )
 
 
-def parse_airflow_env_config(config_data: Dict[str, Any], env_name: str) -> AirflowConfig:
+def parse_airflow_env_config(config_data: dict[str, Any], env_name: str) -> AirflowConfig:
     airflow_section = config_data.get("airflow", {})
     if not airflow_section:
         raise ConfigurationError("Missing 'airflow' section in config.yaml")
@@ -123,7 +123,7 @@ def parse_airflow_env_config(config_data: Dict[str, Any], env_name: str) -> Airf
     )
 
 
-def parse_engine_config(config_data: Dict[str, Any], engine_name: str) -> TargetEngineConfig:
+def parse_engine_config(config_data: dict[str, Any], engine_name: str) -> TargetEngineConfig:
     engine_data = config_data.get(engine_name, {})
     if not engine_data:
         raise ConfigurationError(f"target_storage missing '{engine_name}' section")
@@ -135,7 +135,7 @@ def parse_engine_config(config_data: Dict[str, Any], engine_name: str) -> Target
     return TargetEngineConfig(database_name=database_name)
 
 
-def parse_target_storage_config(config_data: Dict[str, Any]) -> TargetStorageConfig:
+def parse_target_storage_config(config_data: dict[str, Any]) -> TargetStorageConfig:
     section = config_data.get("target_storage", {})
     if not section:
         raise ConfigurationError("Missing 'target_storage' section in config.yaml")

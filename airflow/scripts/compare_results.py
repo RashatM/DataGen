@@ -2,7 +2,6 @@ import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict
 
 from pyspark.sql import DataFrame, SparkSession
 
@@ -77,7 +76,7 @@ class ComparisonReportBuilder:
         hive_result_uri: str,
         iceberg_result_uri: str,
         metrics: ComparisonMetrics,
-    ) -> Dict[str, object]:
+    ) -> dict[str, object]:
         """Build comparison_result.json payload.
 
         Example:

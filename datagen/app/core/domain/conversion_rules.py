@@ -1,5 +1,3 @@
-from typing import Dict, Set
-
 from app.core.domain.enums import DataType
 
 
@@ -11,7 +9,7 @@ class LossyUniqueOutputConversionError(ValueError):
     pass
 
 
-ALLOWED_OUTPUT_TYPES: Dict[DataType, Set[DataType]] = {
+ALLOWED_OUTPUT_TYPES: dict[DataType, set[DataType]] = {
     DataType.DATE: {DataType.DATE, DataType.STRING, DataType.INT, DataType.TIMESTAMP},
     DataType.TIMESTAMP: {DataType.TIMESTAMP, DataType.STRING, DataType.INT, DataType.DATE},
     DataType.INT: {DataType.INT, DataType.FLOAT, DataType.STRING, DataType.BOOLEAN},

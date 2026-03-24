@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from app.core.domain.constraints import TimestampConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
@@ -14,11 +14,11 @@ class TimestampSourceValueConverter(SourceTypeValueConverter[TimestampConstraint
 
     def convert(
         self,
-        values: List[Any],
+        values: list[Any],
         constraints: TimestampConstraints,
         target_type: DataType,
         column_name: str,
-    ) -> List[Any]:
+    ) -> list[Any]:
         if not isinstance(constraints, TimestampConstraints):
             raise InvalidConstraintsError(f"Invalid timestamp constraints for column {column_name}")
 

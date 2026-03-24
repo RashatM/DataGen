@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.publication import EngineLoadPayload, EnginePair, TablePublication
@@ -40,7 +40,7 @@ class ArtifactPublicationService:
             self,
             schema_name: str,
             table_name: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         latest_staged_run_id = self.repository.get_latest_run_id(
             schema_name=schema_name,
             table_name=table_name,
@@ -57,8 +57,8 @@ class ArtifactPublicationService:
     def stage_tables(
             self,
             artifact_layout: RunArtifactKeyLayout,
-            generated_tables: List[GeneratedTableData],
-    ) -> List[TablePublication]:
+            generated_tables: list[GeneratedTableData],
+    ) -> list[TablePublication]:
         table_publications = []
 
         for table_data in generated_tables:
@@ -78,7 +78,7 @@ class ArtifactPublicationService:
     def stage_comparison_queries(
         self,
         artifact_layout: RunArtifactKeyLayout,
-        table_publications: List[TablePublication]
+        table_publications: list[TablePublication]
     ) -> EnginePair[str]:
         rendered_queries = self.comparison_query_renderer.render(table_publications)
         comparison_query_uris = self.repository.stage_comparison_queries(
@@ -91,7 +91,7 @@ class ArtifactPublicationService:
     def publish(
             self,
             artifact_layout: RunArtifactKeyLayout,
-            generated_tables: List[GeneratedTableData]
+            generated_tables: list[GeneratedTableData]
     ) -> ArtifactPublicationResult:
         try:
             table_publications = self.stage_tables(artifact_layout, generated_tables)

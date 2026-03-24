@@ -1,5 +1,4 @@
 import time
-from typing import List
 
 from app.core.application.constants import ExecutionStatus
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
@@ -86,7 +85,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
     def trigger_and_wait(
         self,
         artifact_layout: RunArtifactKeyLayout,
-        publications: List[TablePublication],
+        publications: list[TablePublication],
         comparison_query_uris: EnginePair[str],
         timeout_seconds: int,
     ) -> ExecutionResult:

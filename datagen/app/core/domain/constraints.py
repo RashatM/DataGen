@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from app.core.domain.enums import CaseMode, CharacterSet
 
 
 @dataclass
 class Constraints:
-    allowed_values: Optional[tuple[Any, ...]]
+    allowed_values: tuple[Any, ...] | None
 
 
 @dataclass
@@ -24,7 +24,7 @@ class OutputConstraints:
 @dataclass
 class StringConstraints(ValueConstraints):
     length: int
-    regular_expr: Optional[str]
+    regular_expr: str | None
     character_set: CharacterSet = CharacterSet.LETTERS
     case_mode: CaseMode = CaseMode.MIXED
 

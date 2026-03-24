@@ -1,5 +1,4 @@
 import random
-from typing import List
 
 from app.core.application.ports.generator_port import DataGeneratorPort
 from app.core.domain.constraints import FloatConstraints, OutputConstraints
@@ -16,7 +15,7 @@ class FloatDataGenerator(DataGeneratorPort[FloatConstraints]):
         total_rows: int,
         constraints: FloatConstraints,
         output_constraints: OutputConstraints,
-    ) -> List[float]:
+    ) -> list[float]:
         min_value = constraints.min_value
         max_value = constraints.max_value
         precision = constraints.precision

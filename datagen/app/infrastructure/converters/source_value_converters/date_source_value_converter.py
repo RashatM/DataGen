@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, List
+from typing import Any
 
 from app.core.domain.constraints import DateConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
@@ -15,11 +15,11 @@ class DateSourceValueConverter(SourceTypeValueConverter[DateConstraints]):
 
     def convert(
         self,
-        values: List[Any],
+        values: list[Any],
         constraints: DateConstraints,
         target_type: DataType,
         column_name: str,
-    ) -> List[Any]:
+    ) -> list[Any]:
         if not isinstance(constraints, DateConstraints):
             raise InvalidConstraintsError(f"Invalid date constraints for column {column_name}")
 
