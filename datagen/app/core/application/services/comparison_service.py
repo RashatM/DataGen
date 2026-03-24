@@ -69,14 +69,19 @@ class ComparisonReportService:
 
     @staticmethod
     def format_report_summary(report: ComparisonReport) -> str:
-        outcome = "comparison passed" if report.is_match() else "comparison mismatch detected"
+        status_line = "Comparison passed." if report.is_match() else "Comparison mismatch detected."
         return (
-            f"{outcome}: "
-            f"hive_rows={report.summary.row_count.hive}, "
-            f"iceberg_rows={report.summary.row_count.iceberg}, "
-            f"row_delta={report.summary.row_count_delta}, "
-            f"hive_only_rows={report.summary.exclusive_row_count.hive}, "
-            f"iceberg_only_rows={report.summary.exclusive_row_count.iceberg}"
+            f"{status_line}\n"
+            f"row_count:\n"
+            f"  hive: {report.summary.row_count.hive}\n"
+            f"  iceberg: {report.summary.row_count.iceberg}\n"
+            f"row_count_delta: {report.summary.row_count_delta}\n"
+            f"exclusive_row_count:\n"
+            f"  hive: {report.summary.exclusive_row_count.hive}\n"
+            f"  iceberg: {report.summary.exclusive_row_count.iceberg}\n"
+            f"exclusive_row_ratio:\n"
+            f"  hive: {report.summary.exclusive_row_ratio.hive}\n"
+            f"  iceberg: {report.summary.exclusive_row_ratio.iceberg}"
         )
 
     def load_report(self, report_key: str, run_id: str) -> ComparisonReport:
@@ -84,7 +89,9 @@ class ComparisonReportService:
         report = self.repository.load_report(report_key=report_key, expected_run_id=run_id)
         self.validate_report(report)
         logger.info(
-            f"Comparison report load completed: run_id={run_id}, "
+            f"Comparison report load completed.\n"
+            f"run_id: {run_id}\n"
+            f"report_key: {report_key}\n"
             f"{self.format_report_summary(report)}"
         )
         return report

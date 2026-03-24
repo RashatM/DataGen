@@ -61,13 +61,19 @@ class ExecutePipelineUseCase:
 
         if comparison_report.is_match():
             logger.info(
-                f"Pipeline completed: run_id={run_id}, "
-                f"execution_status={execution_result.status.value}, {comparison_summary}, total={total}s"
+                f"Pipeline completed.\n"
+                f"run_id: {run_id}\n"
+                f"execution_status: {execution_result.status.value}\n"
+                f"total_seconds: {total}\n"
+                f"{comparison_summary}"
             )
         else:
             logger.warning(
-                f"Pipeline completed with mismatch: run_id={run_id}, "
-                f"execution_status={execution_result.status.value}, {comparison_summary}, total={total}s"
+                f"Pipeline completed with mismatch.\n"
+                f"run_id: {run_id}\n"
+                f"execution_status: {execution_result.status.value}\n"
+                f"total_seconds: {total}\n"
+                f"{comparison_summary}"
             )
 
         return PipelineExecutionResult(

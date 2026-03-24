@@ -195,16 +195,20 @@ class ResultComparator:
 
     @staticmethod
     def build_outcome_message(run_id: str, metrics: ComparisonMetrics) -> str:
-        if metrics.status() == "MATCH":
-            return (
-                f"Comparison passed: run_id={run_id}, "
-                f"hive_rows={metrics.row_count.hive}, iceberg_rows={metrics.row_count.iceberg}"
-            )
+        status_line = "Comparison passed." if metrics.status() == "MATCH" else "Comparison mismatch detected."
         return (
-            f"Comparison mismatch detected: run_id={run_id}, "
-            f"hive_rows={metrics.row_count.hive}, iceberg_rows={metrics.row_count.iceberg}, "
-            f"hive_only_rows={metrics.exclusive_row_count.hive}, "
-            f"iceberg_only_rows={metrics.exclusive_row_count.iceberg}"
+            f"{status_line}\n"
+            f"run_id: {run_id}\n"
+            f"row_count:\n"
+            f"  hive: {metrics.row_count.hive}\n"
+            f"  iceberg: {metrics.row_count.iceberg}\n"
+            f"row_count_delta: {metrics.row_count_delta}\n"
+            f"exclusive_row_count:\n"
+            f"  hive: {metrics.exclusive_row_count.hive}\n"
+            f"  iceberg: {metrics.exclusive_row_count.iceberg}\n"
+            f"exclusive_row_ratio:\n"
+            f"  hive: {metrics.exclusive_row_ratio.hive}\n"
+            f"  iceberg: {metrics.exclusive_row_ratio.iceberg}"
         )
 
     def execute(self, run_id: str, comparison_contract: ComparisonContract) -> None:
@@ -230,8 +234,8 @@ class ResultComparator:
         write_json_to_uri(self.spark, comparison_contract.report_uri, report)
 
         logger.info(
-            f"{self.build_outcome_message(run_id, metrics)}, "
-            f"report_uri={comparison_contract.report_uri}"
+            f"{self.build_outcome_message(run_id, metrics)}\n"
+            f"report_uri: {comparison_contract.report_uri}"
         )
 
 
