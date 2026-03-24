@@ -33,7 +33,7 @@ class AirflowDagPayloadBuilder:
             "report_uri": self.object_storage.build_uri(artifact_layout.comparison_report_key),
             "result_uris": {
                 engine_name.value: self.object_storage.build_uri(
-                    artifact_layout.engine_result_key(engine_name)
+                    artifact_layout.comparison_query_result_key(engine_name)
                 )
                 for engine_name in EngineName
             },

@@ -1,11 +1,12 @@
 import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pyspark.sql import DataFrame, SparkSession
 
 from job_common import ComparisonContract, logger, parse_job_contract, write_json_to_uri
+
 
 
 @contextmanager
@@ -14,7 +15,7 @@ def open_spark_session(app_name: str):
         SparkSession.builder
         .appName(app_name)
         .config("spark.sql.sources.partitionOverwriteMode", "static")
-        .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.sql.session.timeZone", "Europe/Moscow")
         .getOrCreate()
     )
     try:
@@ -62,7 +63,7 @@ class ComparisonReportBuilder:
 
     @staticmethod
     def to_checked_at() -> str:
-        return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        return datetime.now(ZoneInfo("Europe/Moscow")).replace(microsecond=0).isoformat()
 
     @staticmethod
     def calculate_ratio(exclusive_count: int, total_count: int) -> float:
@@ -126,7 +127,7 @@ class ComparisonReportBuilder:
         }
 
 
-class ComparisonJob:
+class ResultComparator:
 
     def __init__(
         self,
@@ -165,7 +166,7 @@ class ComparisonJob:
 
     @staticmethod
     def calculate_metrics(hive_df: DataFrame, iceberg_df: DataFrame) -> ComparisonMetrics:
-        hive_df, iceberg_df = ComparisonJob.align_columns(hive_df, iceberg_df)
+        hive_df, iceberg_df = ResultComparator.align_columns(hive_df, iceberg_df)
         hive_df.persist()
         iceberg_df.persist()
         try:
@@ -192,6 +193,20 @@ class ComparisonJob:
             hive_df.unpersist()
             iceberg_df.unpersist()
 
+    @staticmethod
+    def build_outcome_message(run_id: str, metrics: ComparisonMetrics) -> str:
+        if metrics.status() == "MATCH":
+            return (
+                f"Comparison passed: run_id={run_id}, "
+                f"hive_rows={metrics.row_count.hive}, iceberg_rows={metrics.row_count.iceberg}"
+            )
+        return (
+            f"Comparison mismatch detected: run_id={run_id}, "
+            f"hive_rows={metrics.row_count.hive}, iceberg_rows={metrics.row_count.iceberg}, "
+            f"hive_only_rows={metrics.exclusive_row_count.hive}, "
+            f"iceberg_only_rows={metrics.exclusive_row_count.iceberg}"
+        )
+
     def execute(self, run_id: str, comparison_contract: ComparisonContract) -> None:
         hive_contract = comparison_contract.get_engine_contract("hive")
         iceberg_contract = comparison_contract.get_engine_contract("iceberg")
@@ -215,7 +230,7 @@ class ComparisonJob:
         write_json_to_uri(self.spark, comparison_contract.report_uri, report)
 
         logger.info(
-            f"Comparison completed. run_id={run_id}, status={metrics.status()}, "
+            f"{self.build_outcome_message(run_id, metrics)}, "
             f"report_uri={comparison_contract.report_uri}"
         )
 
@@ -224,7 +239,7 @@ if __name__ == "__main__":
     args = parse_args()
     contract = parse_job_contract(args.contract)
     with open_spark_session(args.app_name) as spark_session:
-        ComparisonJob(
+        ResultComparator(
             spark=spark_session,
             report_builder=ComparisonReportBuilder(),
         ).execute(

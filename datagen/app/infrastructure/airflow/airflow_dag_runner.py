@@ -23,8 +23,8 @@ class AirflowDagRunner(ExecutionRunnerPort):
         self.client = client
         self.payload_builder = payload_builder
 
-    @staticmethod
     def to_execution_result(
+        self,
         run_id: str,
         dag_run_state: DagRunState,
     ) -> ExecutionResult:
@@ -32,9 +32,17 @@ class AirflowDagRunner(ExecutionRunnerPort):
             status = ExecutionStatus.SUCCESS
         else:
             status = ExecutionStatus.FAILED
+            try:
+                failed_task_ids = self.client.get_failed_task_ids(dag_run_state.dag_run_id)
+            except Exception:
+                logger.exception(
+                    f"Failed to fetch failed task instances: dag_run_id={dag_run_state.dag_run_id}"
+                )
+                failed_task_ids = []
+            failed_tasks_text = f", failed_tasks={failed_task_ids}" if failed_task_ids else ""
             logger.error(
                 f"DAG finished with error: dag_run_id={dag_run_state.dag_run_id}, "
-                f"state={dag_run_state.state}, raw_response={dag_run_state.raw}"
+                f"state={dag_run_state.state}{failed_tasks_text}"
             )
         return ExecutionResult(
             run_id=run_id,

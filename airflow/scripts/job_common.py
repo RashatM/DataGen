@@ -169,3 +169,19 @@ def write_json_to_uri(spark: "SparkSession", uri: str, payload: dict[str, Any]) 
         writer.flush()
     finally:
         output_stream.close()
+
+
+def read_text_from_uri(spark: "SparkSession", uri: str) -> str:
+    jvm = spark.sparkContext._jvm
+    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+    path = jvm.org.apache.hadoop.fs.Path(uri)
+    file_system = path.getFileSystem(hadoop_conf)
+
+    input_stream = file_system.open(path)
+    scanner = jvm.java.util.Scanner(input_stream, "UTF-8").useDelimiter("\\A")
+    try:
+        if scanner.hasNext():
+            return scanner.next()
+        return ""
+    finally:
+        scanner.close()

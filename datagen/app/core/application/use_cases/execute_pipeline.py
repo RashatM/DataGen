@@ -3,7 +3,7 @@ import time
 from app.core.application.dto.pipeline import PipelineExecutionResult
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
-from app.core.application.services.comparison_report_service import ComparisonReportService
+from app.core.application.services.comparison_service import ComparisonReportService
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.application.services.publication_service import ArtifactPublicationService
 from app.core.domain.entities import GenerationRun

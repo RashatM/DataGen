@@ -67,5 +67,29 @@ class AirflowClient:
         return DagRunState(
             dag_run_id=raw.get("dag_run_id", dag_run_id),
             state=raw.get("state", ""),
-            raw=raw,
         )
+
+    def get_failed_task_ids(self, dag_run_id: str) -> list[str]:
+        url = (
+            f"{self.config.url}/api/v1/dags/"
+            f"{self.config.dag_id}/dagRuns/{dag_run_id}/taskInstances"
+        )
+        raw = self.request_with_retry("GET", url=url)
+
+        if isinstance(raw, dict):
+            task_instances = raw.get("task_instances", [])
+        elif isinstance(raw, list):
+            task_instances = raw
+        else:
+            return []
+
+        failed_task_ids: list[str] = []
+        for item in task_instances:
+            if not isinstance(item, dict):
+                continue
+            if item.get("state") != "failed":
+                continue
+            task_id = item.get("task_id")
+            if isinstance(task_id, str) and task_id:
+                failed_task_ids.append(task_id)
+        return sorted(set(failed_task_ids))

@@ -18,7 +18,7 @@ BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/b
 JOB_COMMON_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/job_common.py"
 ICEBERG_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/iceberg_load.py"
 HADOOP_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/hadoop_load.py"
-COMPARE_RESULTS_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/compare_results.py"
+RESULT_COMPARATOR_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/result_comparator.py"
 HADOOP_CLUSTER_CONFIG_VARIABLE = "datagen_hadoop_cluster_config"
 
 SPARK_CONF_DIRS = {
@@ -171,7 +171,7 @@ def get_compare_spark_config(**context) -> dict[str, str]:
     return {
         **Variable.get("load_table_test", deserialize_json=True),
         **Variable.get("yc_keys", deserialize_json=True),
-        "spark.sql.session.timeZone": "UTC",
+        "spark.sql.session.timeZone": "Europe/Moscow",
         "spark.dynamicAllocation.enabled": "false",
         "spark.executor.instances": "2",
         "spark.executor.cores": "2",
@@ -236,7 +236,7 @@ with DAG(
         conn_id="spark_k8s",
         config_callable=get_compare_spark_config,
         retries=0,
-        application=COMPARE_RESULTS_SCRIPT,
+        application=RESULT_COMPARATOR_SCRIPT,
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_compare_{{ dag_run.conf['run_id'] }}",

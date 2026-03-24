@@ -20,11 +20,11 @@ class RunArtifactKeyLayout:
     def ddl_key(self, schema_name: str, table_name: str, engine_name: EngineName) -> str:
         return f"{self.run_prefix}/tables/{schema_name.strip('/')}/{table_name.strip('/')}/ddl/{engine_name.value}.sql"
 
-    def engine_result_key(self, engine_name: EngineName) -> str:
-        return f"{self.run_prefix}/result/query/{engine_name.value}.parquet"
+    def comparison_query_result_key(self, engine_name: EngineName) -> str:
+        return f"{self.run_prefix}/comparison/query_results/{engine_name.value}"
 
     def comparison_query_key(self, engine_name: EngineName) -> str:
-        return f"{self.run_prefix}/comparison/{engine_name.value}.sql"
+        return f"{self.run_prefix}/comparison/queries/{engine_name.value}.sql"
 
 
 @dataclass(slots=True)

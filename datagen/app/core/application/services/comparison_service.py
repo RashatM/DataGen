@@ -69,15 +69,14 @@ class ComparisonReportService:
 
     @staticmethod
     def format_report_summary(report: ComparisonReport) -> str:
+        outcome = "comparison passed" if report.is_match() else "comparison mismatch detected"
         return (
-            f"comparison_status={report.status.value}, "
-            f"hive_row_count={report.summary.row_count.hive}, "
-            f"iceberg_row_count={report.summary.row_count.iceberg}, "
-            f"row_count_delta={report.summary.row_count_delta}, "
-            f"hive_exclusive_row_count={report.summary.exclusive_row_count.hive}, "
-            f"iceberg_exclusive_row_count={report.summary.exclusive_row_count.iceberg}, "
-            f"hive_exclusive_row_ratio={report.summary.exclusive_row_ratio.hive}, "
-            f"iceberg_exclusive_row_ratio={report.summary.exclusive_row_ratio.iceberg}"
+            f"{outcome}: "
+            f"hive_rows={report.summary.row_count.hive}, "
+            f"iceberg_rows={report.summary.row_count.iceberg}, "
+            f"row_delta={report.summary.row_count_delta}, "
+            f"hive_only_rows={report.summary.exclusive_row_count.hive}, "
+            f"iceberg_only_rows={report.summary.exclusive_row_count.iceberg}"
         )
 
     def load_report(self, report_key: str, run_id: str) -> ComparisonReport:

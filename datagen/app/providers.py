@@ -6,7 +6,7 @@ from app.core.application.ports.comparison_query_renderer_port import Comparison
 from app.core.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
-from app.core.application.services.comparison_report_service import ComparisonReportService
+from app.core.application.services.comparison_service import ComparisonReportService
 from app.core.application.services.publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
 from app.core.domain.enums import DataType

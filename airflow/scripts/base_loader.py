@@ -17,12 +17,13 @@ from pyspark.sql.types import (
     StructType,
 )
 
-from job_common import ComparisonContract, TableContract, logger
+from job_common import ComparisonContract, TableContract, logger, read_text_from_uri
 
 
 class ComparisonDataNormalizer:
     TIMESTAMP_OUTPUT_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
     DATE_OUTPUT_FORMAT = "yyyy-MM-dd"
+    NORMALIZED_INTEGER_TYPE = "bigint"
     NORMALIZED_DECIMAL_TYPE = "decimal(38,18)"
 
     def normalize(self, df: DataFrame) -> DataFrame:
@@ -49,7 +50,9 @@ class ComparisonDataNormalizer:
                         col.cast("date"), self.DATE_OUTPUT_FORMAT
                     ).alias(schema_field.name)
                 )
-            elif isinstance(dt, (ByteType, ShortType, IntegerType, LongType, FloatType, DoubleType, DecimalType)):
+            elif isinstance(dt, (ByteType, ShortType, IntegerType, LongType)):
+                expressions.append(col.cast(self.NORMALIZED_INTEGER_TYPE).alias(schema_field.name))
+            elif isinstance(dt, (FloatType, DoubleType, DecimalType)):
                 expressions.append(col.cast(self.NORMALIZED_DECIMAL_TYPE).alias(schema_field.name))
             elif isinstance(dt, BooleanType):
                 expressions.append(f.lower(col.cast("string")).alias(schema_field.name))
@@ -69,14 +72,14 @@ class BaseSynthLoader(ABC):
     def write_to_tmp(self, data_uri: str, tmp_name: str) -> None:
         pass
 
-    def read_ddl_from_s3(self, ddl_uri: str) -> str:
-        return self.spark.sparkContext.wholeTextFiles(ddl_uri).values().first()
+    def read_ddl_from_uri(self, ddl_uri: str) -> str:
+        return read_text_from_uri(self.spark, ddl_uri)
 
-    def read_query_from_s3(self, query_uri: str) -> str:
-        return self.spark.sparkContext.wholeTextFiles(query_uri).values().first()
+    def read_query_from_uri(self, query_uri: str) -> str:
+        return read_text_from_uri(self.spark, query_uri)
 
     def build_tmp_ddl(self, table: TableContract) -> str:
-        ddl = self.read_ddl_from_s3(table.ddl_uri)
+        ddl = self.read_ddl_from_uri(table.ddl_uri)
         return ddl.replace(table.full_table_name, table.tmp_name)
 
     def drop_table(self, table_name: str) -> None:
@@ -118,10 +121,16 @@ class BaseSynthLoader(ABC):
             f"Comparison query execution started. engine={engine}, run_id={self.run_id}, "
             f"query_uri={engine_contract.query_uri}, result_uri={engine_contract.result_uri}"
         )
-        comparison_query = self.read_query_from_s3(engine_contract.query_uri)
+        comparison_query = self.read_query_from_uri(engine_contract.query_uri)
         comparison_df = self.spark.sql(comparison_query)
         normalized_df = self.comparison_data_normalizer.normalize(comparison_df)
-        normalized_df.write.mode("overwrite").parquet(engine_contract.result_uri)
+        try:
+            normalized_df.write.mode("overwrite").parquet(engine_contract.result_uri)
+        except Exception as error:
+            raise RuntimeError(
+                f"Failed to write comparison parquet. engine={engine}, "
+                f"result_uri={engine_contract.result_uri}"
+            ) from error
         logger.info(
             f"Comparison query execution completed. engine={engine}, run_id={self.run_id}, "
             f"result_uri={engine_contract.result_uri}"
