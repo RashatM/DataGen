@@ -2,13 +2,13 @@ from abc import ABC, abstractmethod
 from typing import Dict, List
 
 from app.core.application.dto.publication import EngineLoadPayload
-from app.core.application.ports.table_load_payload_builder_port import ITableLoadPayloadBuilder
+from app.core.application.ports.table_load_payload_builder_port import TableLoadPayloadBuilderPort
 from app.core.domain.entities import TableColumnSpec, TableSpec
 from app.core.domain.enums import DataType
 from app.infrastructure.errors import UnsupportedOutputDataTypeError
 
 
-class BaseSqlQueryBuilder(ITableLoadPayloadBuilder, ABC):
+class BaseSqlQueryBuilder(TableLoadPayloadBuilderPort, ABC):
     type_mapping: Dict[DataType, str] = {}
 
     def __init__(self, database_name: str):

@@ -1,13 +1,14 @@
 from typing import Any, Dict, List
 
-from app.core.application.ports.value_converter_port import ISourceValueConverter, IValueConverter
+from app.core.application.ports.value_converter_port import ValueConverterPort
 from app.core.domain.entities import TableColumnSpec
 from app.core.domain.enums import DataType
-from app.infrastructure.errors import SourceValueConverterNotRegisteredError
+from app.infrastructure.converters.source_type_value_converter import SourceTypeValueConverter
+from app.infrastructure.errors import SourceTypeValueConverterNotRegisteredError
 
 
-class ValueTypeConverter(IValueConverter):
-    def __init__(self, converter_by_source_type: Dict[DataType, ISourceValueConverter[Any]]):
+class ColumnValueConverter(ValueConverterPort):
+    def __init__(self, converter_by_source_type: Dict[DataType, SourceTypeValueConverter[Any]]):
         self.converter_by_source_type = converter_by_source_type
 
     def convert(self, values: List[Any], table_column: TableColumnSpec) -> List[Any]:
@@ -19,7 +20,7 @@ class ValueTypeConverter(IValueConverter):
 
         converter = self.converter_by_source_type.get(source_type)
         if not converter:
-            raise SourceValueConverterNotRegisteredError(
+            raise SourceTypeValueConverterNotRegisteredError(
                 f"No converter for source data type: {source_type.value}"
             )
 

@@ -4,12 +4,12 @@ from typing import Any, Dict, List
 from app.core.application.constants import EngineName
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.publication import EnginePair, TablePublication
-from app.core.application.ports.object_storage_port import IObjectStorage
+from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 
 
 class AirflowDagPayloadBuilder:
 
-    def __init__(self, object_storage: IObjectStorage) -> None:
+    def __init__(self, object_storage: S3StorageAdapter) -> None:
         self.object_storage = object_storage
 
     @staticmethod

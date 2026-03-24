@@ -5,7 +5,7 @@ from app.core.domain.constraints import OutputConstraints
 from app.core.domain.typevars import TConstraints
 
 
-class IDataGenerator(ABC, Generic[TConstraints]):
+class DataGeneratorPort(ABC, Generic[TConstraints]):
     @abstractmethod
     def generate_values(
         self,

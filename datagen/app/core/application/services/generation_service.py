@@ -1,9 +1,9 @@
 import random
 from typing import Any, List
 
-from app.core.application.ports.generator_factory_port import IDataGeneratorFactory
-from app.core.application.ports.table_dependency_planner_port import ITableDependencyPlanner
-from app.core.application.ports.value_converter_port import IValueConverter
+from app.core.application.ports.generator_factory_port import DataGeneratorFactoryPort
+from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
+from app.core.application.ports.value_converter_port import ValueConverterPort
 from app.core.domain.entities import TableColumnSpec, GeneratedTableData, GenerationRun
 from app.core.domain.enums import RelationType
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
@@ -16,9 +16,9 @@ logger = generation_logger
 class DataGenerationService:
     def __init__(
         self,
-        table_dependency_planner: ITableDependencyPlanner,
-        data_generator_factory: IDataGeneratorFactory,
-        value_converter: IValueConverter,
+        table_dependency_planner: TableDependencyPlannerPort,
+        data_generator_factory: DataGeneratorFactoryPort,
+        value_converter: ValueConverterPort,
         rng: random.Random,
     ) -> None:
         self.table_dependency_planner = table_dependency_planner

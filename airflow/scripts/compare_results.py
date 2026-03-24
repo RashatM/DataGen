@@ -30,7 +30,6 @@ def open_spark_session(app_name: str):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="DataGen: compare Hive and Iceberg query results")
     parser.add_argument("--app_name", required=True)
-    parser.add_argument("--run_id", required=True)
     parser.add_argument("--contract", required=True)
     return parser.parse_args()
 
@@ -230,6 +229,6 @@ if __name__ == "__main__":
             spark=spark_session,
             report_builder=ComparisonReportBuilder(),
         ).execute(
-            run_id=args.run_id,
+            run_id=contract.run_id,
             comparison_contract=contract.comparison,
         )

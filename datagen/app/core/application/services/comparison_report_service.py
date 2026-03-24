@@ -1,6 +1,6 @@
 from app.core.application.constants import ComparisonStatus
 from app.core.application.dto.comparison import ComparisonReport, EngineCountSummary, EngineRatioSummary
-from app.core.application.ports.comparison_repository_port import IComparisonReportRepository
+from app.core.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
 from app.shared.logger import comparison_logger
 
 logger = comparison_logger
@@ -9,7 +9,7 @@ logger = comparison_logger
 class ComparisonReportService:
     SHARE_EPSILON = 1e-6
 
-    def __init__(self, repository: IComparisonReportRepository) -> None:
+    def __init__(self, repository: ComparisonReportRepositoryPort) -> None:
         self.repository = repository
 
     @staticmethod

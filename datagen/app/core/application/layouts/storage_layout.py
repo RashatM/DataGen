@@ -15,10 +15,10 @@ class RunArtifactKeyLayout:
         self.comparison_report_key = f"{run_prefix}/result/comparison_result.json"
 
     def data_key(self, schema_name: str, table_name: str) -> str:
-        return f"{self.run_prefix}/{schema_name.strip('/')}/{table_name.strip('/')}/data/data.parquet"
+        return f"{self.run_prefix}/tables/{schema_name.strip('/')}/{table_name.strip('/')}/data/data.parquet"
 
     def ddl_key(self, schema_name: str, table_name: str, engine_name: EngineName) -> str:
-        return f"{self.run_prefix}/{schema_name.strip('/')}/{table_name.strip('/')}/ddl/{engine_name.value}.sql"
+        return f"{self.run_prefix}/tables/{schema_name.strip('/')}/{table_name.strip('/')}/ddl/{engine_name.value}.sql"
 
     def engine_result_key(self, engine_name: EngineName) -> str:
         return f"{self.run_prefix}/result/query/{engine_name.value}.parquet"

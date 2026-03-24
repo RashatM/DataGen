@@ -1,13 +1,13 @@
 import random
 from typing import List
 
-from app.core.application.ports.generator_port import IDataGenerator
+from app.core.application.ports.generator_port import DataGeneratorPort
 from app.core.domain.constraints import FloatConstraints, OutputConstraints
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.utils import random_choices_from_constants
 
 
-class FloatDataGenerator(IDataGenerator[FloatConstraints]):
+class FloatDataGenerator(DataGeneratorPort[FloatConstraints]):
     def __init__(self, rng: random.Random) -> None:
         self.rng = rng
 

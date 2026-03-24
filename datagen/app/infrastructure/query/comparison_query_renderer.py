@@ -9,10 +9,14 @@ from app.core.application.ports.comparison_query_renderer_port import Comparison
 class TargetTableComparisonQueryRenderer(ComparisonQueryRendererPort):
     STUB_QUERY = """
     SELECT
-        analytics.company_groups.id,
-        analytics.subjects.id
-    FROM analytics.company_groups
-    JOIN analytics.subjects ON analytics.company_groups.id = analytics.subjects.group_id
+        cg.GROUP_ID_DM,
+        cg.MAIN_COMPANY_FLG_DM,
+        cg.VALUE_DAY,
+        COUNT(s.IDSUBJECT) AS subject_count,
+        COUNT(s.SOGRN) AS with_ogrn_count
+    FROM analytics.company_groups cg
+    JOIN analytics.subjects s ON cg.INN = s.SINN
+    GROUP BY cg.GROUP_ID_DM, cg.MAIN_COMPANY_FLG_DM, cg.VALUE_DAY
     """
 
     @staticmethod

@@ -13,15 +13,15 @@ from app.core.application.dto.publication import (
     PublicationArtifacts,
     TablePublication,
 )
-from app.core.application.ports.object_storage_port import IObjectStorage
-from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
+from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
 from app.core.domain.entities import GeneratedTableData
 from app.infrastructure.errors import ObjectNotFoundError, RunStateCorruptedError
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
+from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 
 
-class S3PublicationRepository(IArtifactPublicationRepository):
-    def __init__(self, object_storage: IObjectStorage, schema_builder: ArrowSchemaBuilder):
+class S3PublicationRepository(ArtifactPublicationRepositoryPort):
+    def __init__(self, object_storage: S3StorageAdapter, schema_builder: ArrowSchemaBuilder):
         self.object_storage = object_storage
         self.schema_builder = schema_builder
 

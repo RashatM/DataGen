@@ -4,10 +4,9 @@ from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 
 from app.infrastructure.errors import ObjectNotFoundError, ObjectPayloadFormatError
-from app.core.application.ports.object_storage_port import IObjectStorage
 
 
-class S3StorageAdapter(IObjectStorage):
+class S3StorageAdapter:
 
     def __init__(self, bucket: str, s3_client: S3Client):
         self.bucket = bucket

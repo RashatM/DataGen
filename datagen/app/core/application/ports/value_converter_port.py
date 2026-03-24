@@ -1,29 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, List
+from typing import Any, List
 
 from app.core.domain.entities import TableColumnSpec
-from app.core.domain.enums import DataType
-from app.core.domain.typevars import TConstraints
 
 
-class IValueConverter(ABC):
+class ValueConverterPort(ABC):
     @abstractmethod
     def convert(self, values: List[Any], table_column: TableColumnSpec) -> List[Any]:
-        pass
-
-
-class ISourceValueConverter(ABC, Generic[TConstraints]):
-    @property
-    @abstractmethod
-    def source_type(self) -> DataType:
-        pass
-
-    @abstractmethod
-    def convert(
-        self,
-        values: List[Any],
-        constraints: TConstraints,
-        target_type: DataType,
-        column_name: str,
-    ) -> List[Any]:
         pass

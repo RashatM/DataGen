@@ -2,13 +2,13 @@ import random
 from datetime import datetime, timedelta
 from typing import List
 
-from app.core.application.ports.generator_port import IDataGenerator
+from app.core.application.ports.generator_port import DataGeneratorPort
 from app.core.domain.constraints import OutputConstraints, TimestampConstraints
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.utils import random_choices_from_constants
 
 
-class TimestampDataGenerator(IDataGenerator[TimestampConstraints]):
+class TimestampDataGenerator(DataGeneratorPort[TimestampConstraints]):
     def __init__(self, rng: random.Random) -> None:
         self.rng = rng
 

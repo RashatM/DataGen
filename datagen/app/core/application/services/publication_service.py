@@ -4,8 +4,8 @@ from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.publication import EngineLoadPayload, EnginePair, TablePublication
 from app.core.application.dto.run_artifacts import ArtifactPublicationResult
 from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
-from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
-from app.core.application.ports.table_load_payload_builder_port import ITableLoadPayloadBuilder
+from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
+from app.core.application.ports.table_load_payload_builder_port import TableLoadPayloadBuilderPort
 from app.core.domain.entities import GeneratedTableData
 from app.shared.logger import publication_logger
 
@@ -15,9 +15,9 @@ logger = publication_logger
 class ArtifactPublicationService:
     def __init__(
             self,
-            repository: IArtifactPublicationRepository,
-            hive_load_payload_builder: ITableLoadPayloadBuilder,
-            iceberg_load_payload_builder: ITableLoadPayloadBuilder,
+            repository: ArtifactPublicationRepositoryPort,
+            hive_load_payload_builder: TableLoadPayloadBuilderPort,
+            iceberg_load_payload_builder: TableLoadPayloadBuilderPort,
             comparison_query_renderer: ComparisonQueryRendererPort,
     ):
         self.repository = repository

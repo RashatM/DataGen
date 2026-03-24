@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.publication import EngineLoadPayload, EnginePair, TablePublication
 from app.core.domain.entities import GeneratedTableData
 
 
-class IArtifactPublicationRepository(ABC):
+class ArtifactPublicationRepositoryPort(ABC):
     @abstractmethod
     def stage_table_artifacts(
         self,

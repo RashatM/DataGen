@@ -6,8 +6,8 @@ class ConverterRegistrationError(InfrastructureConfigurationError):
     """Raised when a source converter is registered under a mismatched source type."""
 
 
-class SourceValueConverterNotRegisteredError(InfrastructureConfigurationError):
-    """Raised when no source value converter exists for a source data type."""
+class SourceTypeValueConverterNotRegisteredError(InfrastructureConfigurationError):
+    """Raised when no source-type value converter exists for a source data type."""
 
 
 class DataGeneratorNotRegisteredError(InfrastructureConfigurationError):

@@ -75,27 +75,32 @@ def validate_table_contracts(conf: Dict[str, Any]) -> None:
 def validate_contract(**context) -> None:
     conf = context["dag_run"].conf or {}
 
-    if not conf.get("run_id"):
-        raise ValueError("Contract is missing 'run_id'")
+    require_non_empty_string(conf.get("run_id"), "run_id")
     validate_table_contracts(conf)
 
     comparison = conf.get("comparison")
     if not isinstance(comparison, dict):
         raise ValueError("Contract is missing 'comparison'")
+
     query_uris = comparison.get("query_uris")
     if not isinstance(query_uris, dict):
         raise ValueError("Contract is missing 'comparison.query_uris'")
     for engine in ("hive", "iceberg"):
-        if not query_uris.get(engine):
-            raise ValueError(f"Contract is missing 'comparison.query_uris.{engine}'")
-    if not comparison.get("report_uri"):
-        raise ValueError("Contract is missing 'comparison.report_uri'")
+        require_non_empty_string(
+            query_uris.get(engine),
+            f"comparison.query_uris.{engine}",
+        )
+
+    require_non_empty_string(comparison.get("report_uri"), "comparison.report_uri")
+
     result_uris = comparison.get("result_uris")
     if not isinstance(result_uris, dict):
         raise ValueError("Contract is missing 'comparison.result_uris'")
     for engine in ("hive", "iceberg"):
-        if not result_uris.get(engine):
-            raise ValueError(f"Contract is missing 'comparison.result_uris.{engine}'")
+        require_non_empty_string(
+            result_uris.get(engine),
+            f"comparison.result_uris.{engine}",
+        )
 
 
 def get_iceberg_spark_config(**context) -> Dict[str, str]:
@@ -208,7 +213,6 @@ with DAG(
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_iceberg_{{ dag_run.conf['run_id'] }}",
-            "--run_id", "{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
         ],
     )
@@ -222,7 +226,6 @@ with DAG(
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_hive_{{ dag_run.conf['run_id'] }}",
-            "--run_id", "{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
         ],
     )
@@ -237,7 +240,6 @@ with DAG(
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_compare_{{ dag_run.conf['run_id'] }}",
-            "--run_id", "{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
         ],
     )

@@ -3,9 +3,9 @@ import random
 from mypy_boto3_s3 import S3Client
 
 from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
-from app.core.application.ports.comparison_repository_port import IComparisonReportRepository
+from app.core.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
-from app.core.application.ports.publication_repository_port import IArtifactPublicationRepository
+from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
 from app.core.application.services.comparison_report_service import ComparisonReportService
 from app.core.application.services.publication_service import ArtifactPublicationService
 from app.core.application.services.generation_service import DataGenerationService
@@ -33,12 +33,11 @@ from app.infrastructure.generators.string_generator import StringDataGenerator
 from app.infrastructure.generators.timestamp_generator import TimestampDataGenerator
 from app.infrastructure.graph.networkx_table_dependency_planner import NetworkXTableDependencyPlanner
 from app.infrastructure.query.comparison_query_renderer import TargetTableComparisonQueryRenderer
-from app.core.application.ports.object_storage_port import IObjectStorage
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_comparison_repository import S3ComparisonReportRepository
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
-from app.core.application.ports.value_converter_port import IValueConverter
+from app.core.application.ports.value_converter_port import ValueConverterPort
 from app.shared.config import S3Config, AirflowConfig, TargetStorageConfig
 
 
@@ -53,7 +52,7 @@ def provide_generator_factory(rng: random.Random) -> DataGeneratorFactory:
     return factory
 
 
-def provide_value_converter() -> IValueConverter:
+def provide_value_converter() -> ValueConverterPort:
     factory = ValueConverterFactory()
     factory.register(DataType.STRING, StringSourceValueConverter())
     factory.register(DataType.INT, IntSourceValueConverter())
@@ -87,16 +86,20 @@ def provide_s3_client(s3_config: S3Config) -> S3Client:
     return client
 
 
-def provide_s3_object_storage(bucket: str, s3_client: S3Client) -> IObjectStorage:
+def provide_s3_object_storage(bucket: str, s3_client: S3Client) -> S3StorageAdapter:
     return S3StorageAdapter(bucket=bucket, s3_client=s3_client)
 
 
-def provide_artifact_publication_repository(object_storage: IObjectStorage) -> IArtifactPublicationRepository:
+def provide_artifact_publication_repository(
+        object_storage: S3StorageAdapter,
+) -> ArtifactPublicationRepositoryPort:
     schema_builder = ArrowSchemaBuilder()
     return S3PublicationRepository(object_storage=object_storage, schema_builder=schema_builder)
 
 
-def provide_comparison_report_repository(object_storage: IObjectStorage) -> IComparisonReportRepository:
+def provide_comparison_report_repository(
+        object_storage: S3StorageAdapter,
+) -> ComparisonReportRepositoryPort:
     return S3ComparisonReportRepository(object_storage=object_storage)
 
 
@@ -105,7 +108,7 @@ def provide_comparison_query_renderer() -> ComparisonQueryRendererPort:
 
 
 def provide_artifact_publication_service(
-        object_storage: IObjectStorage,
+        object_storage: S3StorageAdapter,
         target_storage: TargetStorageConfig,
 ) -> ArtifactPublicationService:
     artifact_publication_repository = provide_artifact_publication_repository(object_storage)
@@ -123,7 +126,7 @@ def provide_artifact_publication_service(
 
 def provide_execution_runner(
         airflow_config: AirflowConfig,
-        object_storage: IObjectStorage,
+        object_storage: S3StorageAdapter,
 ) -> ExecutionRunnerPort:
     return AirflowDagRunner(
         client=AirflowClient(airflow_config),
@@ -131,6 +134,6 @@ def provide_execution_runner(
     )
 
 
-def provide_comparison_report_service(object_storage: IObjectStorage) -> ComparisonReportService:
+def provide_comparison_report_service(object_storage: S3StorageAdapter) -> ComparisonReportService:
     comparison_report_repository = provide_comparison_report_repository(object_storage)
     return ComparisonReportService(repository=comparison_report_repository)

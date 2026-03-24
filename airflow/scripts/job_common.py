@@ -1,9 +1,10 @@
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
 
-from pyspark.sql import SparkSession
+if TYPE_CHECKING:
+    from pyspark.sql import SparkSession
 
 
 def create_logger() -> logging.Logger:
@@ -101,6 +102,7 @@ class ComparisonContract:
 
 @dataclass
 class JobContract:
+    run_id: str
     tables: list[ContractTable]
     comparison: ComparisonContract
 
@@ -115,105 +117,44 @@ def load_contract(contract_json: str) -> Dict[str, Any]:
     return contract
 
 
-def require_non_empty_string(value: Any, field_name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"Contract is missing non-empty '{field_name}'")
-    return value
-
-
-def require_object(value: Any, field_name: str) -> Dict[str, Any]:
-    if not isinstance(value, dict):
-        raise ValueError(f"Contract is missing '{field_name}' object")
-    return value
-
-
-def parse_contract_tables(contract: Dict[str, Any]) -> list[ContractTable]:
-    tables = contract.get("tables")
-    if not isinstance(tables, list) or not tables:
-        raise ValueError("Contract is missing non-empty 'tables'")
-
-    parsed_tables = []
-    for index, table_payload in enumerate(tables):
-        table = require_object(table_payload, f"tables[{index}]")
-        artifacts = require_object(table.get("artifacts"), f"tables[{index}].artifacts")
-        engines = require_object(artifacts.get("engines"), f"tables[{index}].artifacts.engines")
-
-        hive = require_object(engines.get("hive"), f"tables[{index}].artifacts.engines.hive")
-        iceberg = require_object(engines.get("iceberg"), f"tables[{index}].artifacts.engines.iceberg")
-
-        parsed_tables.append(
-            ContractTable(
-                schema_name=require_non_empty_string(table.get("schema_name"), f"tables[{index}].schema_name"),
-                table_name=require_non_empty_string(table.get("table_name"), f"tables[{index}].table_name"),
-                data_uri=require_non_empty_string(artifacts.get("data_uri"), f"tables[{index}].artifacts.data_uri"),
-                hive=EngineTableContract(
-                    ddl_uri=require_non_empty_string(
-                        hive.get("ddl_uri"),
-                        f"tables[{index}].artifacts.engines.hive.ddl_uri",
-                    ),
-                    target_table_name=require_non_empty_string(
-                        hive.get("target_table_name"),
-                        f"tables[{index}].artifacts.engines.hive.target_table_name",
-                    ),
-                ),
-                iceberg=EngineTableContract(
-                    ddl_uri=require_non_empty_string(
-                        iceberg.get("ddl_uri"),
-                        f"tables[{index}].artifacts.engines.iceberg.ddl_uri",
-                    ),
-                    target_table_name=require_non_empty_string(
-                        iceberg.get("target_table_name"),
-                        f"tables[{index}].artifacts.engines.iceberg.target_table_name",
-                    ),
-                ),
-            )
+def parse_contract_tables(tables_payload: list[Dict[str, Any]]) -> list[ContractTable]:
+    return [
+        ContractTable(
+            schema_name=table["schema_name"],
+            table_name=table["table_name"],
+            data_uri=table["artifacts"]["data_uri"],
+            hive=EngineTableContract(
+                ddl_uri=table["artifacts"]["engines"]["hive"]["ddl_uri"],
+                target_table_name=table["artifacts"]["engines"]["hive"]["target_table_name"],
+            ),
+            iceberg=EngineTableContract(
+                ddl_uri=table["artifacts"]["engines"]["iceberg"]["ddl_uri"],
+                target_table_name=table["artifacts"]["engines"]["iceberg"]["target_table_name"],
+            ),
         )
-
-    return parsed_tables
-
-
-def validate_comparison_contract(contract: Dict[str, Any]) -> Dict[str, Any]:
-    comparison = require_object(contract.get("comparison"), "comparison")
-
-    query_uris = comparison.get("query_uris")
-    if not isinstance(query_uris, dict):
-        raise ValueError("Contract is missing 'comparison.query_uris'")
-    for engine in ("hive", "iceberg"):
-        query_uri = query_uris.get(engine)
-        if not isinstance(query_uri, str) or not query_uri.strip():
-            raise ValueError(f"Contract is missing non-empty 'comparison.query_uris.{engine}'")
-
-    report_uri = comparison.get("report_uri")
-    if not isinstance(report_uri, str) or not report_uri.strip():
-        raise ValueError("Contract is missing non-empty 'comparison.report_uri'")
-
-    result_uris = comparison.get("result_uris")
-    if not isinstance(result_uris, dict):
-        raise ValueError("Contract is missing 'comparison.result_uris'")
-
-    for engine in ("hive", "iceberg"):
-        result_uri = result_uris.get(engine)
-        if not isinstance(result_uri, str) or not result_uri.strip():
-            raise ValueError(f"Contract is missing non-empty 'comparison.result_uris.{engine}'")
-
-    return comparison
+        for table in tables_payload
+    ]
 
 
 def parse_job_contract(contract_json: str) -> JobContract:
-    """Parse and validate the full DataGen runtime contract."""
+    """Parse trusted runtime contract already validated by the DAG."""
     contract = load_contract(contract_json)
-    comparison = validate_comparison_contract(contract)
-    return JobContract(
-        tables=parse_contract_tables(contract),
-        comparison=ComparisonContract(
-            query_uris=dict(comparison["query_uris"]),
-            result_uris=dict(comparison["result_uris"]),
-            report_uri=comparison["report_uri"],
-        ),
-    )
+    try:
+        comparison = contract["comparison"]
+        return JobContract(
+            run_id=contract["run_id"],
+            tables=parse_contract_tables(contract["tables"]),
+            comparison=ComparisonContract(
+                query_uris=dict(comparison["query_uris"]),
+                result_uris=dict(comparison["result_uris"]),
+                report_uri=comparison["report_uri"],
+            ),
+        )
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"Trusted DAG contract has invalid structure: {error}") from error
 
 
-def write_json_to_uri(spark: SparkSession, uri: str, payload: Dict[str, Any]) -> None:
+def write_json_to_uri(spark: "SparkSession", uri: str, payload: Dict[str, Any]) -> None:
     content = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
 
     jvm = spark.sparkContext._jvm

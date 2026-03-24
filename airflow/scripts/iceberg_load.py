@@ -36,7 +36,6 @@ def open_spark_session(app_name: str):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="DataGen: S3 to Iceberg loader")
     parser.add_argument("--app_name", required=True)
-    parser.add_argument("--run_id", required=True)
     parser.add_argument("--contract", required=True)
     return parser.parse_args()
 
@@ -52,7 +51,7 @@ if __name__ == "__main__":
     contract = parse_job_contract(args.contract)
 
     with open_spark_session(args.app_name) as spark_session:
-        loader = IcebergSynthLoader(spark_session, run_id=args.run_id)
+        loader = IcebergSynthLoader(spark_session, run_id=contract.run_id)
         loader.execute(
             tables=contract.build_table_contracts("iceberg"),
             comparison_contract=contract.comparison,

@@ -1,13 +1,13 @@
 from typing import Dict, List
 import networkx as nx
 
-from app.core.application.ports.table_dependency_planner_port import ITableDependencyPlanner
+from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
 from app.core.domain.entities import TableColumnSpec, TableSpec
 from app.core.domain.enums import RelationType
 from app.core.domain.validation_errors import InvalidForeignKeyError
 
 
-class NetworkXTableDependencyPlanner(ITableDependencyPlanner):
+class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
     @staticmethod
     def can_skip_planning(tables: List[TableSpec]) -> bool:
         return len(tables) == 1 and all(column.foreign_key is None for column in tables[0].columns)

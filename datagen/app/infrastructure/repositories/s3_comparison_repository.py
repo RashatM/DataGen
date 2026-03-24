@@ -6,14 +6,14 @@ from app.core.application.dto.comparison import (
     EngineCountSummary,
     EngineRatioSummary,
 )
-from app.core.application.ports.comparison_repository_port import IComparisonReportRepository
-from app.core.application.ports.object_storage_port import IObjectStorage
+from app.core.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
 from app.infrastructure.errors import ObjectPayloadFormatError
+from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 
 
-class S3ComparisonReportRepository(IComparisonReportRepository):
+class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
 
-    def __init__(self, object_storage: IObjectStorage):
+    def __init__(self, object_storage: S3StorageAdapter):
         self.object_storage = object_storage
 
     @staticmethod
