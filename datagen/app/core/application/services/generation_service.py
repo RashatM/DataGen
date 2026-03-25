@@ -2,10 +2,10 @@ from collections.abc import Iterator
 import random
 from typing import Any
 
+from app.core.application.internal.foreign_key_reference_tracker import ForeignKeyReferenceTracker
 from app.core.application.ports.generator_factory_port import DataGeneratorFactoryPort
 from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
 from app.core.application.ports.value_converter_port import ValueConverterPort
-from app.core.application.services.foreign_key_reference_tracker import ForeignKeyReferenceTracker
 from app.core.domain.entities import GeneratedTableData, GenerationRun, TableColumnSpec, TableSpec
 from app.core.domain.enums import RelationType
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
