@@ -33,15 +33,30 @@ class ExecutePipelineUseCase:
         start = time.monotonic()
         logger.info(f"Pipeline started: run_id={run_id}")
 
-        generated_tables = self.generation_service.generate(generation_run)
-        publication_result = self.artifact_publication_service.publish(
-            artifact_layout=artifact_layout,
-            generated_tables=generated_tables,
-        )
+        table_publications = []
+        try:
+            for table_data in self.generation_service.generate_tables(generation_run):
+                table_publications.append(
+                    self.artifact_publication_service.stage_table(
+                        artifact_layout=artifact_layout,
+                        table_data=table_data,
+                    )
+                )
+
+            comparison_query_uris = self.artifact_publication_service.stage_comparison_queries(
+                artifact_layout=artifact_layout,
+                table_publications=table_publications,
+            )
+            self.artifact_publication_service.commit_pointers(table_publications)
+        except Exception:
+            logger.exception(f"Pipeline artifact staging failed: run_id={run_id}")
+            self.artifact_publication_service.cleanup_run_artifacts(artifact_layout=artifact_layout)
+            raise
+
         execution_result = self.execution_runner.trigger_and_wait(
             artifact_layout=artifact_layout,
-            publications=publication_result.table_publications,
-            comparison_query_uris=publication_result.comparison_query_uris,
+            publications=table_publications,
+            comparison_query_uris=comparison_query_uris,
             timeout_seconds=self.execution_timeout_seconds,
         )
 

@@ -1,6 +1,6 @@
 from contextlib import closing
 import json
-from typing import Any
+from typing import Any, BinaryIO
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 
@@ -41,6 +41,21 @@ class S3StorageAdapter:
             Key=key,
             Body=body,
             ContentType="application/octet-stream",
+        )
+        return self.build_uri(key)
+
+    def upload_stream(
+        self,
+        key: str,
+        stream: BinaryIO,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        stream.seek(0)
+        self.s3_client.upload_fileobj(
+            Fileobj=stream,
+            Bucket=self.bucket,
+            Key=key,
+            ExtraArgs={"ContentType": content_type},
         )
         return self.build_uri(key)
 

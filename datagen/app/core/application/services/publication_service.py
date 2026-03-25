@@ -2,7 +2,6 @@ from typing import Any
 
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.dto.publication import EngineLoadPayload, EnginePair, TablePublication
-from app.core.application.dto.run_artifacts import ArtifactPublicationResult
 from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
 from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
 from app.core.application.ports.table_load_payload_builder_port import TableLoadPayloadBuilderPort
@@ -54,26 +53,21 @@ class ArtifactPublicationService:
             run_id=latest_staged_run_id,
         )
 
-    def stage_tables(
-            self,
-            artifact_layout: RunArtifactKeyLayout,
-            generated_tables: list[GeneratedTableData],
-    ) -> list[TablePublication]:
-        table_publications = []
-
-        for table_data in generated_tables:
-            table_publication = self.repository.stage_table_artifacts(
-                table_data=table_data,
-                artifact_layout=artifact_layout,
-                engine_load_payloads=self.build_engine_load_payloads(table_data),
-            )
-            table_publications.append(table_publication)
-            table = table_data.table
-            logger.info(
-                f"Artifacts uploaded: table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
-            )
-
-        return table_publications
+    def stage_table(
+        self,
+        artifact_layout: RunArtifactKeyLayout,
+        table_data: GeneratedTableData,
+    ) -> TablePublication:
+        table_publication = self.repository.stage_table_artifacts(
+            table_data=table_data,
+            artifact_layout=artifact_layout,
+            engine_load_payloads=self.build_engine_load_payloads(table_data),
+        )
+        table = table_data.table
+        logger.info(
+            f"Artifacts uploaded: table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
+        )
+        return table_publication
 
     def stage_comparison_queries(
         self,
@@ -88,22 +82,7 @@ class ArtifactPublicationService:
         logger.info(f"Comparison queries uploaded: run_id={artifact_layout.run_id}")
         return comparison_query_uris
 
-    def publish(
-            self,
-            artifact_layout: RunArtifactKeyLayout,
-            generated_tables: list[GeneratedTableData]
-    ) -> ArtifactPublicationResult:
-        try:
-            table_publications = self.stage_tables(artifact_layout, generated_tables)
-            comparison_query_uris = self.stage_comparison_queries(
-                artifact_layout=artifact_layout,
-                table_publications=table_publications
-            )
-        except Exception:
-            logger.exception(f"Artifact upload failed: run_id={artifact_layout.run_id}")
-            self.cleanup_run_artifacts(artifact_layout=artifact_layout)
-            raise
-
+    def commit_pointers(self, table_publications: list[TablePublication]) -> None:
         for publication in table_publications:
             self.repository.commit_pointer(
                 schema_name=publication.schema_name,
@@ -111,8 +90,3 @@ class ArtifactPublicationService:
                 run_id=publication.run_id,
             )
             logger.info(f"Pointer updated: table={publication.schema_name}.{publication.table_name}, run_id={publication.run_id}")
-
-        return ArtifactPublicationResult(
-            table_publications=table_publications,
-            comparison_query_uris=comparison_query_uris,
-        )

@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Any
+from tempfile import TemporaryFile
+from typing import Any, BinaryIO
 from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -25,12 +26,11 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         self.object_storage = object_storage
         self.schema_builder = schema_builder
 
-    def serialize_parquet(self, table_data: GeneratedTableData) -> bytes:
+    def write_parquet(self, table_data: GeneratedTableData, destination: BinaryIO) -> None:
         schema = self.schema_builder.build_schema(table_data.table)
         table = pa.Table.from_pydict(table_data.generated_data, schema=schema)
-        sink = pa.BufferOutputStream()
-        pq.write_table(table, sink, compression="snappy")
-        return sink.getvalue().to_pybytes()
+        pq.write_table(table, destination, compression="snappy")
+        destination.flush()
 
     @staticmethod
     def deserialize_parquet(payload: bytes) -> dict[str, list[Any]]:
@@ -40,8 +40,12 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
     def stage_data_artifact(self, table_data: GeneratedTableData, artifact_layout: RunArtifactKeyLayout) -> str:
         table = table_data.table
         data_key = artifact_layout.data_key(table.schema_name, table.table_name)
-        parquet_bytes = self.serialize_parquet(table_data)
-        return self.object_storage.put_bytes(key=data_key, body=parquet_bytes)
+        with TemporaryFile(mode="w+b") as temp_file:
+            self.write_parquet(table_data, temp_file)
+            return self.object_storage.upload_stream(
+                key=data_key,
+                stream=temp_file,
+            )
 
     def stage_engine_artifact(
         self,

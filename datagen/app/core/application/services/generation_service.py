@@ -1,10 +1,12 @@
+from collections.abc import Iterator
 import random
 from typing import Any
 
 from app.core.application.ports.generator_factory_port import DataGeneratorFactoryPort
 from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
 from app.core.application.ports.value_converter_port import ValueConverterPort
-from app.core.domain.entities import TableColumnSpec, GeneratedTableData, GenerationRun
+from app.core.application.services.foreign_key_reference_tracker import ForeignKeyReferenceTracker
+from app.core.domain.entities import GeneratedTableData, GenerationRun, TableColumnSpec, TableSpec
 from app.core.domain.enums import RelationType
 from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.logger import generation_logger
@@ -84,44 +86,53 @@ class DataGenerationService:
                 f"Generated values for column {table_column.name} are not unique in final output"
             )
 
-    def generate(self, generation_run: GenerationRun) -> list[GeneratedTableData]:
-        ordered_tables = self.table_dependency_planner.plan(generation_run.tables)
+    def generate_table_data(
+        self,
+        table: TableSpec,
+        fk_reference_tracker: ForeignKeyReferenceTracker,
+    ) -> GeneratedTableData:
+        generated_columns: dict[str, list[Any]] = {}
 
-        generated_table_data = {}
-        table_data_results = []
+        for table_column in table.columns:
+            fk_info = table_column.foreign_key
+            if fk_info:
+                referenced_values = fk_reference_tracker.get_parent_values(table_column)
+                generated_columns[table_column.name] = self.generate_foreign_key_values(
+                    total_rows=table.total_rows,
+                    table_column=table_column,
+                    referenced_values=referenced_values,
+                )
+            else:
+                generated_columns[table_column.name] = self.generate_column_values(
+                    total_rows=table.total_rows,
+                    table_column=table_column,
+                )
+
+            self.validate_generated_values(
+                table_column=table_column,
+                values=generated_columns[table_column.name],
+            )
+
+        logger.info(
+            f"Table generated: table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
+        )
+        return GeneratedTableData(
+            table=table,
+            generated_data=generated_columns,
+        )
+
+    def generate_tables(self, generation_run: GenerationRun) -> Iterator[GeneratedTableData]:
+        ordered_tables = self.table_dependency_planner.plan(generation_run.tables)
+        fk_reference_tracker = ForeignKeyReferenceTracker.build(ordered_tables)
 
         for table in ordered_tables:
-            generated_columns = {}
-
-            for table_column in table.columns:
-                fk_info = table_column.foreign_key
-                if fk_info:
-                    fk_data = generated_table_data[fk_info.full_table_name][fk_info.column_name]
-                    generated_columns[table_column.name] = self.generate_foreign_key_values(
-                        total_rows=table.total_rows,
-                        table_column=table_column,
-                        referenced_values=fk_data,
-                    )
-                else:
-                    generated_columns[table_column.name] = self.generate_column_values(
-                        total_rows=table.total_rows,
-                        table_column=table_column,
-                    )
-
-                self.validate_generated_values(
-                    table_column=table_column,
-                    values=generated_columns[table_column.name],
-                )
-
-            generated_table_data[table.full_table_name] = generated_columns
-            table_data_results.append(
-                GeneratedTableData(
-                    table=table,
-                    generated_data=generated_columns,
-                )
+            table_data = self.generate_table_data(
+                table=table,
+                fk_reference_tracker=fk_reference_tracker,
             )
-            logger.info(
-                f"Table generated: table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
-            )
+            fk_reference_tracker.remember_parent_table(table, table_data.generated_data)
+            yield table_data
+            fk_reference_tracker.mark_child_table_processed(table)
 
-        return table_data_results
+    def generate(self, generation_run: GenerationRun) -> list[GeneratedTableData]:
+        return list(self.generate_tables(generation_run))
