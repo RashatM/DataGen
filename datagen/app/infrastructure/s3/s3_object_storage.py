@@ -1,3 +1,4 @@
+from contextlib import closing
 import json
 from typing import Any
 from botocore.exceptions import ClientError
@@ -55,8 +56,8 @@ class S3StorageAdapter:
             if self.is_not_found_error(error):
                 raise ObjectNotFoundError(f"Object not found for key={key}") from error
             raise
-        body = response["Body"].read()
-        return body
+        with closing(response["Body"]) as stream:
+            return stream.read()
 
     def get_json(self, key: str) -> dict[str, Any]:
         body = self.get_bytes(key)
@@ -97,3 +98,6 @@ class S3StorageAdapter:
                 deleted_total += len(response.get("Deleted", []))
 
         return deleted_total
+
+    def close(self) -> None:
+        self.s3_client.close()
