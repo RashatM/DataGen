@@ -96,7 +96,7 @@ class DataGenerationService:
         for table_column in table.columns:
             fk_info = table_column.foreign_key
             if fk_info:
-                referenced_values = fk_reference_tracker.get_parent_values(table_column)
+                referenced_values = fk_reference_tracker.get_cached_parent_values(table_column)
                 generated_columns[table_column.name] = self.generate_foreign_key_values(
                     total_rows=table.total_rows,
                     table_column=table_column,
@@ -123,16 +123,16 @@ class DataGenerationService:
 
     def generate_tables(self, generation_run: GenerationRun) -> Iterator[GeneratedTableData]:
         ordered_tables = self.table_dependency_planner.plan(generation_run.tables)
-        fk_reference_tracker = ForeignKeyReferenceTracker.build(ordered_tables)
+        fk_reference_tracker = ForeignKeyReferenceTracker.from_ordered_tables(ordered_tables)
 
         for table in ordered_tables:
             table_data = self.generate_table_data(
                 table=table,
                 fk_reference_tracker=fk_reference_tracker,
             )
-            fk_reference_tracker.remember_parent_table(table, table_data.generated_data)
+            fk_reference_tracker.cache_parent_values(table, table_data.generated_data)
             yield table_data
-            fk_reference_tracker.mark_child_table_processed(table)
+            fk_reference_tracker.release_parent_cache_for_child(table)
 
     def generate(self, generation_run: GenerationRun) -> list[GeneratedTableData]:
         return list(self.generate_tables(generation_run))

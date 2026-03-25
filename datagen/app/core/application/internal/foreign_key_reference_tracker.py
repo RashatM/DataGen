@@ -15,33 +15,33 @@ CachedColumnValues = dict[ColumnName, GeneratedColumnValues]
 class ParentTableBuildState:
     """Временное состояние родительской таблицы на этапе подготовки трекера.
 
-    fk_columns_needed:
+    required_parent_columns:
         Имена колонок родительской таблицы, значения которых потом будут использованы
         для генерации внешних ключей в дочерних таблицах.
-    dependent_table_names:
+    dependent_tables:
         Полные имена дочерних таблиц, которые зависят от этой родительской таблицы
         хотя бы по одному внешнему ключу.
     """
 
-    fk_columns_needed: set[ColumnName] = field(default_factory=set)
-    dependent_table_names: set[DependentTableName] = field(default_factory=set)
+    required_parent_columns: set[ColumnName] = field(default_factory=set)
+    dependent_tables: set[DependentTableName] = field(default_factory=set)
 
 
 @dataclass(slots=True)
 class ParentTableReferenceState:
     """Состояние родительской таблицы во время генерации данных.
 
-    referenced_columns:
+    required_columns:
         Какие колонки нужно держать в кэше, потому что на них ссылаются внешние ключи.
-    remaining_dependent_tables:
+    remaining_dependent_table_count:
         Сколько дочерних таблиц ещё впереди будут читать значения из этого кэша.
-    cached_columns:
+    cached_values_by_column:
         Уже сгенерированные значения нужных колонок родительской таблицы.
     """
 
-    referenced_columns: frozenset[ColumnName]
-    remaining_dependent_tables: int
-    cached_columns: CachedColumnValues = field(default_factory=dict)
+    required_columns: frozenset[ColumnName]
+    remaining_dependent_table_count: int
+    cached_values_by_column: CachedColumnValues = field(default_factory=dict)
 
 
 class ForeignKeyReferenceTracker:
@@ -59,7 +59,7 @@ class ForeignKeyReferenceTracker:
         self.state_by_parent_table = state_by_parent_table
 
     @classmethod
-    def build(cls, ordered_tables: list[TableSpec]) -> "ForeignKeyReferenceTracker":
+    def from_ordered_tables(cls, ordered_tables: list[TableSpec]) -> "ForeignKeyReferenceTracker":
         """Подготавливает начальное состояние трекера до старта генерации.
 
         Метод проходит по таблицам в уже рассчитанном порядке зависимостей и заранее
@@ -75,7 +75,7 @@ class ForeignKeyReferenceTracker:
         for table in ordered_tables:
             # Одна дочерняя таблица может ссылаться на одну родительскую через несколько FK-колонок.
             # Для счётчика зависимых таблиц учитываем её один раз, но сохраняем все нужные колонки.
-            parent_tables_used_by_current_child: set[FullTableName] = set()
+            referenced_parent_tables: set[FullTableName] = set()
 
             for table_column in table.columns:
                 foreign_key_spec = table_column.foreign_key
@@ -86,22 +86,22 @@ class ForeignKeyReferenceTracker:
                     foreign_key_spec.full_table_name,
                     ParentTableBuildState(),
                 )
-                parent_build_state.fk_columns_needed.add(foreign_key_spec.column_name)
-                parent_tables_used_by_current_child.add(foreign_key_spec.full_table_name)
+                parent_build_state.required_parent_columns.add(foreign_key_spec.column_name)
+                referenced_parent_tables.add(foreign_key_spec.full_table_name)
 
-            for parent_table_name in parent_tables_used_by_current_child:
-                build_state_by_parent_table[parent_table_name].dependent_table_names.add(table.full_table_name)
+            for parent_table_name in referenced_parent_tables:
+                build_state_by_parent_table[parent_table_name].dependent_tables.add(table.full_table_name)
 
         state_by_parent_table = {
             parent_table_name: ParentTableReferenceState(
-                referenced_columns=frozenset(parent_build_state.fk_columns_needed),
-                remaining_dependent_tables=len(parent_build_state.dependent_table_names),
+                required_columns=frozenset(parent_build_state.required_parent_columns),
+                remaining_dependent_table_count=len(parent_build_state.dependent_tables),
             )
             for parent_table_name, parent_build_state in build_state_by_parent_table.items()
         }
         return cls(state_by_parent_table)
 
-    def get_parent_values(self, table_column: TableColumnSpec) -> GeneratedColumnValues:
+    def get_cached_parent_values(self, table_column: TableColumnSpec) -> GeneratedColumnValues:
         """Возвращает значения родительской колонки для одной FK-колонки дочерней таблицы.
 
         Используется в момент генерации внешнего ключа, когда дочерней колонке нужно
@@ -113,14 +113,14 @@ class ForeignKeyReferenceTracker:
         if not parent_state:
             raise RuntimeError(f"Missing foreign key tracker state for table {foreign_key_spec.full_table_name}")
 
-        cached_parent_values = parent_state.cached_columns.get(foreign_key_spec.column_name)
+        cached_parent_values = parent_state.cached_values_by_column.get(foreign_key_spec.column_name)
         if cached_parent_values is None:
             raise RuntimeError(
                 f"Missing cached foreign key values for {foreign_key_spec.full_table_name}.{foreign_key_spec.column_name}"
             )
         return cached_parent_values
 
-    def remember_parent_table(
+    def cache_parent_values(
         self,
         table: TableSpec,
         generated_columns_by_name: dict[str, GeneratedColumnValues],
@@ -136,12 +136,12 @@ class ForeignKeyReferenceTracker:
         if not parent_state:
             return
 
-        parent_state.cached_columns = {
+        parent_state.cached_values_by_column = {
             column_name: generated_columns_by_name[column_name]
-            for column_name in parent_state.referenced_columns
+            for column_name in parent_state.required_columns
         }
 
-    def mark_child_table_processed(self, table: TableSpec) -> None:
+    def release_parent_cache_for_child(self, table: TableSpec) -> None:
         """Обновляет счётчики зависимостей после обработки дочерней таблицы.
 
         Метод уменьшает число оставшихся зависимых таблиц у всех родительских таблиц,
@@ -160,8 +160,8 @@ class ForeignKeyReferenceTracker:
             if not parent_state:
                 raise RuntimeError(f"Missing foreign key tracker state for table {parent_table_name}")
 
-            if parent_state.remaining_dependent_tables > 1:
-                parent_state.remaining_dependent_tables -= 1
+            if parent_state.remaining_dependent_table_count > 1:
+                parent_state.remaining_dependent_table_count -= 1
                 continue
 
             del self.state_by_parent_table[parent_table_name]
