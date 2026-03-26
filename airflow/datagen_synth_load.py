@@ -24,7 +24,7 @@ HADOOP_CLUSTER_CONFIG_VARIABLE = "datagen_hadoop_cluster_config"
 SPARK_CONF_DIRS = {
     "BDA51": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda51/spark-conf",
     "BDA61": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda61/spark-conf",
-    "BDA71": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda71/spark-conf"
+    "BDA71": "/opt/airflow/dags/repo/configs/platform_services/s3_to_hadoop/bda71/spark-conf",
 }
 
 
