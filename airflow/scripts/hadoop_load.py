@@ -59,8 +59,6 @@ if __name__ == "__main__":
 
     with open_spark_session(args.app_name) as spark_session:
         loader = HadoopSynthLoader(spark_session, run_id=contract.run_id)
-        loader.execute(
-            tables=contract.build_table_contracts("hive"),
-            comparison_contract=contract.comparison,
-            engine="hive",
-        )
+        tables = contract.build_table_contracts("hive")
+        loader.publish_tables(tables)
+        loader.materialize_comparison_result(contract.comparison, "hive")

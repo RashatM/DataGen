@@ -211,7 +211,8 @@ class ResultComparator:
             f"  iceberg: {metrics.exclusive_row_ratio.iceberg}"
         )
 
-    def execute(self, run_id: str, comparison_contract: ComparisonContract) -> None:
+    def compare_results(self, run_id: str, comparison_contract: ComparisonContract) -> None:
+        """Считывает подготовленные parquet-результаты двух engine и пишет comparison report."""
         hive_contract = comparison_contract.get_engine_contract("hive")
         iceberg_contract = comparison_contract.get_engine_contract("iceberg")
 
@@ -246,7 +247,7 @@ if __name__ == "__main__":
         ResultComparator(
             spark=spark_session,
             report_builder=ComparisonReportBuilder(),
-        ).execute(
+        ).compare_results(
             run_id=contract.run_id,
             comparison_contract=contract.comparison,
         )
