@@ -41,7 +41,7 @@ def open_spark_session(app_name: str):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="DataGen: S3 to Hadoop/Hive loader")
+    parser = argparse.ArgumentParser(description="DataGen: S3 to Hive loader")
     parser.add_argument("--app_name", required=True)
     parser.add_argument("--contract", required=True)
     return parser.parse_args()

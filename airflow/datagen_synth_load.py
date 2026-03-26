@@ -9,7 +9,7 @@ import os
 from plugins.platform_services.operators.templated_spark_operator import PlatformTemplatedSparkOperator
 
 DAG_ID = "datagen_synth_load"
-DAG_DESCRIPTION = "DataGen: loads synthetic data from S3 to Iceberg and Hadoop"
+DAG_DESCRIPTION = "DataGen: loads synthetic data from S3 to Iceberg and Hive"
 DAG_TAGS = ["datagen", "synthetic"]
 SCHEDULE_INTERVAL = None
 EMAIL_LIST = []
@@ -217,6 +217,7 @@ with DAG(
         name="datagen_load_hive_tables",
         conn_id="spark_k8s",
         config_callable=get_hive_spark_config,
+        retries=0,
         application=HIVE_LOADER_SCRIPT,
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
