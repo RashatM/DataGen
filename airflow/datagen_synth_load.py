@@ -198,36 +198,36 @@ with DAG(
 
     # Один Spark job на все таблицы — скрипт итерирует таблицы сам
     # Rollback через tmp таблицу: создать _tmp → загрузить → rename
-    iceberg_load_task = PlatformTemplatedSparkOperator(
-        task_id="iceberg_load",
-        name="datagen_iceberg_load",
+    load_iceberg_tables_task = PlatformTemplatedSparkOperator(
+        task_id="load_iceberg_tables",
+        name="datagen_load_iceberg_tables",
         conn_id="spark_k8s",
         config_callable=get_iceberg_spark_config,
         retries=0,
         application=ICEBERG_LOADER_SCRIPT,
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
-            "--app_name", "datagen_iceberg_{{ dag_run.conf['run_id'] }}",
+            "--app_name", "datagen_load_iceberg_{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
         ],
     )
 
-    hadoop_load_task = PlatformTemplatedSparkOperator(
-        task_id="hadoop_load",
-        name="datagen_hadoop_load",
+    load_hive_tables_task = PlatformTemplatedSparkOperator(
+        task_id="load_hive_tables",
+        name="datagen_load_hive_tables",
         conn_id="spark_k8s",
         config_callable=get_hadoop_spark_config,
         application=HADOOP_LOADER_SCRIPT,
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
-            "--app_name", "datagen_hive_{{ dag_run.conf['run_id'] }}",
+            "--app_name", "datagen_load_hive_{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
         ],
     )
 
-    compare_results_task = PlatformTemplatedSparkOperator(
-        task_id="compare_results",
-        name="datagen_compare_results",
+    compare_query_results_task = PlatformTemplatedSparkOperator(
+        task_id="compare_query_results",
+        name="datagen_compare_query_results",
         conn_id="spark_k8s",
         config_callable=get_compare_spark_config,
         retries=0,
@@ -249,7 +249,7 @@ with DAG(
         trigger_rule="one_failed",
     )
 
-    # iceberg и hadoop параллельно после валидации
-    start_task >> validate_contract_task >> [iceberg_load_task, hadoop_load_task]
-    [iceberg_load_task, hadoop_load_task] >> compare_results_task >> job_succeeded
-    [iceberg_load_task, hadoop_load_task, compare_results_task] >> job_failed
+    # Загрузка таблиц по engine идёт параллельно, потом сравниваются подготовленные query results.
+    start_task >> validate_contract_task >> [load_iceberg_tables_task, load_hive_tables_task]
+    [load_iceberg_tables_task, load_hive_tables_task] >> compare_query_results_task >> job_succeeded
+    [load_iceberg_tables_task, load_hive_tables_task, compare_query_results_task] >> job_failed

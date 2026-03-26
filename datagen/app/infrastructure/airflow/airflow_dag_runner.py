@@ -14,6 +14,7 @@ logger = airflow_logger
 
 
 class AirflowDagRunner(ExecutionRunnerPort):
+    HEARTBEAT_LOG_INTERVAL_SECONDS = 120
 
     def __init__(
         self,
@@ -60,12 +61,14 @@ class AirflowDagRunner(ExecutionRunnerPort):
         start = time.monotonic()
         deadline = start + timeout_seconds
         previous_state = None
+        last_heartbeat_at = start
 
         while time.monotonic() < deadline:
             dag_run_state = self.client.get_dag_run_state(dag_run_id)
+            now = time.monotonic()
 
             if dag_run_state.is_terminal():
-                total = int(time.monotonic() - start)
+                total = int(now - start)
                 logger.info(
                     f"DAG reached terminal state: dag_run_id={dag_run_id}, "
                     f"state={dag_run_state.state}, total={total}s"
@@ -73,12 +76,20 @@ class AirflowDagRunner(ExecutionRunnerPort):
                 return self.to_execution_result(run_id, dag_run_state)
 
             if dag_run_state.state != previous_state:
-                elapsed = int(time.monotonic() - start)
+                elapsed = int(now - start)
                 logger.info(
                     f"DAG state updated: dag_run_id={dag_run_id}, "
                     f"state={dag_run_state.state}, elapsed={elapsed}s"
                 )
                 previous_state = dag_run_state.state
+                last_heartbeat_at = now
+            elif now - last_heartbeat_at >= self.HEARTBEAT_LOG_INTERVAL_SECONDS:
+                elapsed = int(now - start)
+                logger.info(
+                    f"DAG still running: dag_run_id={dag_run_id}, "
+                    f"state={dag_run_state.state}, elapsed={elapsed}s"
+                )
+                last_heartbeat_at = now
             time.sleep(poll_interval)
 
         logger.error(
@@ -110,6 +121,10 @@ class AirflowDagRunner(ExecutionRunnerPort):
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
         logger.info(f"DAG trigger accepted: dag_run_id={dag_run_id}")
+        logger.info(
+            f"DAG submitted successfully. Waiting for terminal state: "
+            f"dag_run_id={dag_run_id}, timeout={timeout_seconds}s"
+        )
 
         return self.poll_until_terminal(
             run_id=artifact_layout.run_id,
