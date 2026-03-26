@@ -1,16 +1,12 @@
-import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-DATAGEN_ROOT = Path(__file__).resolve().parent
-if str(DATAGEN_ROOT) not in sys.path:
-    sys.path.insert(0, str(DATAGEN_ROOT))
-
 from app.core.application.use_cases.execute_pipeline import ExecutePipelineUseCase
 from app.infrastructure.converters.schema_converter import convert_to_generation_run
+from app.infrastructure.input.excel_raw_table_loader import load_raw_tables
 from app.providers import (
     provide_artifact_publication_service,
     provide_comparison_report_service,
@@ -21,7 +17,6 @@ from app.providers import (
 )
 from app.shared.config import load_app_settings
 from app.shared.logger import pipeline_logger
-from tools.excel_to_json import resolve_raw_tables
 
 logger = pipeline_logger
 
@@ -44,10 +39,13 @@ def run_app(
         s3_client=s3_client,
     )
     try:
-        resolved_raw_tables = resolve_raw_tables(raw_tables=raw_tables)
+        loaded_raw_tables = load_raw_tables(
+            raw_tables=raw_tables,
+            input_path=Path(__file__).resolve().parent / "params",
+        )
         generation_run = convert_to_generation_run(
             run_id=generate_run_id(),
-            raw_tables=resolved_raw_tables,
+            raw_tables=loaded_raw_tables,
         )
 
         use_case = ExecutePipelineUseCase(

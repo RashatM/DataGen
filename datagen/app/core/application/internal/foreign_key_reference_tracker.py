@@ -73,10 +73,6 @@ class ForeignKeyReferenceTracker:
         build_state_by_parent_table: dict[FullTableName, ParentTableBuildState] = {}
 
         for table in ordered_tables:
-            # Одна дочерняя таблица может ссылаться на одну родительскую через несколько FK-колонок.
-            # Для счётчика зависимых таблиц учитываем её один раз, но сохраняем все нужные колонки.
-            referenced_parent_tables: set[FullTableName] = set()
-
             for table_column in table.columns:
                 foreign_key_spec = table_column.foreign_key
                 if not foreign_key_spec:
@@ -87,10 +83,7 @@ class ForeignKeyReferenceTracker:
                     ParentTableBuildState(),
                 )
                 parent_build_state.required_parent_columns.add(foreign_key_spec.column_name)
-                referenced_parent_tables.add(foreign_key_spec.full_table_name)
-
-            for parent_table_name in referenced_parent_tables:
-                build_state_by_parent_table[parent_table_name].dependent_tables.add(table.full_table_name)
+                parent_build_state.dependent_tables.add(table.full_table_name)
 
         state_by_parent_table = {
             parent_table_name: ParentTableReferenceState(
@@ -114,16 +107,17 @@ class ForeignKeyReferenceTracker:
             raise RuntimeError(f"Missing foreign key tracker state for table {foreign_key_spec.full_table_name}")
 
         cached_parent_values = parent_state.cached_values_by_column.get(foreign_key_spec.column_name)
-        if cached_parent_values is None:
-            raise RuntimeError(
-                f"Missing cached foreign key values for {foreign_key_spec.full_table_name}.{foreign_key_spec.column_name}"
-            )
-        return cached_parent_values
+        if cached_parent_values is not None:
+            return cached_parent_values
+
+        raise RuntimeError(
+            f"Missing cached foreign key values for {foreign_key_spec.full_table_name}.{foreign_key_spec.column_name}"
+        )
 
     def cache_parent_values(
-        self,
-        table: TableSpec,
-        generated_columns_by_name: dict[str, GeneratedColumnValues],
+            self,
+            table: TableSpec,
+            generated_columns_by_name: dict[str, GeneratedColumnValues],
     ) -> None:
         """Сохраняет в кэше только нужные колонки только что сгенерированной родительской таблицы.
 
