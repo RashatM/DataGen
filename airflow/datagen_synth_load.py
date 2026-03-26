@@ -117,12 +117,7 @@ def get_iceberg_spark_config(**context) -> dict[str, str]:
 
 
 def get_hadoop_cluster_config() -> dict[str, Any]:
-    # cluster_config = Variable.get(HADOOP_CLUSTER_CONFIG_VARIABLE, deserialize_json=True)
-    cluster_config = {
-        "cluster_name": "BDA71",
-        "kerberos_principal": "t_bdp_bda_repl@MSK.AD2012.LOC",
-        "kerberos_keytab_path": "/tmp/t_bdp_bda_repl.keytab"
-    }
+    cluster_config = Variable.get(HADOOP_CLUSTER_CONFIG_VARIABLE, deserialize_json=True)
     required_keys = ["cluster_name", "kerberos_principal", "kerberos_keytab_path"]
     missing_keys = [key for key in required_keys if not cluster_config.get(key)]
 

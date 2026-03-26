@@ -89,4 +89,8 @@ class ArtifactPublicationService:
                 table_name=publication.table_name,
                 run_id=publication.run_id,
             )
-            logger.info(f"Pointer updated: table={publication.schema_name}.{publication.table_name}, run_id={publication.run_id}")
+            logger.info(
+                f"Pointer updated: "
+                f"table={publication.schema_name}.{publication.table_name}, "
+                f"run_id={publication.run_id}"
+            )

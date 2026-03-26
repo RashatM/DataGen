@@ -17,7 +17,7 @@ class ValueConstraints(Constraints):
 
 @dataclass
 class OutputConstraints:
-    null_ratio: int
+    null_ratio: float
     is_unique: bool
 
 
@@ -51,8 +51,8 @@ class DateConstraints(ValueConstraints):
 
 @dataclass
 class TimestampConstraints(ValueConstraints):
-    min_timestamp: datetime = datetime(2024, 1, 1, 0, 0, 0)
-    max_timestamp: datetime = datetime(2024, 12, 31, 0, 0, 0)
+    min_timestamp: datetime = datetime(2024, 1, 1)
+    max_timestamp: datetime = datetime(2024, 12, 31)
     timestamp_format: str = "%Y-%m-%d %H:%M:%S"
 
 

@@ -293,9 +293,11 @@ def normalize_constraints(raw_constraints: dict[str, Any], generator_type: str) 
             raise ValueError(f"unsupported constraint {raw_key!r} for {generator_type}. Supported: {supported}")
 
         if key == "null_ratio":
-            if isinstance(raw_value, bool):
-                raise ValueError("null_ratio must be integer from 0 to 100")
-            constraints[key] = int(raw_value)
+            if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
+                raise ValueError("null_ratio must be a number in [0, 1]")
+            if not 0 <= float(raw_value) <= 1:
+                raise ValueError("null_ratio must be in [0, 1]")
+            constraints[key] = raw_value
             continue
 
         if key == "is_unique":
@@ -340,18 +342,18 @@ def apply_legacy_string_flags(constraints: dict[str, Any], legacy_flags: dict[st
     digits_only = legacy_flags.get("digits_only")
     chars_only = legacy_flags.get("chars_only")
 
-    if lowercase is True:
+    if lowercase:
         constraints.setdefault("case_mode", CaseMode.LOWER.value)
-    if uppercase is True:
+    if uppercase:
         constraints.setdefault("case_mode", CaseMode.UPPER.value)
-    if lowercase is True and uppercase is True:
+    if lowercase and uppercase:
         raise ValueError("lowercase=true and uppercase=true cannot be used together")
 
-    if digits_only is True:
+    if digits_only:
         constraints.setdefault("character_set", CharacterSet.DIGITS.value)
-    if chars_only is True:
+    if chars_only:
         constraints.setdefault("character_set", CharacterSet.LETTERS.value)
-    if digits_only is True and chars_only is True:
+    if digits_only and chars_only:
         raise ValueError("digits_only=true and chars_only=true cannot be used together")
 
 

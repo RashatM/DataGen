@@ -29,6 +29,19 @@ LEGACY_MAPPING = {
 FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
 
 
+def normalize_null_ratio(column_name: str, raw_null_ratio: Any) -> float:
+    if isinstance(raw_null_ratio, bool) or not isinstance(raw_null_ratio, (int, float)):
+        raise SchemaValidationError(f"Column {column_name} has invalid null_ratio: {raw_null_ratio!r}")
+
+    null_ratio = float(raw_null_ratio)
+    if 0 <= null_ratio <= 1:
+        return null_ratio
+
+    raise SchemaValidationError(
+        f"Column {column_name} has null_ratio outside [0, 1]: {raw_null_ratio}"
+    )
+
+
 def resolve_data_types(column_data: dict, constraints_data: dict) -> tuple[DataType, DataType]:
     generator_raw = column_data.get("generator_data_type", column_data.get("gen_data_type"))
     output_raw = column_data.get("output_data_type")
@@ -91,12 +104,7 @@ def convert_to_table_spec(table_data: dict) -> TableSpec:
                     f"Unsupported relation_type for column {column_name}: {foreign_key_data.get('relation_type')}"
                 ) from exc
 
-        null_ratio = constraints_data.get("null_ratio", 0)
-        if not isinstance(null_ratio, (int, float)):
-            raise SchemaValidationError(f"Column {column_name} has invalid null_ratio: {null_ratio!r}")
-        if not 0 <= null_ratio <= 100:
-            raise SchemaValidationError(f"Column {column_name} has null_ratio outside [0, 100]: {null_ratio}")
-        null_ratio = int(null_ratio)
+        null_ratio = normalize_null_ratio(column_name, constraints_data.get("null_ratio", 0))
         is_unique = (
             constraints_data.get("is_unique", constraints_data.get("unique", False))
             if not is_primary_key
@@ -173,8 +181,8 @@ def convert_to_table_spec(table_data: dict) -> TableSpec:
             normalized_timestamp_values = tuple(parse(v) for v in allowed_values) if allowed_values else None
             constraints = TimestampConstraints(
                 allowed_values=normalized_timestamp_values,
-                min_timestamp=parse(min_timestamp) if min_timestamp else datetime(datetime.now().year, 1, 1, 0, 0, 0),
-                max_timestamp=parse(max_timestamp) if max_timestamp else datetime(datetime.now().year, 12, 31, 0, 0, 0),
+                min_timestamp=parse(min_timestamp) if min_timestamp else datetime(datetime.now().year, 1, 1),
+                max_timestamp=parse(max_timestamp) if max_timestamp else datetime(datetime.now().year, 12, 31),
                 timestamp_format=constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
             )
 

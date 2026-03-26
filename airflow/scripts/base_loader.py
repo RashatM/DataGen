@@ -13,7 +13,6 @@ from pyspark.sql.types import (
     LongType,
     MapType,
     ShortType,
-    StringType,
     StructType,
 )
 

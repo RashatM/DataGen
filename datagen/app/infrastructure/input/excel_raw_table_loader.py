@@ -63,7 +63,7 @@ class ExcelToRawTablesConverter:
 
         for table_meta in table_specs:
             try:
-                raw_tables.append(self._build_table_payload(xls, table_meta))
+                raw_tables.append(self.build_table_payload(xls, table_meta))
             except WorkbookValidationError as exc:
                 issues.extend(exc.issues)
 
@@ -79,7 +79,7 @@ class ExcelToRawTablesConverter:
         return raw_tables
 
     def _read_table_specs(self, xls: pd.ExcelFile) -> list[TableMeta]:
-        tables_df = self._read_sheet(xls, SHEET_TABLES, header=None)
+        tables_df = self.read_sheet(xls, SHEET_TABLES, header=None)
         try:
             header_row, header_map = find_tables_header(tables_df)
         except ValueError as exc:
@@ -122,8 +122,8 @@ class ExcelToRawTablesConverter:
 
         return table_specs
 
-    def _build_table_payload(self, xls: pd.ExcelFile, table_meta: TableMeta) -> dict[str, Any]:
-        sheet_df = normalize_sheet(self._read_sheet(xls, table_meta.sheet_name))
+    def build_table_payload(self, xls: pd.ExcelFile, table_meta: TableMeta) -> dict[str, Any]:
+        sheet_df = normalize_sheet(self.read_sheet(xls, table_meta.sheet_name))
         missing_fields = sorted(DATA_SHEET_REQUIRED_FIELDS - set(sheet_df.columns))
         if missing_fields:
             raise WorkbookValidationError(
@@ -142,7 +142,7 @@ class ExcelToRawTablesConverter:
             excel_row = int(row_index) + 2
 
             try:
-                columns.append(self._build_column_payload(table_meta, row))
+                columns.append(self.build_column_payload(table_meta, row))
             except ValueError as exc:
                 issues.append(format_issue(table_meta.sheet_name, str(exc), row=excel_row))
 
@@ -159,7 +159,8 @@ class ExcelToRawTablesConverter:
             "columns": columns,
         }
 
-    def _build_column_payload(self, table_meta: TableMeta, row: pd.Series) -> dict[str, Any]:
+    @staticmethod
+    def build_column_payload(table_meta: TableMeta, row: pd.Series) -> dict[str, Any]:
         column_name = normalize_text(row.get("column_name"))
         if not column_name:
             raise ValueError("column_name must not be empty")
@@ -193,7 +194,7 @@ class ExcelToRawTablesConverter:
         return payload
 
     @staticmethod
-    def _read_sheet(
+    def read_sheet(
         xls: pd.ExcelFile,
         sheet_name: str,
         header: int | None = 0,

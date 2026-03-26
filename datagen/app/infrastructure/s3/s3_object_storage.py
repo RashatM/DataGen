@@ -1,6 +1,6 @@
 from contextlib import closing
 import json
-from typing import Any, BinaryIO
+from typing import Any, IO
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 
@@ -20,17 +20,17 @@ class S3StorageAdapter:
         self.s3_client.put_object(
             Bucket=self.bucket,
             Key=key,
-            Body=content.encode("utf-8"),
+            Body=content.encode(),
             ContentType="text/plain; charset=utf-8",
         )
         return self.build_uri(key)
 
     def put_json(self, key: str, payload: dict[str, Any]) -> str:
-        content = json.dumps(payload, ensure_ascii=True, indent=2)
+        content = json.dumps(payload, indent=2)
         self.s3_client.put_object(
             Bucket=self.bucket,
             Key=key,
-            Body=content.encode("utf-8"),
+            Body=content.encode(),
             ContentType="application/json; charset=utf-8",
         )
         return self.build_uri(key)
@@ -47,7 +47,7 @@ class S3StorageAdapter:
     def upload_stream(
         self,
         key: str,
-        stream: BinaryIO,
+        stream: IO[bytes],
         content_type: str = "application/octet-stream",
     ) -> str:
         stream.seek(0)
@@ -76,7 +76,7 @@ class S3StorageAdapter:
 
     def get_json(self, key: str) -> dict[str, Any]:
         body = self.get_bytes(key)
-        loaded = json.loads(body.decode("utf-8"))
+        loaded = json.loads(body.decode())
         if not isinstance(loaded, dict):
             raise ObjectPayloadFormatError(
                 f"Object payload must be a JSON object for key={key}"

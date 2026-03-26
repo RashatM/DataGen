@@ -29,7 +29,7 @@ class DataGenerationService:
         self.rng = rng
 
     def generate_column_values(self, total_rows: int, table_column: TableColumnSpec) -> list[Any]:
-        total_nulls = int(total_rows * (table_column.output_constraints.null_ratio / 100))
+        total_nulls = int(total_rows * table_column.output_constraints.null_ratio)
         total_non_nulls = total_rows - total_nulls
 
         values = self.data_generator_factory.get(table_column.generator_data_type).generate_values(
@@ -50,7 +50,7 @@ class DataGenerationService:
         table_column: TableColumnSpec,
         referenced_values: list[Any],
     ) -> list[Any]:
-        total_nulls = int(total_rows * (table_column.output_constraints.null_ratio / 100))
+        total_nulls = int(total_rows * table_column.output_constraints.null_ratio)
         total_non_nulls = total_rows - total_nulls
         reference_pool = [value for value in referenced_values if value is not None]
 

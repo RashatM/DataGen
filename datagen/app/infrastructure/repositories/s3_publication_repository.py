@@ -1,6 +1,6 @@
 from datetime import datetime
 from tempfile import TemporaryFile
-from typing import Any, BinaryIO
+from typing import Any, IO
 from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -26,10 +26,10 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         self.object_storage = object_storage
         self.schema_builder = schema_builder
 
-    def write_parquet(self, table_data: GeneratedTableData, destination: BinaryIO) -> None:
+    def write_parquet(self, table_data: GeneratedTableData, destination: IO[bytes]) -> None:
         schema = self.schema_builder.build_schema(table_data.table)
-        table = pa.Table.from_pydict(table_data.generated_data, schema=schema)
-        pq.write_table(table, destination, compression="snappy")
+        table = pa.table(data=table_data.generated_data, schema=schema)
+        pq.write_table(table, destination)
         destination.flush()
 
     @staticmethod

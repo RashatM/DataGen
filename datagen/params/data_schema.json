@@ -43,7 +43,7 @@
           "name": "segment",
           "generator_data_type": "STRING",
           "constraints": {
-            "null_ratio": 10,
+            "null_ratio": 0.1,
             "allowed_values": [
               "VIP",
               "STANDARD",

@@ -74,7 +74,7 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
 
                 if fk_info.relation_type == RelationType.ONE_TO_ONE:
                     non_null_child_rows = table.total_rows - int(
-                        table.total_rows * (column.output_constraints.null_ratio / 100)
+                        table.total_rows * column.output_constraints.null_ratio
                     )
                     if non_null_child_rows > ref_table.total_rows:
                         invalid_references.append(
