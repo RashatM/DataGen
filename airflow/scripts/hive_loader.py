@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-class HadoopSynthLoader(BaseSynthLoader):
+class HiveSynthLoader(BaseSynthLoader):
 
     def write_to_tmp(self, data_uri: str, tmp_name: str) -> None:
         self.spark.read.parquet(data_uri).write.insertInto(tmp_name, overwrite=True)
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     contract = parse_job_contract(args.contract)
 
     with open_spark_session(args.app_name) as spark_session:
-        loader = HadoopSynthLoader(spark_session, run_id=contract.run_id)
+        loader = HiveSynthLoader(spark_session, run_id=contract.run_id)
         tables = contract.build_table_contracts("hive")
         loader.publish_tables(tables)
         loader.materialize_comparison_result(contract.comparison, "hive")

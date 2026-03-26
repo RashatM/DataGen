@@ -19,6 +19,10 @@ class AirflowClient:
     def dag_id(self) -> str:
         return self.config.dag_id
 
+    def build_dag_run_url(self, dag_run_id: str) -> str:
+        base_url = self.config.url.rstrip("/")
+        return f"{base_url}/dags/{self.config.dag_id}/grid?dag_run_id={dag_run_id}"
+
     def poll_interval(self) -> int:
         return self.config.poll_interval_seconds
 

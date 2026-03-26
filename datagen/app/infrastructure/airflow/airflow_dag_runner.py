@@ -49,6 +49,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
             run_id=run_id,
             execution_id=dag_run_state.dag_run_id,
             status=status,
+            execution_url=self.client.build_dag_run_url(dag_run_state.dag_run_id),
         )
 
     def poll_until_terminal(
@@ -92,13 +93,16 @@ class AirflowDagRunner(ExecutionRunnerPort):
                 last_heartbeat_at = now
             time.sleep(poll_interval)
 
-        logger.error(
-            f"DAG polling timed out: dag_run_id={dag_run_id}, timeout={timeout_seconds}s"
+        execution_url = self.client.build_dag_run_url(dag_run_id)
+        logger.warning(
+            f"DAG wait timeout reached. The DAG may still be running in Airflow: "
+            f"dag_run_id={dag_run_id}, timeout={timeout_seconds}s, airflow_url={execution_url}"
         )
         return ExecutionResult(
             run_id=run_id,
             execution_id=dag_run_id,
-            status=ExecutionStatus.TIMEOUT,
+            status=ExecutionStatus.WAIT_TIMEOUT,
+            execution_url=execution_url,
         )
 
     def trigger_and_wait(

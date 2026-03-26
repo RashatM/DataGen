@@ -16,8 +16,8 @@ EMAIL_LIST = []
 
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/base_loader.py"
 JOB_COMMON_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/job_common.py"
-ICEBERG_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/iceberg_load.py"
-HADOOP_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/hadoop_load.py"
+ICEBERG_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/iceberg_loader.py"
+HIVE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/hive_loader.py"
 RESULT_COMPARATOR_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/result_comparator.py"
 HADOOP_CLUSTER_CONFIG_VARIABLE = "datagen_hadoop_cluster_config"
 
@@ -129,7 +129,7 @@ def get_hadoop_cluster_config() -> dict[str, Any]:
     return cluster_config
 
 
-def get_hadoop_spark_config(**context) -> dict[str, str]:
+def get_hive_spark_config(**context) -> dict[str, str]:
     cluster_config = get_hadoop_cluster_config()
     cluster_name = cluster_config["cluster_name"]
 
@@ -216,8 +216,8 @@ with DAG(
         task_id="load_hive_tables",
         name="datagen_load_hive_tables",
         conn_id="spark_k8s",
-        config_callable=get_hadoop_spark_config,
-        application=HADOOP_LOADER_SCRIPT,
+        config_callable=get_hive_spark_config,
+        application=HIVE_LOADER_SCRIPT,
         py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
         application_args=[
             "--app_name", "datagen_load_hive_{{ dag_run.conf['run_id'] }}",

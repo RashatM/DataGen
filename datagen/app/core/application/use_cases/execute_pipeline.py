@@ -62,6 +62,14 @@ class ExecutePipelineUseCase:
 
         total = int(time.monotonic() - start)
         if not execution_result.is_success():
+            if execution_result.is_wait_timeout():
+                execution_url_text = f", execution_url={execution_result.execution_url}" if execution_result.execution_url else ""
+                logger.warning(
+                    f"Pipeline wait timeout reached: run_id={run_id}, "
+                    f"status={execution_result.status.value}, execution_id={execution_result.execution_id}, "
+                    f"total={total}s{execution_url_text}"
+                )
+                return PipelineExecutionResult(run_id=run_id, execution_result=execution_result)
             logger.error(
                 f"Pipeline failed: run_id={run_id}, "
                 f"status={execution_result.status.value}, total={total}s"

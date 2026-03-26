@@ -57,6 +57,9 @@ def run_app(
         )
         pipeline_result = use_case.execute(generation_run=generation_run)
         execution_result = pipeline_result.execution_result
+        execution_details = f", execution_id={execution_result.execution_id}"
+        if execution_result.execution_url:
+            execution_details += f", execution_url={execution_result.execution_url}"
 
         if execution_result.is_success():
             logger.info(
@@ -65,9 +68,17 @@ def run_app(
             )
             return
 
+        if execution_result.is_wait_timeout():
+            logger.warning(
+                f"Application finished without terminal DAG result: environment={env_name}, "
+                f"run_id={pipeline_result.run_id}, status={execution_result.status.value}, "
+                f"{execution_details.removeprefix(', ')}"
+            )
+            return
+
         logger.error(
             f"Application finished with error: environment={env_name}, "
-            f"run_id={pipeline_result.run_id}, status={execution_result.status.value}"
+            f"run_id={pipeline_result.run_id}, status={execution_result.status.value}{execution_details}"
         )
     finally:
         object_storage.close()
