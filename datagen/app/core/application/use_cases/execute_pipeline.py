@@ -84,7 +84,7 @@ class ExecutePipelineUseCase:
 
         if comparison_report.is_match():
             logger.info(
-                f"Pipeline completed.\n"
+                f"Pipeline completed successfully.\n"
                 f"run_id: {run_id}\n"
                 f"execution_status: {execution_result.status.value}\n"
                 f"total_seconds: {total}\n"

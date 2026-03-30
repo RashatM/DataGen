@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 import random
+import time
 from typing import Any
 
 from app.core.application.internal.foreign_key_reference_tracker import ForeignKeyReferenceTracker
@@ -92,6 +93,7 @@ class DataGenerationService:
         fk_reference_tracker: ForeignKeyReferenceTracker,
     ) -> GeneratedTableData:
         generated_columns: dict[str, list[Any]] = {}
+        table_started_at = time.monotonic()
 
         for table_column in table.columns:
             fk_info = table_column.foreign_key
@@ -113,8 +115,10 @@ class DataGenerationService:
                 values=generated_columns[table_column.name],
             )
 
+        total_elapsed_ms = int((time.monotonic() - table_started_at) * 1000)
         logger.info(
-            f"Table generated: table={table.full_table_name}, rows={table.total_rows}, columns={len(table.columns)}"
+            f"Table generated: table={table.full_table_name}, rows={table.total_rows}, "
+            f"columns={len(table.columns)}, elapsed_ms={total_elapsed_ms}"
         )
         return GeneratedTableData(
             table=table,

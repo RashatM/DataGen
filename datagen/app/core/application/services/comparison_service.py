@@ -89,9 +89,7 @@ class ComparisonReportService:
         report = self.repository.load_report(report_key=report_key, expected_run_id=run_id)
         self.validate_report(report)
         logger.info(
-            f"Comparison report load completed.\n"
-            f"run_id: {run_id}\n"
-            f"report_key: {report_key}\n"
-            f"{self.format_report_summary(report)}"
+            f"Comparison report load completed: run_id={run_id}, "
+            f"report_key={report_key}, comparison_status={report.status.value}"
         )
         return report
