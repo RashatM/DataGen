@@ -140,10 +140,15 @@ def build_int_constraints(
                 f"Column {column_name}: digits_count cannot be used together with {conflict_list}"
             )
 
-        try:
-            min_value, max_value = IntConstraints.range_from_digits_count(digits_count)
-        except InvalidConstraintsError as exc:
-            raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
+        if isinstance(digits_count, bool) or not isinstance(digits_count, int):
+            raise SchemaValidationError(f"Column {column_name}: digits_count must be integer")
+        if digits_count <= 0:
+            raise SchemaValidationError(f"Column {column_name}: digits_count must be greater than 0")
+
+        if digits_count == 1:
+            min_value, max_value = 0, 9
+        else:
+            min_value, max_value = 10 ** (digits_count - 1), 10 ** digits_count - 1
     else:
         min_value = 0 if min_value is None else min_value
         max_value = 1000 if max_value is None else max_value
@@ -153,7 +158,6 @@ def build_int_constraints(
             allowed_values=allowed_values,
             min_value=min_value,
             max_value=max_value,
-            digits_count=digits_count,
         )
     except InvalidConstraintsError as exc:
         raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
