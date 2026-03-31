@@ -275,10 +275,11 @@ def convert_to_table_spec(table_data: dict) -> TableSpec:
             min_timestamp = constraints_data.get("min_timestamp")
             max_timestamp = constraints_data.get("max_timestamp")
             normalized_timestamp_values = tuple(parse(v) for v in allowed_values) if allowed_values else None
+            current_year = datetime.now().year
             constraints = TimestampConstraints(
                 allowed_values=normalized_timestamp_values,
-                min_timestamp=parse(min_timestamp) if min_timestamp else datetime(datetime.now().year, 1, 1),
-                max_timestamp=parse(max_timestamp) if max_timestamp else datetime(datetime.now().year, 12, 31),
+                min_timestamp=parse(min_timestamp) if min_timestamp else datetime(current_year, 1, 1, 0, 0, 0),
+                max_timestamp=parse(max_timestamp) if max_timestamp else datetime(current_year, 12, 31, 23, 59, 59),
                 timestamp_format=constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
             )
 
