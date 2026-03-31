@@ -110,9 +110,13 @@ def parse_airflow_env_config(config_data: dict[str, Any], env_name: str) -> Airf
     if not base_url:
         raise ConfigurationError(f"Airflow environment '{env_name}' missing 'url'")
 
+    dag_id = data.get("dag_id", "")
+    if not dag_id:
+        raise ConfigurationError(f"Airflow environment '{env_name}' missing 'dag_id'")
+
     return AirflowConfig(
         url=base_url,
-        dag_id=data.get("dag_id", ""),
+        dag_id=dag_id,
         dag_run_id_prefix=data.get("dag_run_id_prefix", "datagen"),
         poll_interval_seconds=data.get("poll_interval_seconds", 10),
         dag_timeout_seconds=data.get("dag_timeout_seconds", 3600),

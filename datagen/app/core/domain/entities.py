@@ -29,8 +29,8 @@ class TableColumnSpec(Generic[TConstraints]):
     foreign_key: TableForeignKeySpec | None
     output_data_type: DataType | None = None
 
-    def __post_init__(self):
-        if not self.output_data_type:
+    def __post_init__(self) -> None:
+        if self.output_data_type is None:
             self.output_data_type = self.generator_data_type
 
 

@@ -19,6 +19,7 @@ from app.core.domain.entities import (
     TableForeignKeySpec, GenerationRun
 )
 from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
+from app.core.domain.validation_errors import InvalidConstraintsError
 from app.infrastructure.errors import SchemaValidationError
 
 LEGACY_MAPPING = {
@@ -39,6 +40,43 @@ def normalize_null_ratio(column_name: str, raw_null_ratio: Any) -> float:
 
     raise SchemaValidationError(
         f"Column {column_name} has null_ratio outside [0, 1]: {raw_null_ratio}"
+    )
+
+
+def normalize_is_unique(column_name: str, raw_is_unique: Any) -> bool:
+    if isinstance(raw_is_unique, bool):
+        return raw_is_unique
+
+    raise SchemaValidationError(f"Column {column_name} has invalid is_unique: {raw_is_unique!r}")
+
+
+def build_output_constraints(
+    column_name: str,
+    constraints_data: dict[str, Any],
+    is_primary_key: bool,
+) -> OutputConstraints:
+    raw_null_ratio = constraints_data.get("null_ratio")
+    raw_is_unique = constraints_data.get("is_unique", constraints_data.get("unique"))
+
+    null_ratio = 0.0 if raw_null_ratio is None else normalize_null_ratio(column_name, raw_null_ratio)
+    is_unique = False if raw_is_unique is None else normalize_is_unique(column_name, raw_is_unique)
+
+    if is_primary_key:
+        if raw_is_unique is False:
+            raise SchemaValidationError(
+                f"Primary key column {column_name} cannot declare is_unique=false"
+            )
+        if null_ratio != 0:
+            raise SchemaValidationError(f"Primary key column {column_name} must have null_ratio=0")
+
+        return OutputConstraints(
+            null_ratio=0.0,
+            is_unique=True,
+        )
+
+    return OutputConstraints(
+        null_ratio=null_ratio,
+        is_unique=is_unique,
     )
 
 
@@ -77,6 +115,88 @@ def resolve_data_types(column_data: dict, constraints_data: dict) -> tuple[DataT
     return generator_data_type, output_data_type
 
 
+def build_int_constraints(
+    column_name: str,
+    constraints_data: dict[str, Any],
+    allowed_values: tuple[Any, ...] | None,
+) -> IntConstraints:
+    digits_count = constraints_data.get("digits_count")
+    min_value = constraints_data.get("min_value")
+    max_value = constraints_data.get("max_value")
+
+    if digits_count is not None:
+        conflicting = [
+            field_name
+            for field_name, field_value in (
+                ("min_value", min_value),
+                ("max_value", max_value),
+                ("allowed_values", allowed_values),
+            )
+            if field_value is not None
+        ]
+        if conflicting:
+            conflict_list = ", ".join(conflicting)
+            raise SchemaValidationError(
+                f"Column {column_name}: digits_count cannot be used together with {conflict_list}"
+            )
+
+        try:
+            min_value, max_value = IntConstraints.range_from_digits_count(digits_count)
+        except InvalidConstraintsError as exc:
+            raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
+    else:
+        min_value = 0 if min_value is None else min_value
+        max_value = 1000 if max_value is None else max_value
+
+    try:
+        constraints = IntConstraints(
+            allowed_values=allowed_values,
+            min_value=min_value,
+            max_value=max_value,
+            digits_count=digits_count,
+        )
+    except InvalidConstraintsError as exc:
+        raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
+
+    return constraints
+
+
+def build_string_constraints(
+    column_name: str,
+    constraints_data: dict[str, Any],
+    allowed_values: tuple[Any, ...] | None,
+    output_data_type: DataType,
+) -> StringConstraints:
+    case_mode_raw = constraints_data.get("case_mode")
+    if not case_mode_raw:
+        if constraints_data.get("uppercase"):
+            case_mode_raw = "upper"
+        elif constraints_data.get("lowercase"):
+            case_mode_raw = "lower"
+        else:
+            case_mode_raw = "mixed"
+
+    character_set_raw = constraints_data.get("character_set")
+    if not character_set_raw:
+        if constraints_data.get("digits_only"):
+            character_set_raw = "digits"
+        elif constraints_data.get("chars_only"):
+            character_set_raw = "letters"
+        else:
+            character_set_raw = "letters"
+
+    try:
+        return StringConstraints(
+            allowed_values=allowed_values,
+            length=constraints_data.get("length", 10),
+            character_set=CharacterSet(character_set_raw.lower()),
+            case_mode=CaseMode(case_mode_raw.lower()),
+            regular_expr=constraints_data.get("regular_expr"),
+        )
+    except InvalidConstraintsError as exc:
+        raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
+
+
 def convert_to_table_spec(table_data: dict) -> TableSpec:
     schema_name = table_data["schema_name"]
     table_name = table_data["table_name"]
@@ -104,17 +224,12 @@ def convert_to_table_spec(table_data: dict) -> TableSpec:
                     f"Unsupported relation_type for column {column_name}: {foreign_key_data.get('relation_type')}"
                 ) from exc
 
-        null_ratio = normalize_null_ratio(column_name, constraints_data.get("null_ratio", 0))
-        is_unique = (
-            constraints_data.get("is_unique", constraints_data.get("unique", False))
-            if not is_primary_key
-            else is_primary_key
-        )
         allowed_values = constraints_data.get("allowed_values")
         normalized_allowed_values = tuple(allowed_values) if allowed_values else None
-        output_constraints = OutputConstraints(
-            null_ratio=null_ratio,
-            is_unique=is_unique,
+        output_constraints = build_output_constraints(
+            column_name=column_name,
+            constraints_data=constraints_data,
+            is_primary_key=is_primary_key,
         )
         ensure_final_uniqueness_supported(
             source_type=generator_data_type,
@@ -123,37 +238,18 @@ def convert_to_table_spec(table_data: dict) -> TableSpec:
         )
 
         if generator_data_type == DataType.STRING:
-            case_mode_raw = constraints_data.get("case_mode")
-            if not case_mode_raw:
-                if constraints_data.get("uppercase"):
-                    case_mode_raw = "upper"
-                elif constraints_data.get("lowercase"):
-                    case_mode_raw = "lower"
-                else:
-                    case_mode_raw = "mixed"
-
-            character_set_raw = constraints_data.get("character_set")
-            if not character_set_raw:
-                if constraints_data.get("digits_only"):
-                    character_set_raw = "digits"
-                elif constraints_data.get("chars_only"):
-                    character_set_raw = "letters"
-                else:
-                    character_set_raw = "letters"
-
-            constraints = StringConstraints(
+            constraints = build_string_constraints(
+                column_name=column_name,
+                constraints_data=constraints_data,
                 allowed_values=normalized_allowed_values,
-                length=constraints_data.get("length", 10),
-                character_set=CharacterSet(character_set_raw.lower()),
-                case_mode=CaseMode(case_mode_raw.lower()),
-                regular_expr=constraints_data.get("regular_expr"),
+                output_data_type=output_data_type,
             )
 
         elif generator_data_type == DataType.INT:
-            constraints = IntConstraints(
+            constraints = build_int_constraints(
+                column_name=column_name,
+                constraints_data=constraints_data,
                 allowed_values=normalized_allowed_values,
-                min_value=constraints_data.get("min_value", 0),
-                max_value=constraints_data.get("max_value", 1000),
             )
 
         elif generator_data_type == DataType.FLOAT:
@@ -191,9 +287,6 @@ def convert_to_table_spec(table_data: dict) -> TableSpec:
 
         else:
             raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
-
-        if is_primary_key and null_ratio != 0:
-            raise SchemaValidationError(f"Primary key column {column_name} must have null_ratio=0")
 
         if foreign_key_data:
             unsupported_constraint_fields = sorted(

@@ -10,7 +10,7 @@ from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
 SHEET_TABLES = "tables"
 EXCEL_SUFFIXES = {".xlsx", ".xlsm"}
 TABLES_HEADER_FIELDS = {"schema_name", "table_name", "total_rows"}
-DATA_SHEET_REQUIRED_FIELDS = {"column_name", "generator_data_type", "constraints", "foreign_key", "is_primary_key"}
+DATA_SHEET_REQUIRED_FIELDS = {"column_name", "generator_data_type"}
 ROW_DATA_FIELDS = (
     "column_name",
     "generator_data_type",
@@ -65,6 +65,7 @@ SUPPORTED_CONSTRAINTS = {
         "allowed_values",
         "min_value",
         "max_value",
+        "digits_count",
     },
     DataType.FLOAT.value: {
         "null_ratio",
@@ -312,7 +313,7 @@ def normalize_constraints(raw_constraints: dict[str, Any], generator_type: str) 
             constraints[key] = raw_value
             continue
 
-        if key in {"length", "precision"}:
+        if key in {"length", "precision", "digits_count"}:
             if isinstance(raw_value, bool):
                 raise ValueError(f"{key} must be integer")
             constraints[key] = int(raw_value)
