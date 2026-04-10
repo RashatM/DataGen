@@ -97,9 +97,7 @@ class ComparisonResultMaterializer:
         engine: str,
     ) -> None:
         engine_contract = comparison_contract.get_engine_contract(engine)
-        ignored_columns = self.build_ignored_columns(
-            extra_columns=engine_contract.exclude_columns,
-        )
+        ignored_columns = self.build_ignored_columns(extra_columns=engine_contract.exclude_columns)
         logger.info(
             f"Comparison query execution started. engine={engine}, run_id={self.run_id}, "
             f"query_uri={engine_contract.query_uri}, result_uri={engine_contract.result_uri}"

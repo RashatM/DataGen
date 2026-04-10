@@ -4,7 +4,7 @@ from typing import Any
 
 from dateutil.parser import parse
 
-from app.core.application.constants import WriteMode
+from app.core.application.constants import EngineScope, WriteMode
 from app.core.application.dto.pipeline import (
     ComparisonQuerySpec,
     PipelineExecutionSpec,
@@ -30,7 +30,7 @@ from app.core.domain.entities import (
     TableForeignKeySpec,
     TableSpec,
 )
-from app.core.domain.enums import CaseMode, CharacterSet, DataType, DerivationRule, EngineScope, RelationType
+from app.core.domain.enums import CaseMode, CharacterSet, DataType, DerivationRule, RelationType
 from app.core.domain.validation_errors import InvalidConstraintsError, InvalidDerivationError
 from app.infrastructure.errors import SchemaValidationError
 
@@ -432,8 +432,6 @@ def build_foreign_key_spec(column_name: str, foreign_key_data: dict[str, Any]) -
 
 def build_generated_column_spec(
     column_data: Mapping[str, Any],
-    *,
-    engine_scope: EngineScope = EngineScope.BOTH,
 ) -> TableColumnSpec[Any]:
     column_name = require_non_empty_string(column_data.get("name"), "Column name")
     constraints_data = get_constraints_data(column_name, column_data)
@@ -461,7 +459,6 @@ def build_generated_column_spec(
         output_data_type=output_data_type,
         output_constraints=output_constraints,
         is_primary_key=is_primary_key,
-        engine_scope=engine_scope,
         generation=ColumnGenerationSpec(
             source_data_type=generator_data_type,
             constraints=generator_constraints,
@@ -519,19 +516,62 @@ def convert_to_table_spec(table_data: Mapping[str, Any]) -> TableSpec:
     )
 
 
-def build_hive_load_columns(table: TableSpec) -> tuple[str, ...]:
-    return tuple(
-        column.name
-        for column in table.columns
-        if column.engine_scope in {EngineScope.BOTH, EngineScope.HIVE_ONLY}
+def parse_engine_scope(
+    table_name: str,
+    column_name: str,
+    column_data: Mapping[str, Any],
+) -> EngineScope:
+    try:
+        return EngineScope(
+            require_non_empty_string(
+                column_data.get("engine_scope"),
+                f"Column {table_name}.{column_name} engine_scope",
+            )
+        )
+    except ValueError as exc:
+        raise SchemaValidationError(
+            f"Unsupported engine_scope for column {table_name}.{column_name}: {column_data.get('engine_scope')}"
+        ) from exc
+
+
+def build_engine_load_columns(
+    table_name: str,
+    raw_columns: Sequence[Mapping[str, Any]],
+    engine_name: str,
+    included_scopes: set[EngineScope],
+) -> tuple[str, ...]:
+    load_columns = tuple(
+        column_name
+        for column_data in raw_columns
+        for column_name in [require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")]
+        if parse_engine_scope(
+            table_name=table_name,
+            column_name=column_name,
+            column_data=column_data,
+        ) in included_scopes
+    )
+    return validate_engine_load_columns(
+        table_name=table_name,
+        engine_name=engine_name,
+        load_columns=load_columns,
     )
 
 
-def build_iceberg_load_columns(table: TableSpec) -> tuple[str, ...]:
-    return tuple(
-        column.name
-        for column in table.columns
-        if column.engine_scope in {EngineScope.BOTH, EngineScope.ICEBERG_ONLY}
+def build_hive_load_columns(table_name: str, raw_columns: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:
+    return build_engine_load_columns(
+        table_name=table_name,
+        raw_columns=raw_columns,
+        engine_name="hive",
+        included_scopes={EngineScope.BOTH, EngineScope.HIVE_ONLY},
+    )
+
+
+def build_iceberg_load_columns(table_name: str, raw_columns: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:
+    return build_engine_load_columns(
+        table_name=table_name,
+        raw_columns=raw_columns,
+        engine_name="iceberg",
+        included_scopes={EngineScope.BOTH, EngineScope.ICEBERG_ONLY},
     )
 
 
@@ -606,18 +646,6 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
 
         resolving_stack.add(cache_key)
         try:
-            try:
-                engine_scope = EngineScope(
-                    require_non_empty_string(
-                        column_data.get("engine_scope"),
-                        f"Column {table_name}.{column_name} engine_scope",
-                    )
-                )
-            except ValueError as exc:
-                raise SchemaValidationError(
-                    f"Unsupported engine_scope for column {table_name}.{column_name}: {column_data.get('engine_scope')}"
-                ) from exc
-
             constraints_data = get_constraints_data(column_name, column_data)
             is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
             raw_foreign_key = optional_mapping(
@@ -659,7 +687,6 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
                         is_primary_key=is_primary_key,
                     ),
                     is_primary_key=is_primary_key,
-                    engine_scope=engine_scope,
                     foreign_key=build_foreign_key_spec(column_name, raw_foreign_key),
                 )
             elif raw_derive:
@@ -710,14 +737,10 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
                     name=column_name,
                     output_data_type=output_data_type,
                     output_constraints=DERIVATION_POLICY.derive_output_constraints_from_source(source_column),
-                    engine_scope=engine_scope,
                     derivation=derivation,
                 )
             else:
-                resolved_column = build_generated_column_spec(
-                    column_data=column_data,
-                    engine_scope=engine_scope,
-                )
+                resolved_column = build_generated_column_spec(column_data=column_data)
 
             resolved_columns[cache_key] = resolved_column
             return resolved_column
@@ -727,6 +750,7 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
     execution_tables: list[TableExecutionSpec] = []
     for table_data in raw_tables:
         table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
+        table_columns_data = require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
 
         table_spec = TableSpec(
             table_name=table_name,
@@ -735,7 +759,7 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
                     table_name,
                     require_non_empty_string(column_data.get("name"), f"Table {table_name} column name"),
                 )
-                for column_data in require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
+                for column_data in table_columns_data
             ],
             total_rows=require_integer(table_data.get("total_rows"), f"Table {table_name} total_rows"),
         )
@@ -758,15 +782,13 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
                         f"Table {table_name} iceberg_target_table",
                     ),
                     write_mode=write_mode,
-                    hive_columns=validate_engine_load_columns(
+                    hive_columns=build_hive_load_columns(
                         table_name=table_name,
-                        engine_name="hive",
-                        load_columns=build_hive_load_columns(table_spec),
+                        raw_columns=table_columns_data,
                     ),
-                    iceberg_columns=validate_engine_load_columns(
+                    iceberg_columns=build_iceberg_load_columns(
                         table_name=table_name,
-                        engine_name="iceberg",
-                        load_columns=build_iceberg_load_columns(table_spec),
+                        raw_columns=table_columns_data,
                     ),
                 ),
             )

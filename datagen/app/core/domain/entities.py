@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Generic
 
 from app.core.domain.constraints import OutputConstraints
-from app.core.domain.enums import DataType, DerivationRule, EngineScope, RelationType
+from app.core.domain.enums import DataType, DerivationRule, RelationType
 from app.core.domain.typevars import TConstraints
 from app.core.domain.value_types import GeneratedColumnsByName
 
@@ -36,7 +36,6 @@ class TableColumnSpec(Generic[TConstraints]):
     output_data_type: DataType
     output_constraints: OutputConstraints
     is_primary_key: bool = False
-    engine_scope: EngineScope = EngineScope.BOTH
     generation: ColumnGenerationSpec[TConstraints] | None = None
     foreign_key: TableForeignKeySpec | None = None
     derivation: TableDerivationSpec | None = None

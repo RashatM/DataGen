@@ -17,13 +17,6 @@ class DataType(Enum):
     BOOLEAN = "BOOLEAN"
 
 
-class EngineScope(str, Enum):
-    """Ограничивает, в какие engine-specific target таблицы должна попасть колонка."""
-    BOTH = "both"
-    HIVE_ONLY = "hive_only"
-    ICEBERG_ONLY = "iceberg_only"
-
-
 class DerivationRule(str, Enum):
     """Поддерживаемые правила вычисления производных колонок из исходного значения."""
     YYYYMMDD = "YYYYMMDD"

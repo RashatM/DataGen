@@ -22,6 +22,13 @@ class EngineName(str, Enum):
     ICEBERG = "iceberg"
 
 
+class EngineScope(str, Enum):
+    """Input-level правило, в какой engine-specific load projection должна попасть колонка."""
+    BOTH = "both"
+    HIVE_ONLY = "hive_only"
+    ICEBERG_ONLY = "iceberg_only"
+
+
 class WriteMode(str, Enum):
     """Поддерживаемые режимы загрузки generated данных в целевые таблицы."""
     OVERWRITE_TABLE = "OVERWRITE_TABLE"
