@@ -3,6 +3,7 @@ import json
 from typing import Any, IO
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
+from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
 
 from app.infrastructure.errors import ObjectNotFoundError, ObjectPayloadFormatError
 
@@ -92,7 +93,7 @@ class S3StorageAdapter:
             if not contents:
                 continue
 
-            objects = [{"Key": item["Key"]} for item in contents if "Key" in item]
+            objects: list[ObjectIdentifierTypeDef] = [{"Key": item["Key"]} for item in contents if "Key" in item]
             if not objects:
                 continue
 

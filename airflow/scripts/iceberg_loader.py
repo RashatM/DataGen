@@ -1,6 +1,7 @@
 import argparse
 from contextlib import contextmanager
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.types import StructType
 import pyspark.sql.functions as f
 
 from base_loader import BaseSynthLoader
@@ -37,8 +38,35 @@ def parse_args() -> argparse.Namespace:
 
 
 class IcebergSynthLoader(BaseSynthLoader):
-    def write_to_tmp(self, data_uri: str, tmp_name: str) -> None:
-        self.spark.read.parquet(data_uri).writeTo(tmp_name).overwrite(f.lit(True))
+
+    ICEBERG_TABLE_PROPERTIES = [
+        "'format' = 'iceberg/parquet'",
+        "'format-version' = '2'",
+        "'write.distribution-mode' = 'hash'",
+        "'write.delete.mode' = 'merge-on-read'",
+        "'write.merge.mode' = 'merge-on-read'",
+        "'write.update.mode' = 'merge-on-read'",
+        "'write.metadata.delete-after-commit.enabled' = 'true'",
+        "'write.metadata.previous-versions-max' = '100'",
+        "'write.metadata.metrics.default' = 'full'",
+        "'write.parquet.compression-codec' = 'zstd'",
+        "'write.parquet.compression-level' = '3'",
+        "'write.delete.granularity' = 'file'",
+        "'commit.retry.num-retries' = '20'",
+        "'commit.retry.min-wait-ms' = '100'",
+        "'commit.retry.max-wait-ms' = '5000'",
+    ]
+
+    def build_create_table_sql(self, schema: StructType, table_name: str) -> str:
+        cols = ", ".join(f"`{field.name}` {field.dataType.simpleString()}" for field in schema)
+        props = self.ICEBERG_TABLE_PROPERTIES + [
+            f"'write.metadata.metrics.max-inferred-column-defaults' = '{len(schema)}'",
+        ]
+        props_sql = ", ".join(props)
+        return f"CREATE TABLE {table_name} ({cols}) USING ICEBERG TBLPROPERTIES ({props_sql})"
+
+    def load_into_table(self, df: DataFrame, table_name: str) -> None:
+        df.writeTo(table_name).overwrite(f.lit(True))
 
 
 if __name__ == "__main__":

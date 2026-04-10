@@ -14,11 +14,8 @@ class RunArtifactKeyLayout:
         self.run_prefix = run_prefix
         self.comparison_report_key = f"{run_prefix}/result/comparison_result.json"
 
-    def data_key(self, schema_name: str, table_name: str) -> str:
-        return f"{self.run_prefix}/tables/{schema_name.strip('/')}/{table_name.strip('/')}/data/data.parquet"
-
-    def ddl_key(self, schema_name: str, table_name: str, engine_name: EngineName) -> str:
-        return f"{self.run_prefix}/tables/{schema_name.strip('/')}/{table_name.strip('/')}/ddl/{engine_name.value}.sql"
+    def data_key(self, table_name: str) -> str:
+        return f"{self.run_prefix}/tables/{table_name.strip('/')}/data/data.parquet"
 
     def comparison_query_result_key(self, engine_name: EngineName) -> str:
         return f"{self.run_prefix}/comparison/query_results/{engine_name.value}"
@@ -29,10 +26,9 @@ class RunArtifactKeyLayout:
 
 @dataclass(slots=True)
 class TableStateKeyLayout:
-    schema_name: str
     table_name: str
     pointer_key: str = field(init=False)
 
     def __post_init__(self) -> None:
-        pointer_key = f"tables/{self.schema_name.strip('/')}/{self.table_name.strip('/')}/pointer.json"
+        pointer_key = f"tables/{self.table_name.strip('/')}/pointer.json"
         self.pointer_key = pointer_key

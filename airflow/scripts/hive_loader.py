@@ -1,6 +1,7 @@
 import argparse
 from contextlib import contextmanager
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.types import StructType
 
 from base_loader import BaseSynthLoader
 from job_common import logger, parse_job_contract
@@ -49,8 +50,12 @@ def parse_args() -> argparse.Namespace:
 
 class HiveSynthLoader(BaseSynthLoader):
 
-    def write_to_tmp(self, data_uri: str, tmp_name: str) -> None:
-        self.spark.read.parquet(data_uri).write.insertInto(tmp_name, overwrite=True)
+    def build_create_table_sql(self, schema: StructType, table_name: str) -> str:
+        cols = ", ".join(f"`{field.name}` {field.dataType.simpleString()}" for field in schema)
+        return f"CREATE TABLE {table_name} ({cols}) STORED AS PARQUET"
+
+    def load_into_table(self, df: DataFrame, table_name: str) -> None:
+        df.write.insertInto(table_name, overwrite=True)
 
 
 if __name__ == "__main__":

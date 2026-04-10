@@ -1,8 +1,16 @@
 from datetime import date, datetime
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from dateutil.parser import parse
 
+from app.core.application.constants import WriteMode
+from app.core.application.dto.pipeline import (
+    ComparisonQuerySpec,
+    PipelineExecutionSpec,
+    TableExecutionSpec,
+    TableLoadSpec,
+)
 from app.core.domain.constraints import (
     BooleanConstraints,
     DateConstraints,
@@ -13,13 +21,17 @@ from app.core.domain.constraints import (
     TimestampConstraints,
 )
 from app.core.domain.conversion_rules import ensure_conversion_supported, ensure_final_uniqueness_supported
+from app.core.domain.derivation import DerivationPolicy
 from app.core.domain.entities import (
+    ColumnGenerationSpec,
+    GenerationRun,
     TableColumnSpec,
+    TableDerivationSpec,
+    TableForeignKeySpec,
     TableSpec,
-    TableForeignKeySpec, GenerationRun
 )
-from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
-from app.core.domain.validation_errors import InvalidConstraintsError
+from app.core.domain.enums import CaseMode, CharacterSet, DataType, DerivationRule, EngineScope, RelationType
+from app.core.domain.validation_errors import InvalidConstraintsError, InvalidDerivationError
 from app.infrastructure.errors import SchemaValidationError
 
 LEGACY_MAPPING = {
@@ -28,6 +40,105 @@ LEGACY_MAPPING = {
 }
 
 FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
+DERIVATION_POLICY = DerivationPolicy()
+
+
+def require_non_empty_string(value: Any, context: str) -> str:
+    if isinstance(value, str) and value.strip():
+        return value
+    raise SchemaValidationError(f"{context} must be a non-empty string")
+
+
+def require_integer(value: Any, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise SchemaValidationError(f"{context} must be an integer")
+    return value
+
+
+def require_number(value: Any, context: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise SchemaValidationError(f"{context} must be a number")
+    return float(value)
+
+
+def require_mapping(value: Any, context: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SchemaValidationError(f"{context} must be an object")
+    return value
+
+
+def optional_mapping(value: Any, context: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return require_mapping(value, context)
+
+
+def require_list_of_mappings(value: Any, context: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise SchemaValidationError(f"{context} must be a list")
+
+    if not all(isinstance(item, dict) for item in value):
+        raise SchemaValidationError(f"{context} must contain only objects")
+
+    return value
+
+
+def require_string_list(value: Any, context: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise SchemaValidationError(f"{context} must be a list")
+
+    string_values: list[str] = []
+    for item in value:
+        string_values.append(require_non_empty_string(item, context))
+    return string_values
+
+
+def optional_string(value: Any, context: str) -> str | None:
+    if value is None:
+        return None
+    return require_non_empty_string(value, context)
+
+
+def normalize_is_primary_key(column_name: str, raw_is_primary_key: Any) -> bool:
+    if raw_is_primary_key is None:
+        return False
+    if isinstance(raw_is_primary_key, bool):
+        return raw_is_primary_key
+    raise SchemaValidationError(f"Column {column_name} has invalid is_primary_key: {raw_is_primary_key!r}")
+
+
+def get_constraints_data(column_name: str, column_data: Mapping[str, Any]) -> dict[str, Any]:
+    return optional_mapping(column_data.get("constraints"), f"Column {column_name} constraints") or {}
+
+
+def normalize_allowed_values(column_name: str, raw_allowed_values: Any) -> tuple[Any, ...] | None:
+    if raw_allowed_values is None:
+        return None
+    if isinstance(raw_allowed_values, (str, bytes)) or not isinstance(raw_allowed_values, list):
+        raise SchemaValidationError(f"Column {column_name} allowed_values must be a list")
+    return tuple(raw_allowed_values)
+
+
+def parse_date_literal(column_name: str, field_name: str, raw_value: Any) -> date:
+    if isinstance(raw_value, datetime):
+        return raw_value.date()
+    if isinstance(raw_value, date):
+        return raw_value
+    if isinstance(raw_value, str):
+        return parse(raw_value).date()
+    raise SchemaValidationError(f"Column {column_name} has invalid {field_name}: {raw_value!r}")
+
+
+def parse_timestamp_literal(column_name: str, field_name: str, raw_value: Any) -> datetime:
+    if isinstance(raw_value, datetime):
+        return raw_value
+    if isinstance(raw_value, date):
+        return datetime.combine(raw_value, datetime.min.time())
+    if isinstance(raw_value, str):
+        return parse(raw_value)
+    raise SchemaValidationError(f"Column {column_name} has invalid {field_name}: {raw_value!r}")
 
 
 def normalize_null_ratio(column_name: str, raw_null_ratio: Any) -> float:
@@ -80,14 +191,21 @@ def build_output_constraints(
     )
 
 
-def resolve_data_types(column_data: dict, constraints_data: dict) -> tuple[DataType, DataType]:
+def resolve_data_types(
+    column_data: Mapping[str, Any],
+    constraints_data: Mapping[str, Any],
+) -> tuple[DataType, DataType]:
+    column_name = require_non_empty_string(column_data.get("name"), "Column name")
     generator_raw = column_data.get("generator_data_type", column_data.get("gen_data_type"))
     output_raw = column_data.get("output_data_type")
 
-    if not generator_raw:
-        raise SchemaValidationError(f"Column {column_data.get('name')} has no generator data type")
+    if generator_raw is None:
+        raise SchemaValidationError(f"Column {column_name} has no generator data type")
 
-    generator_normalized = str(generator_raw).upper()
+    generator_normalized = require_non_empty_string(
+        generator_raw,
+        f"Column {column_name} generator_data_type",
+    ).upper()
     if generator_normalized in LEGACY_MAPPING:
         generator_data_type = LEGACY_MAPPING[generator_normalized]
     else:
@@ -96,16 +214,21 @@ def resolve_data_types(column_data: dict, constraints_data: dict) -> tuple[DataT
         except ValueError as exc:
             raise SchemaValidationError(f"Unsupported generator data type: {generator_normalized}") from exc
 
-    if output_raw:
+    if output_raw is not None:
         try:
-            output_data_type = DataType(str(output_raw).upper())
+            output_data_type = DataType(
+                require_non_empty_string(
+                    output_raw,
+                    f"Column {column_name} output_data_type",
+                ).upper()
+            )
         except ValueError as exc:
             raise SchemaValidationError(
-                f"Unsupported output data type for column {column_data.get('name')}: {output_raw}"
+                f"Unsupported output data type for column {column_name}: {output_raw}"
             ) from exc
     elif (
-            (generator_data_type == DataType.DATE and "date_format" in constraints_data) or
-            (generator_data_type == DataType.TIMESTAMP and "timestamp_format" in constraints_data)
+        (generator_data_type == DataType.DATE and "date_format" in constraints_data) or
+        (generator_data_type == DataType.TIMESTAMP and "timestamp_format" in constraints_data)
     ):
         output_data_type = DataType.STRING
     else:
@@ -150,8 +273,8 @@ def build_int_constraints(
         else:
             min_value, max_value = 10 ** (digits_count - 1), 10 ** digits_count - 1
     else:
-        min_value = 0 if min_value is None else min_value
-        max_value = 1000 if max_value is None else max_value
+        min_value = 0 if min_value is None else require_integer(min_value, f"Column {column_name} min_value")
+        max_value = 1000 if max_value is None else require_integer(max_value, f"Column {column_name} max_value")
 
     try:
         constraints = IntConstraints(
@@ -169,131 +292,203 @@ def build_string_constraints(
     column_name: str,
     constraints_data: dict[str, Any],
     allowed_values: tuple[Any, ...] | None,
-    output_data_type: DataType,
 ) -> StringConstraints:
     case_mode_raw = constraints_data.get("case_mode")
-    if not case_mode_raw:
+    if case_mode_raw is None:
         if constraints_data.get("uppercase"):
             case_mode_raw = "upper"
         elif constraints_data.get("lowercase"):
             case_mode_raw = "lower"
         else:
             case_mode_raw = "mixed"
+    else:
+        case_mode_raw = require_non_empty_string(case_mode_raw, f"Column {column_name} case_mode")
 
     character_set_raw = constraints_data.get("character_set")
-    if not character_set_raw:
+    if character_set_raw is None:
         if constraints_data.get("digits_only"):
             character_set_raw = "digits"
         elif constraints_data.get("chars_only"):
             character_set_raw = "letters"
         else:
             character_set_raw = "letters"
+    else:
+        character_set_raw = require_non_empty_string(
+            character_set_raw,
+            f"Column {column_name} character_set",
+        )
 
     try:
         return StringConstraints(
             allowed_values=allowed_values,
-            length=constraints_data.get("length", 10),
+            length=require_integer(constraints_data.get("length", 10), f"Column {column_name} length"),
             character_set=CharacterSet(character_set_raw.lower()),
             case_mode=CaseMode(case_mode_raw.lower()),
-            regular_expr=constraints_data.get("regular_expr"),
+            regular_expr=optional_string(
+                constraints_data.get("regular_expr"),
+                f"Column {column_name} regular_expr",
+            ),
         )
     except InvalidConstraintsError as exc:
         raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
 
 
-def convert_to_table_spec(table_data: dict) -> TableSpec:
-    schema_name = table_data["schema_name"]
-    table_name = table_data["table_name"]
-    total_rows = table_data["total_rows"]
-    table_columns = []
-
-    for column_data in table_data["columns"]:
-        column_name = column_data["name"]
-        constraints_data = column_data.get("constraints", {})
-        generator_data_type, output_data_type = resolve_data_types(column_data, constraints_data)
-
-        is_primary_key = column_data.get("is_primary_key", False)
-        foreign_key_data = column_data.get("foreign_key")
-        foreign_key = None
-        if foreign_key_data:
-            try:
-                foreign_key = TableForeignKeySpec(
-                    schema_name=foreign_key_data["schema_name"],
-                    table_name=foreign_key_data["table_name"],
-                    column_name=foreign_key_data["column_name"],
-                    relation_type=RelationType(str(foreign_key_data["relation_type"]).upper()),
-                )
-            except ValueError as exc:
-                raise SchemaValidationError(
-                    f"Unsupported relation_type for column {column_name}: {foreign_key_data.get('relation_type')}"
-                ) from exc
-
-        allowed_values = constraints_data.get("allowed_values")
-        normalized_allowed_values = tuple(allowed_values) if allowed_values else None
-        output_constraints = build_output_constraints(
+def build_generator_constraints(
+    column_name: str,
+    generator_data_type: DataType,
+    constraints_data: dict[str, Any],
+    allowed_values: tuple[Any, ...] | None,
+) -> Any:
+    if generator_data_type == DataType.STRING:
+        return build_string_constraints(
             column_name=column_name,
             constraints_data=constraints_data,
-            is_primary_key=is_primary_key,
-        )
-        ensure_final_uniqueness_supported(
-            source_type=generator_data_type,
-            target_type=output_data_type,
-            requires_unique_output=is_primary_key or output_constraints.is_unique,
+            allowed_values=allowed_values,
         )
 
-        if generator_data_type == DataType.STRING:
-            constraints = build_string_constraints(
-                column_name=column_name,
-                constraints_data=constraints_data,
-                allowed_values=normalized_allowed_values,
-                output_data_type=output_data_type,
-            )
+    if generator_data_type == DataType.INT:
+        return build_int_constraints(
+            column_name=column_name,
+            constraints_data=constraints_data,
+            allowed_values=allowed_values,
+        )
 
-        elif generator_data_type == DataType.INT:
-            constraints = build_int_constraints(
-                column_name=column_name,
-                constraints_data=constraints_data,
-                allowed_values=normalized_allowed_values,
-            )
+    if generator_data_type == DataType.FLOAT:
+        return FloatConstraints(
+            allowed_values=allowed_values,
+            min_value=require_number(constraints_data.get("min_value", 0), f"Column {column_name} min_value"),
+            max_value=require_number(constraints_data.get("max_value", 1000), f"Column {column_name} max_value"),
+            precision=require_integer(constraints_data.get("precision", 2), f"Column {column_name} precision"),
+        )
 
-        elif generator_data_type == DataType.FLOAT:
-            constraints = FloatConstraints(
-                allowed_values=normalized_allowed_values,
-                min_value=constraints_data.get("min_value", 0),
-                max_value=constraints_data.get("max_value", 1000),
-                precision=constraints_data.get("precision", 2),
-            )
+    if generator_data_type == DataType.DATE:
+        min_date = constraints_data.get("min_value")
+        max_date = constraints_data.get("max_value")
+        normalized_date_values = (
+            tuple(parse_date_literal(column_name, "allowed_values", value) for value in allowed_values)
+            if allowed_values else None
+        )
+        return DateConstraints(
+            allowed_values=normalized_date_values,
+            min_date=parse_date_literal(column_name, "min_value", min_date) if min_date is not None
+            else date(date.today().year, 1, 1),
+            max_date=parse_date_literal(column_name, "max_value", max_date) if max_date is not None
+            else date(date.today().year, 12, 31),
+            date_format=require_non_empty_string(
+                constraints_data.get("date_format", "%Y-%m-%d"),
+                f"Column {column_name} date_format",
+            ),
+        )
 
-        elif generator_data_type == DataType.DATE:
-            min_date = constraints_data.get("min_value")
-            max_date = constraints_data.get("max_value")
-            normalized_date_values = tuple(parse(v).date() for v in allowed_values) if allowed_values else None
-            constraints = DateConstraints(
-                allowed_values=normalized_date_values,
-                min_date=parse(min_date).date() if min_date else date(date.today().year, 1, 1),
-                max_date=parse(max_date).date() if max_date else date(date.today().year, 12, 31),
-                date_format=constraints_data.get("date_format", "%Y-%m-%d"),
-            )
+    if generator_data_type == DataType.TIMESTAMP:
+        min_timestamp = constraints_data.get("min_timestamp")
+        max_timestamp = constraints_data.get("max_timestamp")
+        normalized_timestamp_values = (
+            tuple(parse_timestamp_literal(column_name, "allowed_values", value) for value in allowed_values)
+            if allowed_values else None
+        )
+        current_year = datetime.now().year
+        return TimestampConstraints(
+            allowed_values=normalized_timestamp_values,
+            min_timestamp=parse_timestamp_literal(column_name, "min_timestamp", min_timestamp)
+            if min_timestamp is not None else datetime(current_year, 1, 1, 0, 0, 0),
+            max_timestamp=parse_timestamp_literal(column_name, "max_timestamp", max_timestamp)
+            if max_timestamp is not None else datetime(current_year, 12, 31, 23, 59, 59),
+            timestamp_format=require_non_empty_string(
+                constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
+                f"Column {column_name} timestamp_format",
+            ),
+        )
 
-        elif generator_data_type == DataType.TIMESTAMP:
-            min_timestamp = constraints_data.get("min_timestamp")
-            max_timestamp = constraints_data.get("max_timestamp")
-            normalized_timestamp_values = tuple(parse(v) for v in allowed_values) if allowed_values else None
-            current_year = datetime.now().year
-            constraints = TimestampConstraints(
-                allowed_values=normalized_timestamp_values,
-                min_timestamp=parse(min_timestamp) if min_timestamp else datetime(current_year, 1, 1, 0, 0, 0),
-                max_timestamp=parse(max_timestamp) if max_timestamp else datetime(current_year, 12, 31, 23, 59, 59),
-                timestamp_format=constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
-            )
+    if generator_data_type == DataType.BOOLEAN:
+        return BooleanConstraints(allowed_values=allowed_values)
 
-        elif generator_data_type == DataType.BOOLEAN:
-            constraints = BooleanConstraints(allowed_values=normalized_allowed_values)
+    raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
 
-        else:
-            raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
 
+def build_foreign_key_spec(column_name: str, foreign_key_data: dict[str, Any]) -> TableForeignKeySpec:
+    try:
+        return TableForeignKeySpec(
+            table_name=require_non_empty_string(
+                foreign_key_data.get("table_name"),
+                f"Foreign key column {column_name} table_name",
+            ),
+            column_name=require_non_empty_string(
+                foreign_key_data.get("column_name"),
+                f"Foreign key column {column_name} column_name",
+            ),
+            relation_type=RelationType(
+                require_non_empty_string(
+                    foreign_key_data.get("relation_type"),
+                    f"Foreign key column {column_name} relation_type",
+                ).upper()
+            ),
+        )
+    except ValueError as exc:
+        raise SchemaValidationError(
+            f"Unsupported relation_type for column {column_name}: {foreign_key_data.get('relation_type')}"
+        ) from exc
+
+
+def build_generated_column_spec(
+    column_data: Mapping[str, Any],
+    *,
+    engine_scope: EngineScope = EngineScope.BOTH,
+) -> TableColumnSpec[Any]:
+    column_name = require_non_empty_string(column_data.get("name"), "Column name")
+    constraints_data = get_constraints_data(column_name, column_data)
+    generator_data_type, output_data_type = resolve_data_types(column_data, constraints_data)
+    is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
+    normalized_allowed_values = normalize_allowed_values(column_name, constraints_data.get("allowed_values"))
+    output_constraints = build_output_constraints(
+        column_name=column_name,
+        constraints_data=constraints_data,
+        is_primary_key=is_primary_key,
+    )
+    ensure_final_uniqueness_supported(
+        source_type=generator_data_type,
+        target_type=output_data_type,
+        requires_unique_output=is_primary_key or output_constraints.is_unique,
+    )
+    generator_constraints = build_generator_constraints(
+        column_name=column_name,
+        generator_data_type=generator_data_type,
+        constraints_data=constraints_data,
+        allowed_values=normalized_allowed_values,
+    )
+    return TableColumnSpec(
+        name=column_name,
+        output_data_type=output_data_type,
+        output_constraints=output_constraints,
+        is_primary_key=is_primary_key,
+        engine_scope=engine_scope,
+        generation=ColumnGenerationSpec(
+            source_data_type=generator_data_type,
+            constraints=generator_constraints,
+        ),
+    )
+
+
+def convert_to_table_spec(table_data: Mapping[str, Any]) -> TableSpec:
+    table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
+    total_rows = require_integer(table_data.get("total_rows"), f"Table {table_name} total_rows")
+    table_columns = []
+
+    for column_data in require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns"):
+        column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
+        foreign_key_data = optional_mapping(
+            column_data.get("foreign_key"),
+            f"Column {column_name} foreign_key",
+        )
         if foreign_key_data:
+            constraints_data = get_constraints_data(column_name, column_data)
+            _, output_data_type = resolve_data_types(column_data, constraints_data)
+            is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
+            output_constraints = build_output_constraints(
+                column_name=column_name,
+                constraints_data=constraints_data,
+                is_primary_key=is_primary_key,
+            )
             unsupported_constraint_fields = sorted(
                 set(constraints_data.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS
             )
@@ -304,26 +499,249 @@ def convert_to_table_spec(table_data: dict) -> TableSpec:
                     f"got: {unsupported_fields}"
                 )
 
-        table_columns.append(
-            TableColumnSpec(
-                name=column_name,
-                generator_data_type=generator_data_type,
-                generator_constraints=constraints,
-                output_constraints=output_constraints,
-                output_data_type=output_data_type,
-                is_primary_key=is_primary_key,
-                foreign_key=foreign_key,
+            table_columns.append(
+                TableColumnSpec(
+                    name=column_name,
+                    output_data_type=output_data_type,
+                    output_constraints=output_constraints,
+                    is_primary_key=is_primary_key,
+                    foreign_key=build_foreign_key_spec(column_name, foreign_key_data),
+                )
             )
-        )
+            continue
+
+        table_columns.append(build_generated_column_spec(column_data))
 
     return TableSpec(
-        schema_name=schema_name,
         table_name=table_name,
         columns=table_columns,
         total_rows=total_rows,
     )
 
 
-def convert_to_generation_run(run_id: str, raw_tables: list[dict[str, Any]]) -> GenerationRun:
+def convert_to_generation_run(run_id: str, raw_tables: Sequence[Mapping[str, Any]]) -> GenerationRun:
     tables = [convert_to_table_spec(table_data) for table_data in raw_tables]
     return GenerationRun(run_id=run_id, tables=tables)
+
+
+def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> PipelineExecutionSpec:
+    raw_queries = require_mapping(raw_workbook_spec.get("queries"), "Workbook queries")
+    comparison = ComparisonQuerySpec(
+        hive_sql=require_non_empty_string(raw_queries.get("hive_sql"), "Workbook queries hive_sql"),
+        iceberg_sql=require_non_empty_string(raw_queries.get("iceberg_sql"), "Workbook queries iceberg_sql"),
+        hive_exclude_columns=tuple(require_string_list(
+            raw_queries.get("hive_exclude_columns"),
+            "Workbook queries hive_exclude_columns",
+        )),
+        iceberg_exclude_columns=tuple(require_string_list(
+            raw_queries.get("iceberg_exclude_columns"),
+            "Workbook queries iceberg_exclude_columns",
+        )),
+    )
+
+    raw_tables = require_list_of_mappings(raw_workbook_spec.get("tables"), "Workbook tables")
+    raw_tables_by_name: dict[str, dict[str, Any]] = {}
+    raw_columns_by_table: dict[str, dict[str, dict[str, Any]]] = {}
+
+    for table_data in raw_tables:
+        table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
+        raw_tables_by_name[table_name] = table_data
+
+        table_columns = require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
+        raw_columns_by_table[table_name] = {}
+        for column_data in table_columns:
+            column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
+            raw_columns_by_table[table_name][column_name] = column_data
+
+    resolved_columns: dict[tuple[str, str], TableColumnSpec[Any]] = {}
+    resolving_stack: set[tuple[str, str]] = set()
+
+    def resolve_column(table_name: str, column_name: str) -> TableColumnSpec[Any]:
+        cache_key = (table_name, column_name)
+        cached_column = resolved_columns.get(cache_key)
+        if cached_column is not None:
+            return cached_column
+
+        if cache_key in resolving_stack:
+            raise SchemaValidationError(
+                f"Circular column dependency detected while resolving {table_name}.{column_name}"
+            )
+
+        table_columns = raw_columns_by_table.get(table_name)
+        if table_columns is None:
+            raise SchemaValidationError(f"Unknown table referenced in workbook contract: {table_name}")
+
+        column_data = table_columns.get(column_name)
+        if column_data is None:
+            raise SchemaValidationError(f"Unknown column referenced in workbook contract: {table_name}.{column_name}")
+
+        resolving_stack.add(cache_key)
+        try:
+            try:
+                engine_scope = EngineScope(
+                    require_non_empty_string(
+                        column_data.get("engine_scope"),
+                        f"Column {table_name}.{column_name} engine_scope",
+                    )
+                )
+            except ValueError as exc:
+                raise SchemaValidationError(
+                    f"Unsupported engine_scope for column {table_name}.{column_name}: {column_data.get('engine_scope')}"
+                ) from exc
+
+            constraints_data = get_constraints_data(column_name, column_data)
+            is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
+            raw_foreign_key = optional_mapping(
+                column_data.get("foreign_key"),
+                f"Column {table_name}.{column_name} foreign_key",
+            )
+            raw_derive = optional_mapping(
+                column_data.get("derive"),
+                f"Column {table_name}.{column_name} derive",
+            )
+
+            if raw_foreign_key:
+                unsupported_constraint_fields = sorted(
+                    set(constraints_data.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS
+                )
+                if unsupported_constraint_fields:
+                    unsupported_fields = ", ".join(unsupported_constraint_fields)
+                    raise SchemaValidationError(
+                        f"Foreign key column {column_name} supports only null_ratio constraint, "
+                        f"got: {unsupported_fields}"
+                    )
+
+                parent_column = resolve_column(
+                    require_non_empty_string(
+                        raw_foreign_key.get("table_name"),
+                        f"Column {table_name}.{column_name} foreign_key table_name",
+                    ),
+                    require_non_empty_string(
+                        raw_foreign_key.get("column_name"),
+                        f"Column {table_name}.{column_name} foreign_key column_name",
+                    ),
+                )
+                resolved_column = TableColumnSpec(
+                    name=column_name,
+                    output_data_type=parent_column.output_data_type,
+                    output_constraints=build_output_constraints(
+                        column_name=column_name,
+                        constraints_data=constraints_data,
+                        is_primary_key=is_primary_key,
+                    ),
+                    is_primary_key=is_primary_key,
+                    engine_scope=engine_scope,
+                    foreign_key=build_foreign_key_spec(column_name, raw_foreign_key),
+                )
+            elif raw_derive:
+                if constraints_data:
+                    raise SchemaValidationError(
+                        f"Derived column {column_name} cannot define constraints"
+                    )
+                if is_primary_key:
+                    raise SchemaValidationError(
+                        f"Derived column {column_name} cannot be primary key"
+                    )
+                output_raw = column_data.get("output_data_type")
+                if not output_raw:
+                    raise SchemaValidationError(
+                        f"Derived column {column_name} must declare output_data_type"
+                    )
+
+                source_column_name = require_non_empty_string(
+                    raw_derive.get("source_column"),
+                    f"Derived column {table_name}.{column_name} source_column",
+                )
+                source_column = resolve_column(table_name, source_column_name)
+                derivation = TableDerivationSpec(
+                    source_column=source_column_name,
+                    rule=DerivationRule(
+                        require_non_empty_string(
+                            raw_derive.get("rule"),
+                            f"Derived column {table_name}.{column_name} rule",
+                        )
+                    ),
+                )
+                output_data_type = DataType(
+                    require_non_empty_string(
+                        output_raw,
+                        f"Derived column {table_name}.{column_name} output_data_type",
+                    ).upper()
+                )
+                try:
+                    DERIVATION_POLICY.validate_derived_column_spec(
+                        column_name=column_name,
+                        source_column=source_column,
+                        derivation=derivation,
+                        output_data_type=output_data_type,
+                    )
+                except InvalidDerivationError as exc:
+                    raise SchemaValidationError(str(exc)) from exc
+                resolved_column = TableColumnSpec(
+                    name=column_name,
+                    output_data_type=output_data_type,
+                    output_constraints=DERIVATION_POLICY.derive_output_constraints_from_source(source_column),
+                    engine_scope=engine_scope,
+                    derivation=derivation,
+                )
+            else:
+                resolved_column = build_generated_column_spec(
+                    column_data=column_data,
+                    engine_scope=engine_scope,
+                )
+
+            resolved_columns[cache_key] = resolved_column
+            return resolved_column
+        finally:
+            resolving_stack.remove(cache_key)
+
+    execution_tables: list[TableExecutionSpec] = []
+    for table_data in raw_tables:
+        table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
+
+        table_spec = TableSpec(
+            table_name=table_name,
+            columns=[
+                resolve_column(
+                    table_name,
+                    require_non_empty_string(column_data.get("name"), f"Table {table_name} column name"),
+                )
+                for column_data in require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
+            ],
+            total_rows=require_integer(table_data.get("total_rows"), f"Table {table_name} total_rows"),
+        )
+        try:
+            write_mode = WriteMode(require_non_empty_string(table_data.get("write_mode"), f"Table {table_name} write_mode"))
+        except ValueError as exc:
+            raise SchemaValidationError(
+                f"Unsupported write_mode for table {table_name}: {table_data.get('write_mode')}"
+            ) from exc
+        execution_tables.append(
+            TableExecutionSpec(
+                table=table_spec,
+                load_spec=TableLoadSpec(
+                    hive_target_table=require_non_empty_string(
+                        table_data.get("hive_target_table"),
+                        f"Table {table_name} hive_target_table",
+                    ),
+                    iceberg_target_table=require_non_empty_string(
+                        table_data.get("iceberg_target_table"),
+                        f"Table {table_name} iceberg_target_table",
+                    ),
+                    write_mode=write_mode,
+                    hive_partition_columns=tuple(require_string_list(
+                        table_data.get("hive_partition_columns"),
+                        f"Table {table_name} hive_partition_columns",
+                    )),
+                    iceberg_partition_columns=tuple(require_string_list(
+                        table_data.get("iceberg_partition_columns"),
+                        f"Table {table_name} iceberg_partition_columns",
+                    )),
+                ),
+            )
+        )
+
+    return PipelineExecutionSpec(
+        tables=tuple(execution_tables),
+        comparison=comparison,
+    )

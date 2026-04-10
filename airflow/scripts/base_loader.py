@@ -21,10 +21,44 @@ from job_common import ComparisonContract, TableContract, logger, read_text_from
 
 
 class ComparisonDataNormalizer:
+    TECHNICAL_IGNORE_COLUMNS = {
+        "hive": frozenset({"date_part", "year_part", "month_part"}),
+        "iceberg": frozenset(),
+    }
     TIMESTAMP_OUTPUT_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
     DATE_OUTPUT_FORMAT = "yyyy-MM-dd"
     NORMALIZED_INTEGER_TYPE = "bigint"
     NORMALIZED_DECIMAL_TYPE = "decimal(38,18)"
+
+    @classmethod
+    def get_ignored_columns(cls, engine: str, extra_columns: tuple[str, ...]) -> set[str]:
+        return set(cls.TECHNICAL_IGNORE_COLUMNS.get(engine, frozenset())) | {
+            column_name for column_name in extra_columns if isinstance(column_name, str) and column_name.strip()
+        }
+
+    @staticmethod
+    def split_columns_for_comparison(
+        df: DataFrame,
+        ignored_columns: set[str],
+    ) -> tuple[list[str], list[str], list[str]]:
+        selected_columns: list[str] = []
+        ignored_by_name: list[str] = []
+        ignored_by_type: list[str] = []
+        ignored_names = {name.lower() for name in ignored_columns}
+
+        for schema_field in df.schema.fields:
+            column_name = schema_field.name
+            if column_name.lower() in ignored_names:
+                ignored_by_name.append(column_name)
+                continue
+
+            if schema_field.dataType.typeName() in {"timestamp", "timestamp_ntz", "date"}:
+                ignored_by_type.append(column_name)
+                continue
+
+            selected_columns.append(column_name)
+
+        return selected_columns, ignored_by_name, ignored_by_type
 
     def normalize(self, df: DataFrame) -> DataFrame:
         expressions = []
@@ -80,13 +114,23 @@ class ComparisonResultMaterializer:
 
     def materialize(self, comparison_contract: ComparisonContract, engine: str) -> None:
         engine_contract = comparison_contract.get_engine_contract(engine)
+        ignored_columns = self.normalizer.get_ignored_columns(engine, engine_contract.exclude_columns)
         logger.info(
             f"Comparison query execution started. engine={engine}, run_id={self.run_id}, "
             f"query_uri={engine_contract.query_uri}, result_uri={engine_contract.result_uri}"
         )
         comparison_query = self.read_query_from_uri(engine_contract.query_uri)
         comparison_df = self.spark.sql(comparison_query)
-        normalized_df = self.normalizer.normalize(comparison_df)
+        selected_columns, ignored_by_name, ignored_by_type = self.normalizer.split_columns_for_comparison(
+            comparison_df,
+            ignored_columns,
+        )
+        logger.info(
+            f"Comparison result columns filtered. engine={engine}, run_id={self.run_id}, "
+            f"kept={selected_columns}, ignored_by_name={ignored_by_name}, ignored_by_type={ignored_by_type}"
+        )
+        filtered_df = comparison_df.select(*(f.col(column_name) for column_name in selected_columns))
+        normalized_df = self.normalizer.normalize(filtered_df)
         self.write_result(normalized_df, engine_contract.result_uri, engine)
         logger.info(
             f"Comparison query execution completed. engine={engine}, run_id={self.run_id}, "
@@ -126,15 +170,12 @@ class BaseSynthLoader(ABC):
         )
 
     @abstractmethod
-    def write_to_tmp(self, data_uri: str, tmp_name: str) -> None:
+    def build_create_table_sql(self, schema: StructType, table_name: str) -> str:
         pass
 
-    def read_ddl_from_uri(self, ddl_uri: str) -> str:
-        return read_text_from_uri(self.spark, ddl_uri)
-
-    def build_tmp_ddl(self, table: TableContract) -> str:
-        ddl = self.read_ddl_from_uri(table.ddl_uri)
-        return ddl.replace(table.full_table_name, table.tmp_name)
+    @abstractmethod
+    def load_into_table(self, df: DataFrame, table_name: str) -> None:
+        pass
 
     def drop_table(self, table_name: str) -> None:
         self.spark.sql(f"DROP TABLE IF EXISTS {table_name} PURGE")
@@ -172,10 +213,10 @@ class BaseSynthLoader(ABC):
 
     def prepare_table(self, table: TableContract) -> None:
         logger.info(f"Preparing table. table={table.full_table_name}, run_id={self.run_id}")
-        tmp_ddl = self.build_tmp_ddl(table)
+        df = self.spark.read.parquet(table.data_uri)
         self.drop_table(table.tmp_name)
-        self.spark.sql(tmp_ddl)
-        self.write_to_tmp(table.data_uri, table.tmp_name)
+        self.spark.sql(self.build_create_table_sql(df.schema, table.tmp_name))
+        self.load_into_table(df, table.tmp_name)
         logger.info(f"Table prepared. table={table.full_table_name}, run_id={self.run_id}")
 
     def cleanup_tmp_tables(self, tables: list[TableContract]) -> None:

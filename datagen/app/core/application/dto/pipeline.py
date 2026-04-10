@@ -1,11 +1,33 @@
 from dataclasses import dataclass
 
-from app.core.application.dto.comparison import ComparisonReport
-from app.core.application.dto.execution import ExecutionResult
+from app.core.application.constants import WriteMode
+from app.core.domain.entities import TableSpec
 
 
-@dataclass(slots=True)
-class PipelineExecutionResult:
-    run_id: str
-    execution_result: ExecutionResult
-    comparison_report: ComparisonReport | None = None
+@dataclass(frozen=True, slots=True)
+class TableLoadSpec:
+    hive_target_table: str
+    iceberg_target_table: str
+    write_mode: WriteMode
+    hive_partition_columns: tuple[str, ...] = ()
+    iceberg_partition_columns: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonQuerySpec:
+    hive_sql: str
+    iceberg_sql: str
+    hive_exclude_columns: tuple[str, ...] = ()
+    iceberg_exclude_columns: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TableExecutionSpec:
+    table: TableSpec
+    load_spec: TableLoadSpec
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineExecutionSpec:
+    tables: tuple[TableExecutionSpec, ...]
+    comparison: ComparisonQuerySpec

@@ -108,7 +108,11 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         constraints: StringConstraints,
         output_constraints: OutputConstraints,
     ) -> list[str]:
-        values = list(dict.fromkeys(map(str, constraints.allowed_values)))
+        allowed_values = constraints.allowed_values
+        if allowed_values is None:
+            raise InvalidConstraintsError("allowed_values must be defined for constant string generation")
+
+        values = list(dict.fromkeys(map(str, allowed_values)))
 
         if output_constraints.is_unique:
             if total_rows > len(values):
@@ -123,7 +127,11 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         constraints: StringConstraints,
         output_constraints: OutputConstraints,
     ) -> list[str]:
-        parsed_regex = self.parse_fixed_length_char_class_regex(constraints.regular_expr)
+        regex = constraints.regular_expr
+        if regex is None:
+            raise InvalidConstraintsError("regular_expr must be defined for regex generation")
+
+        parsed_regex = self.parse_fixed_length_char_class_regex(regex)
         if parsed_regex:
             pool, length = parsed_regex
             return self.generate_fixed_length_pool_values(
@@ -140,7 +148,6 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         result = []
         batch_size = 1000
         apply_case = self.apply_case
-        regex = constraints.regular_expr
         case_mode = constraints.case_mode
 
         for start in range(0, total_rows, batch_size):

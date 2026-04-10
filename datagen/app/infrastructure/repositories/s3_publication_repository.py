@@ -1,21 +1,20 @@
 from datetime import datetime
 from tempfile import TemporaryFile
-from typing import Any, IO
+from typing import IO
 from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from app.core.application.constants import EngineName
+from app.core.application.dto.pipeline import TableLoadSpec
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout, TableStateKeyLayout
 from app.core.application.dto.publication import (
-    EngineLoadArtifact,
-    EngineLoadPayload,
     EnginePair,
-    PublicationArtifacts,
     TablePublication,
 )
 from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
 from app.core.domain.entities import GeneratedTableData
+from app.core.domain.value_types import GeneratedColumnsByName
 from app.infrastructure.errors import ObjectNotFoundError, RunStateCorruptedError
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
@@ -33,37 +32,19 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         destination.flush()
 
     @staticmethod
-    def deserialize_parquet(payload: bytes) -> dict[str, list[Any]]:
+    def deserialize_parquet(payload: bytes) -> GeneratedColumnsByName:
         table = pq.read_table(pa.BufferReader(payload))
         return table.to_pydict()
 
     def stage_data_artifact(self, table_data: GeneratedTableData, artifact_layout: RunArtifactKeyLayout) -> str:
         table = table_data.table
-        data_key = artifact_layout.data_key(table.schema_name, table.table_name)
+        data_key = artifact_layout.data_key(table.table_name)
         with TemporaryFile(mode="w+b") as temp_file:
             self.write_parquet(table_data, temp_file)
             return self.object_storage.upload_stream(
                 key=data_key,
                 stream=temp_file,
             )
-
-    def stage_engine_artifact(
-        self,
-        schema_name: str,
-        table_name: str,
-        artifact_layout: RunArtifactKeyLayout,
-        engine_name: EngineName,
-        load_payload: EngineLoadPayload,
-    ) -> EngineLoadArtifact:
-        ddl_key = artifact_layout.ddl_key(schema_name, table_name, engine_name)
-        ddl_uri = self.object_storage.put_text(
-            key=ddl_key,
-            content=f"{load_payload.ddl_query.strip()}\n",
-        )
-        return EngineLoadArtifact(
-            ddl_uri=ddl_uri,
-            target_table_name=load_payload.target_table_name,
-        )
 
     def stage_comparison_query(
         self,
@@ -76,47 +57,19 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
             content=f"{rendered_query.strip()}\n",
         )
 
-    def stage_engine_artifacts(
-            self,
-            table_data: GeneratedTableData,
-            artifact_layout: RunArtifactKeyLayout,
-            engine_load_payloads: EnginePair[EngineLoadPayload],
-    ) -> EnginePair[EngineLoadArtifact]:
-        table = table_data.table
-        return EnginePair(
-            hive=self.stage_engine_artifact(
-                schema_name=table.schema_name,
-                table_name=table.table_name,
-                artifact_layout=artifact_layout,
-                engine_name=EngineName.HIVE,
-                load_payload=engine_load_payloads.hive,
-            ),
-            iceberg=self.stage_engine_artifact(
-                schema_name=table.schema_name,
-                table_name=table.table_name,
-                artifact_layout=artifact_layout,
-                engine_name=EngineName.ICEBERG,
-                load_payload=engine_load_payloads.iceberg,
-            ),
-        )
-
     def stage_table_artifacts(
             self,
             table_data: GeneratedTableData,
             artifact_layout: RunArtifactKeyLayout,
-            engine_load_payloads: EnginePair[EngineLoadPayload],
+            load_spec: TableLoadSpec,
     ) -> TablePublication:
         data_uri = self.stage_data_artifact(table_data, artifact_layout)
-        engines = self.stage_engine_artifacts(table_data, artifact_layout, engine_load_payloads)
         table = table_data.table
         return TablePublication(
-            schema_name=table.schema_name,
             table_name=table.table_name,
             run_id=artifact_layout.run_id,
-            artifacts=PublicationArtifacts(
-                data_uri=data_uri,
-                engines=engines,
-            ),
+            data_uri=data_uri,
+            load_spec=load_spec,
         )
 
     def stage_comparison_queries(
@@ -137,10 +90,10 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
             ),
         )
 
-    def commit_pointer(self, schema_name: str, table_name: str, run_id: str) -> None:
-        state_layout = TableStateKeyLayout(schema_name=schema_name, table_name=table_name)
+    def commit_pointer(self, table_name: str, run_id: str) -> None:
+        state_layout = TableStateKeyLayout(table_name=table_name)
         pointer_key = state_layout.pointer_key
-        previous_run_id = self.get_latest_run_id(schema_name, table_name)
+        previous_run_id = self.get_latest_run_id(table_name)
 
         self.object_storage.put_json(
             key=pointer_key,
@@ -151,8 +104,8 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
             },
         )
 
-    def get_latest_run_id(self, schema_name: str, table_name: str) -> str | None:
-        state_layout = TableStateKeyLayout(schema_name=schema_name, table_name=table_name)
+    def get_latest_run_id(self, table_name: str) -> str | None:
+        state_layout = TableStateKeyLayout(table_name=table_name)
         pointer_key = state_layout.pointer_key
         try:
             payload = self.object_storage.get_json(key=pointer_key)
@@ -164,9 +117,9 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
             raise RunStateCorruptedError(f"latest_generated pointer is corrupted for key={pointer_key}: invalid run_id")
         return run_id
 
-    def read_table_data(self, schema_name: str, table_name: str, run_id: str) -> dict[str, Any]:
+    def read_table_data(self, table_name: str, run_id: str) -> GeneratedColumnsByName:
         artifact_layout = RunArtifactKeyLayout(run_id=run_id)
-        key = artifact_layout.data_key(schema_name, table_name)
+        key = artifact_layout.data_key(table_name)
         payload = self.object_storage.get_bytes(key=key)
         return self.deserialize_parquet(payload)
 

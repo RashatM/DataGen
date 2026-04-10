@@ -1,6 +1,7 @@
 import time
 
-from app.core.application.dto.pipeline import PipelineExecutionResult
+from app.core.application.dto.execution_result import PipelineExecutionResult
+from app.core.application.dto.pipeline import PipelineExecutionSpec
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.core.application.services.comparison_service import ComparisonReportService
@@ -27,8 +28,15 @@ class ExecutePipelineUseCase:
         self.execution_runner = execution_runner
         self.execution_timeout_seconds = execution_timeout_seconds
 
-    def execute(self, generation_run: GenerationRun) -> PipelineExecutionResult:
-        run_id = generation_run.run_id
+    def execute(self, run_id: str, pipeline_spec: PipelineExecutionSpec) -> PipelineExecutionResult:
+        generation_run = GenerationRun(
+            run_id=run_id,
+            tables=[table_execution.table for table_execution in pipeline_spec.tables],
+        )
+        execution_tables_by_name = {
+            table_execution.table.table_name: table_execution
+            for table_execution in pipeline_spec.tables
+        }
         artifact_layout = RunArtifactKeyLayout(run_id=run_id)
         start = time.monotonic()
         logger.info(f"Pipeline started: run_id={run_id}")
@@ -36,16 +44,18 @@ class ExecutePipelineUseCase:
         table_publications = []
         try:
             for table_data in self.generation_service.generate_tables(generation_run):
+                table_execution = execution_tables_by_name[table_data.table.table_name]
                 table_publications.append(
                     self.artifact_publication_service.stage_table(
                         artifact_layout=artifact_layout,
+                        table_execution=table_execution,
                         table_data=table_data,
                     )
                 )
 
             comparison_query_uris = self.artifact_publication_service.stage_comparison_queries(
                 artifact_layout=artifact_layout,
-                table_publications=table_publications,
+                comparison_spec=pipeline_spec.comparison,
             )
             self.artifact_publication_service.commit_pointers(table_publications)
         except Exception:
@@ -56,6 +66,7 @@ class ExecutePipelineUseCase:
         execution_result = self.execution_runner.trigger_and_wait(
             artifact_layout=artifact_layout,
             publications=table_publications,
+            comparison_spec=pipeline_spec.comparison,
             comparison_query_uris=comparison_query_uris,
             timeout_seconds=self.execution_timeout_seconds,
         )

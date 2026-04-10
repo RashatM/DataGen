@@ -30,10 +30,10 @@ logger = create_logger()
 
 @dataclass
 class TableContract:
-    logical_table_name: str
     full_table_name: str
     data_uri: str
-    ddl_uri: str
+    write_mode: str
+    partition_columns: tuple[str, ...]
 
     tmp_name: str = field(init=False)
     old_name: str = field(init=False)
@@ -45,13 +45,13 @@ class TableContract:
 
 @dataclass
 class EngineTableContract:
-    ddl_uri: str
     target_table_name: str
+    write_mode: str
+    partition_columns: tuple[str, ...]
 
 
 @dataclass
 class ContractTable:
-    schema_name: str
     table_name: str
     data_uri: str
     hive: EngineTableContract
@@ -66,10 +66,10 @@ class ContractTable:
             raise ValueError(f"Unsupported engine={engine}")
 
         return TableContract(
-            logical_table_name=f"{self.schema_name}.{self.table_name}",
             full_table_name=engine_contract.target_table_name,
             data_uri=self.data_uri,
-            ddl_uri=engine_contract.ddl_uri,
+            write_mode=engine_contract.write_mode,
+            partition_columns=engine_contract.partition_columns,
         )
 
 
@@ -77,12 +77,14 @@ class ContractTable:
 class EngineComparisonContract:
     query_uri: str
     result_uri: str
+    exclude_columns: tuple[str, ...]
 
 
 @dataclass
 class ComparisonContract:
     query_uris: dict[str, str]
     result_uris: dict[str, str]
+    exclude_columns: dict[str, tuple[str, ...]]
     report_uri: str
 
     def get_engine_contract(self, engine: str) -> EngineComparisonContract:
@@ -97,6 +99,7 @@ class ComparisonContract:
         return EngineComparisonContract(
             query_uri=query_uri,
             result_uri=result_uri,
+            exclude_columns=tuple(self.exclude_columns.get(engine, ())),
         )
 
 
@@ -120,16 +123,17 @@ def load_contract(contract_json: str) -> dict[str, Any]:
 def parse_contract_tables(tables_payload: list[dict[str, Any]]) -> list[ContractTable]:
     return [
         ContractTable(
-            schema_name=table["schema_name"],
             table_name=table["table_name"],
-            data_uri=table["artifacts"]["data_uri"],
+            data_uri=table["data_uri"],
             hive=EngineTableContract(
-                ddl_uri=table["artifacts"]["engines"]["hive"]["ddl_uri"],
-                target_table_name=table["artifacts"]["engines"]["hive"]["target_table_name"],
+                target_table_name=table["load"]["hive"]["target_table_name"],
+                write_mode=table["load"]["hive"]["write_mode"],
+                partition_columns=tuple(table["load"]["hive"].get("partition_columns", [])),
             ),
             iceberg=EngineTableContract(
-                ddl_uri=table["artifacts"]["engines"]["iceberg"]["ddl_uri"],
-                target_table_name=table["artifacts"]["engines"]["iceberg"]["target_table_name"],
+                target_table_name=table["load"]["iceberg"]["target_table_name"],
+                write_mode=table["load"]["iceberg"]["write_mode"],
+                partition_columns=tuple(table["load"]["iceberg"].get("partition_columns", [])),
             ),
         )
         for table in tables_payload
@@ -147,6 +151,10 @@ def parse_job_contract(contract_json: str) -> JobContract:
             comparison=ComparisonContract(
                 query_uris=dict(comparison["query_uris"]),
                 result_uris=dict(comparison["result_uris"]),
+                exclude_columns={
+                    engine: tuple(columns)
+                    for engine, columns in dict(comparison.get("exclude_columns", {})).items()
+                },
                 report_uri=comparison["report_uri"],
             ),
         )

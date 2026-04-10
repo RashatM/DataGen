@@ -8,9 +8,26 @@ from app.core.domain.conversion_rules import ALLOWED_OUTPUT_TYPES
 from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
 
 SHEET_TABLES = "tables"
+SHEET_QUERIES = "queries"
 EXCEL_SUFFIXES = {".xlsx", ".xlsm"}
 TABLES_HEADER_FIELDS = {"schema_name", "table_name", "total_rows"}
+WORKBOOK_TABLES_HEADER_FIELDS = {
+    "table_name",
+    "total_rows",
+    "hive_target_table",
+    "iceberg_target_table",
+    "write_mode",
+    "hive_partition_columns",
+    "iceberg_partition_columns",
+}
+WORKBOOK_QUERIES_HEADER_FIELDS = {
+    "hive_sql",
+    "iceberg_sql",
+    "hive_exclude_columns",
+    "iceberg_exclude_columns",
+}
 DATA_SHEET_REQUIRED_FIELDS = {"column_name", "generator_data_type"}
+WORKBOOK_DATA_SHEET_REQUIRED_FIELDS = {"column_name"}
 ROW_DATA_FIELDS = (
     "column_name",
     "generator_data_type",
@@ -19,6 +36,30 @@ ROW_DATA_FIELDS = (
     "constraints",
     "foreign_key",
 )
+WORKBOOK_ROW_DATA_FIELDS = (
+    "column_name",
+    "generator_data_type",
+    "output_data_type",
+    "is_primary_key",
+    "constraints",
+    "foreign_key",
+    "engine_scope",
+    "derive",
+)
+WORKBOOK_QUERY_ROW_FIELDS = (
+    "hive_sql",
+    "iceberg_sql",
+    "hive_exclude_columns",
+    "iceberg_exclude_columns",
+)
+WRITE_MODES = {
+    "OVERWRITE_TABLE",
+    "OVERWRITE_PARTITIONS",
+    "APPEND",
+    "APPEND_DISTINCT_PARTITIONS",
+}
+ENGINE_SCOPES = {"both", "hive_only", "iceberg_only"}
+DERIVE_RULES = {"YYYYMMDD", "YYYY", "MM"}
 GENERATOR_TYPE_ALIASES = {
     "STRING": DataType.STRING.value,
     "INT": DataType.INT.value,
@@ -43,6 +84,17 @@ HEADER_ALIASES = {
     "is_primary_key": "is_primary_key",
     "constraints": "constraints",
     "foreign_key": "foreign_key",
+    "engine_scope": "engine_scope",
+    "derive": "derive",
+    "hive_target_table": "hive_target_table",
+    "iceberg_target_table": "iceberg_target_table",
+    "write_mode": "write_mode",
+    "hive_partition_columns": "hive_partition_columns",
+    "iceberg_partition_columns": "iceberg_partition_columns",
+    "hive_sql": "hive_sql",
+    "iceberg_sql": "iceberg_sql",
+    "hive_exclude_columns": "hive_exclude_columns",
+    "iceberg_exclude_columns": "iceberg_exclude_columns",
 }
 LEGACY_CONSTRAINT_ALIASES = {
     "unique": "is_unique",
@@ -132,6 +184,10 @@ def row_has_data(row: pd.Series) -> bool:
     return any(normalize_text(row.get(field_name)) for field_name in ROW_DATA_FIELDS)
 
 
+def row_has_data_by_fields(row: pd.Series, field_names: tuple[str, ...]) -> bool:
+    return any(normalize_text(row.get(field_name)) for field_name in field_names)
+
+
 def normalize_sheet(df: pd.DataFrame) -> pd.DataFrame:
     normalized_df = df.dropna(how="all").copy()
     normalized_df.columns = [
@@ -151,6 +207,25 @@ def find_tables_header(df: pd.DataFrame) -> tuple[int, dict[str, int]]:
         if TABLES_HEADER_FIELDS <= set(current_headers):
             return row_index, current_headers
     raise ValueError("could not find table metadata header on 'tables' sheet")
+
+
+def find_required_header(
+    df: pd.DataFrame,
+    required_headers: set[str],
+    *,
+    max_rows: int = 20,
+    max_columns: int = 20,
+) -> tuple[int, dict[str, int]]:
+    for row_index in range(min(len(df.index), max_rows)):
+        current_headers: dict[str, int] = {}
+        for column_index in range(min(len(df.columns), max_columns)):
+            header = normalize_text(df.iat[row_index, column_index]).lower()
+            if header:
+                current_headers[header] = column_index
+        if required_headers <= set(current_headers):
+            return row_index, current_headers
+    required_text = ", ".join(sorted(required_headers))
+    raise ValueError(f"could not find required header: {required_text}")
 
 
 def parse_optional_bool(value: Any, field_name: str) -> bool | None:
@@ -186,6 +261,42 @@ def normalize_output_type(value: Any) -> str | None:
     if not normalized:
         raise ValueError(f"unsupported output_data_type: {value!r}")
     return normalized
+
+
+def normalize_write_mode(value: Any) -> str:
+    text = normalize_text(value).upper()
+    if not text:
+        raise ValueError("write_mode must not be empty")
+    if text not in WRITE_MODES:
+        supported = ", ".join(sorted(WRITE_MODES))
+        raise ValueError(f"unsupported write_mode: {value!r}. Supported: {supported}")
+    return text
+
+
+def normalize_engine_scope(value: Any) -> str:
+    text = normalize_text(value).lower()
+    if not text:
+        return "both"
+    if text not in ENGINE_SCOPES:
+        supported = ", ".join(sorted(ENGINE_SCOPES))
+        raise ValueError(f"unsupported engine_scope: {value!r}. Supported: {supported}")
+    return text
+
+
+def parse_csv_list(raw_value: Any) -> list[str]:
+    text = normalize_text(raw_value)
+    if not text:
+        return []
+    items: list[str] = []
+    seen: set[str] = set()
+    for chunk in text.split(","):
+        item = normalize_text(chunk)
+        if not item:
+            continue
+        if item not in seen:
+            seen.add(item)
+            items.append(item)
+    return items
 
 
 def split_semicolon_pairs(raw_text: str) -> list[str]:
@@ -358,11 +469,10 @@ def apply_legacy_string_flags(constraints: dict[str, Any], legacy_flags: dict[st
         raise ValueError("digits_only=true and chars_only=true cannot be used together")
 
 
-def normalize_foreign_key(raw_foreign_key: dict[str, Any], current_schema_name: str) -> dict[str, Any] | None:
+def normalize_foreign_key(raw_foreign_key: dict[str, Any]) -> dict[str, Any] | None:
     if not raw_foreign_key:
         return None
 
-    schema_name = normalize_text(raw_foreign_key.get("schema_name")) or current_schema_name
     table_name = normalize_text(raw_foreign_key.get("table_name"))
     column_name = normalize_text(raw_foreign_key.get("column_name"))
     relation_type = normalize_text(raw_foreign_key.get("relation_type")).upper()
@@ -375,8 +485,49 @@ def normalize_foreign_key(raw_foreign_key: dict[str, Any], current_schema_name: 
         raise ValueError(f"unsupported relation_type: {relation_type!r}")
 
     return {
-        "schema_name": schema_name,
         "table_name": table_name,
         "column_name": column_name,
         "relation_type": relation_type,
+    }
+
+
+def normalize_foreign_key_reference(raw_foreign_key: dict[str, Any]) -> dict[str, str] | None:
+    if not raw_foreign_key:
+        return None
+
+    table_name = normalize_text(raw_foreign_key.get("table_name"))
+    column_name = normalize_text(raw_foreign_key.get("column_name"))
+    relation_type = normalize_text(raw_foreign_key.get("relation_type")).upper()
+
+    if not table_name or not column_name or not relation_type:
+        raise ValueError("foreign_key must contain table_name, column_name and relation_type")
+
+    allowed_relation_types = {item.value for item in RelationType}
+    if relation_type not in allowed_relation_types:
+        raise ValueError(f"unsupported relation_type: {relation_type!r}")
+
+    return {
+        "table_name": table_name,
+        "column_name": column_name,
+        "relation_type": relation_type,
+    }
+
+
+def normalize_derive_spec(raw_derive: dict[str, Any]) -> dict[str, str] | None:
+    if not raw_derive:
+        return None
+
+    source_column = normalize_text(raw_derive.get("source_column"))
+    rule = normalize_text(raw_derive.get("rule")).upper()
+
+    if not source_column or not rule:
+        raise ValueError("derive must contain source_column and rule")
+
+    if rule not in DERIVE_RULES:
+        supported = ", ".join(sorted(DERIVE_RULES))
+        raise ValueError(f"unsupported derive rule: {rule!r}. Supported: {supported}")
+
+    return {
+        "source_column": source_column,
+        "rule": rule,
     }

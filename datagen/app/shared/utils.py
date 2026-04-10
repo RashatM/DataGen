@@ -1,15 +1,12 @@
 import random
-from typing import Any
+from collections.abc import Sequence
+from typing import TypeVar
+
+TItem = TypeVar("TItem")
 
 
-def random_choices_from_constants(constants: list[Any], length: int, rng: random.Random) -> list[Any]:
+def random_choices_from_constants(constants: Sequence[TItem], length: int, rng: random.Random) -> list[TItem]:
     return rng.choices(constants, k=length) if len(constants) > 1 else [constants[0] for _ in range(length)]
-
-
-def shuffle_values_with_nulls(target_count: int, values: list[Any], rng: random.Random) -> list[Any]:
-    values = [None] * target_count + values
-    rng.shuffle(values)
-    return values
 
 
 def visualize_graph(graph):

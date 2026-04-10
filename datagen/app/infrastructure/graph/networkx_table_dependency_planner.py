@@ -28,8 +28,8 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
                 if not fk_info:
                     continue
 
-                ref_table_name = fk_info.full_table_name
-                source_column_name = f"{table.full_table_name}.{column.name}"
+                ref_table_name = fk_info.table_name
+                source_column_name = f"{table.table_name}.{column.name}"
                 referenced_column_name = f"{ref_table_name}.{fk_info.column_name}"
                 ref_table = table_by_name.get(ref_table_name)
 
@@ -92,12 +92,12 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
         if self.can_skip_planning(tables):
             return tables
 
-        table_by_name: dict[str, TableSpec] = {table.full_table_name: table for table in tables}
+        table_by_name: dict[str, TableSpec] = {table.table_name: table for table in tables}
         table_columns_map = {
-            table.full_table_name: {column.name for column in table.columns} for table in tables
+            table.table_name: {column.name for column in table.columns} for table in tables
         }
         table_column_specs = {
-            table.full_table_name: {column.name: column for column in table.columns} for table in tables
+            table.table_name: {column.name: column for column in table.columns} for table in tables
         }
         graph = nx.DiGraph()
         invalid_references = self.collect_invalid_references(

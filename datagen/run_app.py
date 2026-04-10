@@ -5,8 +5,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.core.application.use_cases.execute_pipeline import ExecutePipelineUseCase
-from app.infrastructure.converters.schema_converter import convert_to_generation_run
-from app.infrastructure.input.excel_raw_table_loader import load_raw_tables
+from app.infrastructure.converters.schema_converter import convert_to_pipeline_execution_spec
+from app.infrastructure.input.excel_raw_table_loader import load_workbook_specs
 from app.providers import (
     provide_artifact_publication_service,
     provide_comparison_report_service,
@@ -39,23 +39,28 @@ def run_app(
         s3_client=s3_client,
     )
     try:
-        loaded_raw_tables = load_raw_tables(
-            raw_tables=raw_tables,
+        if raw_tables is not None:
+            raise ValueError("run_app no longer supports legacy raw_tables input")
+
+        workbook_specs = load_workbook_specs(
             input_path=Path(__file__).resolve().parent / "params",
         )
-        generation_run = convert_to_generation_run(
-            run_id=generate_run_id(),
-            raw_tables=loaded_raw_tables,
-        )
+        if len(workbook_specs) != 1:
+            raise ValueError(
+                f"Exactly one workbook spec is supported, got {len(workbook_specs)}"
+            )
+
+        run_id = generate_run_id()
+        pipeline_spec = convert_to_pipeline_execution_spec(workbook_specs[0])
 
         use_case = ExecutePipelineUseCase(
             generation_service=provide_generation_service(),
-            artifact_publication_service=provide_artifact_publication_service(object_storage, config.target_storage),
+            artifact_publication_service=provide_artifact_publication_service(object_storage),
             comparison_report_service=provide_comparison_report_service(object_storage),
             execution_runner=provide_execution_runner(config.airflow, object_storage),
             execution_timeout_seconds=config.airflow.dag_timeout_seconds,
         )
-        pipeline_result = use_case.execute(generation_run=generation_run)
+        pipeline_result = use_case.execute(run_id=run_id, pipeline_spec=pipeline_spec)
         execution_result = pipeline_result.execution_result
         execution_details = f", execution_id={execution_result.execution_id}"
         if execution_result.execution_url:

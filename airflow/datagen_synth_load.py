@@ -13,6 +13,12 @@ DAG_DESCRIPTION = "DataGen: loads synthetic data from S3 to Iceberg and Hive"
 DAG_TAGS = ["datagen", "synthetic"]
 SCHEDULE_INTERVAL = None
 EMAIL_LIST = []
+ALLOWED_WRITE_MODES = {
+    "OVERWRITE_TABLE",
+    "OVERWRITE_PARTITIONS",
+    "APPEND",
+    "APPEND_DISTINCT_PARTITIONS",
+}
 
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/base_loader.py"
 JOB_COMMON_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/job_common.py"
@@ -42,34 +48,50 @@ def validate_table_contracts(conf: dict[str, Any]) -> None:
         if not isinstance(table, dict):
             raise ValueError(f"Contract table at index={index} must be an object")
 
-        require_non_empty_string(table.get("schema_name"), f"tables[{index}].schema_name")
         require_non_empty_string(table.get("table_name"), f"tables[{index}].table_name")
 
-        artifacts = table.get("artifacts")
-        if not isinstance(artifacts, dict):
-            raise ValueError(f"Contract is missing 'tables[{index}].artifacts'")
+        require_non_empty_string(table.get("data_uri"), f"tables[{index}].data_uri")
 
-        require_non_empty_string(artifacts.get("data_uri"), f"tables[{index}].artifacts.data_uri")
-
-        engines = artifacts.get("engines")
-        if not isinstance(engines, dict):
-            raise ValueError(f"Contract is missing 'tables[{index}].artifacts.engines'")
+        load = table.get("load")
+        if not isinstance(load, dict):
+            raise ValueError(f"Contract is missing 'tables[{index}].load'")
 
         for engine in ("hive", "iceberg"):
-            engine_artifacts = engines.get(engine)
-            if not isinstance(engine_artifacts, dict):
+            engine_load = load.get(engine)
+            if not isinstance(engine_load, dict):
                 raise ValueError(
-                    f"Contract is missing 'tables[{index}].artifacts.engines.{engine}'"
+                    f"Contract is missing 'tables[{index}].load.{engine}'"
                 )
 
             require_non_empty_string(
-                engine_artifacts.get("ddl_uri"),
-                f"tables[{index}].artifacts.engines.{engine}.ddl_uri",
+                engine_load.get("target_table_name"),
+                f"tables[{index}].load.{engine}.target_table_name",
             )
             require_non_empty_string(
-                engine_artifacts.get("target_table_name"),
-                f"tables[{index}].artifacts.engines.{engine}.target_table_name",
+                engine_load.get("write_mode"),
+                f"tables[{index}].load.{engine}.write_mode",
             )
+            if engine_load["write_mode"] not in ALLOWED_WRITE_MODES:
+                allowed = ", ".join(sorted(ALLOWED_WRITE_MODES))
+                raise ValueError(
+                    f"Unsupported write_mode in tables[{index}].load.{engine}: "
+                    f"{engine_load['write_mode']}. Allowed: {allowed}"
+                )
+            partition_columns = engine_load.get("partition_columns", [])
+            if not isinstance(partition_columns, list):
+                raise ValueError(
+                    f"Contract is missing list 'tables[{index}].load.{engine}.partition_columns'"
+                )
+            for column_index, column_name in enumerate(partition_columns):
+                require_non_empty_string(
+                    column_name,
+                    f"tables[{index}].load.{engine}.partition_columns[{column_index}]",
+                )
+            if engine_load["write_mode"] in {"OVERWRITE_PARTITIONS", "APPEND_DISTINCT_PARTITIONS"} and not partition_columns:
+                raise ValueError(
+                    f"tables[{index}].load.{engine}.partition_columns must be non-empty "
+                    f"for write_mode={engine_load['write_mode']}"
+                )
 
 
 def validate_contract(**context) -> None:
@@ -101,6 +123,20 @@ def validate_contract(**context) -> None:
             result_uris.get(engine),
             f"comparison.result_uris.{engine}",
         )
+
+    exclude_columns = comparison.get("exclude_columns")
+    if exclude_columns is not None:
+        if not isinstance(exclude_columns, dict):
+            raise ValueError("Contract field 'comparison.exclude_columns' must be an object")
+        for engine in ("hive", "iceberg"):
+            engine_columns = exclude_columns.get(engine, [])
+            if not isinstance(engine_columns, list):
+                raise ValueError(f"comparison.exclude_columns.{engine} must be a list")
+            for column_index, column_name in enumerate(engine_columns):
+                require_non_empty_string(
+                    column_name,
+                    f"comparison.exclude_columns.{engine}[{column_index}]",
+                )
 
 
 def get_iceberg_spark_config(**context) -> dict[str, str]:

@@ -1,17 +1,23 @@
 from collections.abc import Iterator
 import random
 import time
-from typing import Any
 
+from app.core.application.errors import GenerationInvariantError
 from app.core.application.internal.foreign_key_reference_tracker import ForeignKeyReferenceTracker
 from app.core.application.ports.generator_factory_port import DataGeneratorFactoryPort
 from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
 from app.core.application.ports.value_converter_port import ValueConverterPort
+from app.core.domain.derivation import DerivationPolicy
 from app.core.domain.entities import GeneratedTableData, GenerationRun, TableColumnSpec, TableSpec
 from app.core.domain.enums import RelationType
-from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
+from app.core.domain.output_validation import validate_column_output_values
+from app.core.domain.value_types import (
+    ColumnValues,
+    GeneratedColumnsByName,
+    NonNullColumnValues,
+)
+from app.core.domain.validation_errors import UnsatisfiableConstraintsError
 from app.shared.logger import generation_logger
-from app.shared.utils import shuffle_values_with_nulls
 
 logger = generation_logger
 
@@ -28,101 +34,180 @@ class DataGenerationService:
         self.data_generator_factory = data_generator_factory
         self.value_converter = value_converter
         self.rng = rng
+        self.derivation_policy = DerivationPolicy()
 
-    def generate_column_values(self, total_rows: int, table_column: TableColumnSpec) -> list[Any]:
-        total_nulls = int(total_rows * table_column.output_constraints.null_ratio)
-        total_non_nulls = total_rows - total_nulls
+    @staticmethod
+    def insert_nulls(
+        values: NonNullColumnValues,
+        total_rows: int,
+        null_positions: set[int],
+    ) -> ColumnValues:
+        if not null_positions:
+            return values
 
-        values = self.data_generator_factory.get(table_column.generator_data_type).generate_values(
-            total_rows=total_non_nulls,
+        output_values: ColumnValues = []
+        append_output_value = output_values.append
+        value_index = 0
+
+        for row_index in range(total_rows):
+            if row_index in null_positions:
+                append_output_value(None)
+                continue
+
+            append_output_value(values[value_index])
+            value_index += 1
+
+        return output_values
+
+    def generate_non_null_source_values(
+        self,
+        total_non_null_rows: int,
+        table_column: TableColumnSpec,
+    ) -> NonNullColumnValues:
+        return self.data_generator_factory.get(table_column.generator_data_type).generate_values(
+            total_rows=total_non_null_rows,
             constraints=table_column.generator_constraints,
             output_constraints=table_column.output_constraints,
         )
-        values = self.value_converter.convert(values=values, table_column=table_column)
 
-        if table_column.output_constraints.null_ratio > 0:
-            values = shuffle_values_with_nulls(target_count=total_nulls, values=values, rng=self.rng)
-
-        return values
-
-    def generate_foreign_key_values(
+    def build_foreign_key_non_null_values(
         self,
-        total_rows: int,
+        total_non_null_rows: int,
         table_column: TableColumnSpec,
-        referenced_values: list[Any],
-    ) -> list[Any]:
-        total_nulls = int(total_rows * table_column.output_constraints.null_ratio)
-        total_non_nulls = total_rows - total_nulls
+        referenced_values: ColumnValues,
+    ) -> NonNullColumnValues:
+        foreign_key = table_column.foreign_key
+        if foreign_key is None:
+            raise GenerationInvariantError(f"Column {table_column.name} is not a foreign key")
+
         reference_pool = [value for value in referenced_values if value is not None]
 
-        if not reference_pool and total_non_nulls > 0:
+        if not reference_pool and total_non_null_rows > 0:
             raise UnsatisfiableConstraintsError(
                 f"Foreign key column {table_column.name} has no non-null referenced values to sample from"
             )
 
-        if table_column.foreign_key.relation_type == RelationType.ONE_TO_MANY:
-            values = self.rng.choices(reference_pool, k=total_non_nulls)
-        else:
-            if total_non_nulls > len(reference_pool):
-                raise UnsatisfiableConstraintsError(
-                    f"Foreign key column {table_column.name} requires {total_non_nulls} unique referenced values, "
-                    f"but only {len(reference_pool)} are available"
-                )
-            values = self.rng.sample(reference_pool, total_non_nulls)
+        if foreign_key.relation_type == RelationType.ONE_TO_MANY:
+            return self.rng.choices(reference_pool, k=total_non_null_rows)
 
-        if total_nulls > 0:
-            values = shuffle_values_with_nulls(target_count=total_nulls, values=values, rng=self.rng)
+        if total_non_null_rows > len(reference_pool):
+            raise UnsatisfiableConstraintsError(
+                f"Foreign key column {table_column.name} requires {total_non_null_rows} unique referenced values, "
+                f"but only {len(reference_pool)} are available"
+            )
+        return self.rng.sample(reference_pool, total_non_null_rows)
 
-        return values
+    def finalize_output_values(
+        self,
+        table_column: TableColumnSpec,
+        output_non_null_values: NonNullColumnValues,
+        total_rows: int,
+        null_positions: set[int],
+    ) -> ColumnValues:
+        output_values = self.insert_nulls(
+            values=output_non_null_values,
+            total_rows=total_rows,
+            null_positions=null_positions,
+        )
+        validate_column_output_values(table_column=table_column, values=output_values)
+        return output_values
 
     @staticmethod
-    def validate_generated_values(table_column: TableColumnSpec, values: list[Any]) -> None:
-        non_null_values = [value for value in values if value is not None]
+    def collect_derived_columns_by_source(
+        table: TableSpec,
+    ) -> dict[str, list[TableColumnSpec]]:
+        derived_columns_by_source: dict[str, list[TableColumnSpec]] = {}
 
-        if table_column.is_primary_key and len(non_null_values) != len(values):
-            raise InvalidConstraintsError(f"Primary key column {table_column.name} cannot contain null values")
+        for table_column in table.columns:
+            if not table_column.is_derived:
+                continue
 
-        if table_column.output_constraints.is_unique and len(set(non_null_values)) != len(non_null_values):
-            raise UnsatisfiableConstraintsError(
-                f"Generated values for column {table_column.name} are not unique in final output"
-            )
+            derivation = table_column.derivation
+            if derivation is None:
+                raise GenerationInvariantError(f"Column {table_column.name} is marked as derived without derivation config")
+
+            derived_columns_by_source.setdefault(derivation.source_column, []).append(table_column)
+
+        return derived_columns_by_source
 
     def generate_table_data(
         self,
         table: TableSpec,
         fk_reference_tracker: ForeignKeyReferenceTracker,
     ) -> GeneratedTableData:
-        generated_columns: dict[str, list[Any]] = {}
+        derived_columns_by_source = self.collect_derived_columns_by_source(table)
+        generated_columns: GeneratedColumnsByName = {}
         table_started_at = time.monotonic()
 
         for table_column in table.columns:
-            fk_info = table_column.foreign_key
-            if fk_info:
-                referenced_values = fk_reference_tracker.get_cached_parent_values(table_column)
-                generated_columns[table_column.name] = self.generate_foreign_key_values(
-                    total_rows=table.total_rows,
+            if table_column.is_derived:
+                continue
+
+            total_nulls = int(table.total_rows * table_column.output_constraints.null_ratio)
+            total_non_null_rows = table.total_rows - total_nulls
+            null_positions = set(self.rng.sample(range(table.total_rows), total_nulls)) if total_nulls else set()
+
+            if table_column.is_foreign_key:
+                foreign_key_output_non_null_values = self.build_foreign_key_non_null_values(
+                    total_non_null_rows=total_non_null_rows,
                     table_column=table_column,
-                    referenced_values=referenced_values,
+                    referenced_values=fk_reference_tracker.get_cached_parent_values(table_column),
                 )
-            else:
-                generated_columns[table_column.name] = self.generate_column_values(
-                    total_rows=table.total_rows,
+                generated_columns[table_column.name] = self.finalize_output_values(
                     table_column=table_column,
+                    output_non_null_values=foreign_key_output_non_null_values,
+                    total_rows=table.total_rows,
+                    null_positions=null_positions,
+                )
+                continue
+
+            derived_columns = derived_columns_by_source.get(table_column.name, [])
+            source_non_null_values = self.generate_non_null_source_values(
+                total_non_null_rows=total_non_null_rows,
+                table_column=table_column,
+            )
+            base_output_non_null_values = self.value_converter.convert(
+                values=source_non_null_values,
+                table_column=table_column,
+            )
+            generated_columns[table_column.name] = self.finalize_output_values(
+                table_column=table_column,
+                output_non_null_values=base_output_non_null_values,
+                total_rows=table.total_rows,
+                null_positions=null_positions,
+            )
+
+            if not derived_columns:
+                continue
+
+            for derived_column in derived_columns:
+                derived_output_non_null_values = self.derivation_policy.derive_output_values(
+                    table_column=derived_column,
+                    source_non_null_values=source_non_null_values,
+                )
+                generated_columns[derived_column.name] = self.finalize_output_values(
+                    table_column=derived_column,
+                    output_non_null_values=derived_output_non_null_values,
+                    total_rows=table.total_rows,
+                    null_positions=null_positions,
                 )
 
-            self.validate_generated_values(
-                table_column=table_column,
-                values=generated_columns[table_column.name],
+        missing_columns = [column.name for column in table.columns if column.name not in generated_columns]
+        if missing_columns:
+            missing_columns_text = ", ".join(missing_columns)
+            raise GenerationInvariantError(
+                f"Table {table.table_name} has unresolved columns after generation: {missing_columns_text}"
             )
 
         total_elapsed_ms = int((time.monotonic() - table_started_at) * 1000)
         logger.info(
-            f"Table generated: table={table.full_table_name}, rows={table.total_rows}, "
+            f"Table generated: table={table.table_name}, rows={table.total_rows}, "
             f"columns={len(table.columns)}, elapsed_ms={total_elapsed_ms}"
         )
+
         return GeneratedTableData(
             table=table,
-            generated_data=generated_columns,
+            generated_data={column.name: generated_columns[column.name] for column in table.columns},
         )
 
     def generate_tables(self, generation_run: GenerationRun) -> Iterator[GeneratedTableData]:

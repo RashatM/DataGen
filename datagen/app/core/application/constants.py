@@ -17,3 +17,10 @@ class ComparisonStatus(Enum):
 class EngineName(str, Enum):
     HIVE = "hive"
     ICEBERG = "iceberg"
+
+
+class WriteMode(str, Enum):
+    OVERWRITE_TABLE = "OVERWRITE_TABLE"
+    OVERWRITE_PARTITIONS = "OVERWRITE_PARTITIONS"
+    APPEND = "APPEND"
+    APPEND_DISTINCT_PARTITIONS = "APPEND_DISTINCT_PARTITIONS"

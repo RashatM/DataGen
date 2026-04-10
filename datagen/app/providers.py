@@ -2,7 +2,6 @@ import boto3
 import random
 from mypy_boto3_s3 import S3Client
 
-from app.core.application.ports.comparison_query_renderer_port import ComparisonQueryRendererPort
 from app.core.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
@@ -22,8 +21,6 @@ from app.infrastructure.converters.source_value_converters.string_source_value_c
 from app.infrastructure.converters.source_value_converters.timestamp_source_value_converter import \
     TimestampSourceValueConverter
 from app.infrastructure.converters.value_converter_factory import ValueConverterFactory
-from app.infrastructure.ddl.hive_query_builder import HiveQueryBuilder
-from app.infrastructure.ddl.iceberg_query_builder import IcebergQueryBuilder
 from app.infrastructure.generators.boolean_generator import BooleanDataGenerator
 from app.infrastructure.generators.date_generator import DateDataGenerator
 from app.infrastructure.generators.float_generator import FloatDataGenerator
@@ -32,13 +29,12 @@ from app.infrastructure.generators.generator_factory import DataGeneratorFactory
 from app.infrastructure.generators.string_generator import StringDataGenerator
 from app.infrastructure.generators.timestamp_generator import TimestampDataGenerator
 from app.infrastructure.graph.networkx_table_dependency_planner import NetworkXTableDependencyPlanner
-from app.infrastructure.query.comparison_query_renderer import TargetTableComparisonQueryRenderer
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_comparison_repository import S3ComparisonReportRepository
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 from app.core.application.ports.value_converter_port import ValueConverterPort
-from app.shared.config import S3Config, AirflowConfig, TargetStorageConfig
+from app.shared.config import S3Config, AirflowConfig
 
 
 def provide_generator_factory(rng: random.Random) -> DataGeneratorFactory:
@@ -103,24 +99,12 @@ def provide_comparison_report_repository(
     return S3ComparisonReportRepository(object_storage=object_storage)
 
 
-def provide_comparison_query_renderer() -> ComparisonQueryRendererPort:
-    return TargetTableComparisonQueryRenderer()
-
-
 def provide_artifact_publication_service(
         object_storage: S3StorageAdapter,
-        target_storage: TargetStorageConfig,
 ) -> ArtifactPublicationService:
     artifact_publication_repository = provide_artifact_publication_repository(object_storage)
     return ArtifactPublicationService(
         repository=artifact_publication_repository,
-        comparison_query_renderer=provide_comparison_query_renderer(),
-        hive_load_payload_builder=HiveQueryBuilder(
-            database_name=target_storage.hive.database_name,
-        ),
-        iceberg_load_payload_builder=IcebergQueryBuilder(
-            database_name=target_storage.iceberg.database_name,
-        ),
     )
 
 

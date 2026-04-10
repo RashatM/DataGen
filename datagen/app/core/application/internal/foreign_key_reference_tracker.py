@@ -1,14 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Any
 
+from app.core.application.errors import GenerationInvariantError
 from app.core.domain.entities import TableColumnSpec, TableSpec
-
-# Псевдонимы ниже нужны только для читаемости сигнатур и состояния трекера.
-FullTableName = str
-ColumnName = str
-DependentTableName = str
-GeneratedColumnValues = list[Any]
-CachedColumnValues = dict[ColumnName, GeneratedColumnValues]
+from app.core.domain.value_types import ColumnValues, GeneratedColumnsByName
 
 
 @dataclass(slots=True)
@@ -23,8 +17,8 @@ class ParentTableBuildState:
         хотя бы по одному внешнему ключу.
     """
 
-    required_parent_columns: set[ColumnName] = field(default_factory=set)
-    dependent_tables: set[DependentTableName] = field(default_factory=set)
+    required_parent_columns: set[str] = field(default_factory=set)
+    dependent_tables: set[str] = field(default_factory=set)
 
 
 @dataclass(slots=True)
@@ -39,9 +33,9 @@ class ParentTableReferenceState:
         Уже сгенерированные значения нужных колонок родительской таблицы.
     """
 
-    required_columns: frozenset[ColumnName]
+    required_columns: frozenset[str]
     remaining_dependent_table_count: int
-    cached_values_by_column: CachedColumnValues = field(default_factory=dict)
+    cached_values_by_column: dict[str, ColumnValues] = field(default_factory=dict)
 
 
 class ForeignKeyReferenceTracker:
@@ -53,7 +47,7 @@ class ForeignKeyReferenceTracker:
     - удаляет кэш целиком, когда последняя зависимая дочерняя таблица уже обработана
     """
 
-    def __init__(self, state_by_parent_table: dict[FullTableName, ParentTableReferenceState]) -> None:
+    def __init__(self, state_by_parent_table: dict[str, ParentTableReferenceState]) -> None:
         # Ключ словаря — полное имя родительской таблицы.
         # Значение — runtime-состояние её FK-кэша.
         self.state_by_parent_table = state_by_parent_table
@@ -70,7 +64,7 @@ class ForeignKeyReferenceTracker:
 
         # Временное состояние для каждой родительской таблицы,
         # которое собирается до начала генерации.
-        build_state_by_parent_table: dict[FullTableName, ParentTableBuildState] = {}
+        build_state_by_parent_table: dict[str, ParentTableBuildState] = {}
 
         for table in ordered_tables:
             for table_column in table.columns:
@@ -79,11 +73,11 @@ class ForeignKeyReferenceTracker:
                     continue
 
                 parent_build_state = build_state_by_parent_table.setdefault(
-                    foreign_key_spec.full_table_name,
+                    foreign_key_spec.table_name,
                     ParentTableBuildState(),
                 )
                 parent_build_state.required_parent_columns.add(foreign_key_spec.column_name)
-                parent_build_state.dependent_tables.add(table.full_table_name)
+                parent_build_state.dependent_tables.add(table.table_name)
 
         state_by_parent_table = {
             parent_table_name: ParentTableReferenceState(
@@ -94,7 +88,7 @@ class ForeignKeyReferenceTracker:
         }
         return cls(state_by_parent_table)
 
-    def get_cached_parent_values(self, table_column: TableColumnSpec) -> GeneratedColumnValues:
+    def get_cached_parent_values(self, table_column: TableColumnSpec) -> ColumnValues:
         """Возвращает значения родительской колонки для одной FK-колонки дочерней таблицы.
 
         Используется в момент генерации внешнего ключа, когда дочерней колонке нужно
@@ -102,22 +96,25 @@ class ForeignKeyReferenceTracker:
         """
 
         foreign_key_spec = table_column.foreign_key
-        parent_state = self.state_by_parent_table.get(foreign_key_spec.full_table_name)
+        if foreign_key_spec is None:
+            raise GenerationInvariantError(f"Column {table_column.name} is not a foreign key")
+
+        parent_state = self.state_by_parent_table.get(foreign_key_spec.table_name)
         if not parent_state:
-            raise RuntimeError(f"Missing foreign key tracker state for table {foreign_key_spec.full_table_name}")
+            raise GenerationInvariantError(f"Missing foreign key tracker state for table {foreign_key_spec.table_name}")
 
         cached_parent_values = parent_state.cached_values_by_column.get(foreign_key_spec.column_name)
         if cached_parent_values is not None:
             return cached_parent_values
 
-        raise RuntimeError(
-            f"Missing cached foreign key values for {foreign_key_spec.full_table_name}.{foreign_key_spec.column_name}"
+        raise GenerationInvariantError(
+            f"Missing cached foreign key values for {foreign_key_spec.table_name}.{foreign_key_spec.column_name}"
         )
 
     def cache_parent_values(
             self,
             table: TableSpec,
-            generated_columns_by_name: dict[str, GeneratedColumnValues],
+            generated_columns_by_name: GeneratedColumnsByName,
     ) -> None:
         """Сохраняет в кэше только нужные колонки только что сгенерированной родительской таблицы.
 
@@ -126,7 +123,7 @@ class ForeignKeyReferenceTracker:
         используются как источник значений для FK.
         """
 
-        parent_state = self.state_by_parent_table.get(table.full_table_name)
+        parent_state = self.state_by_parent_table.get(table.table_name)
         if not parent_state:
             return
 
@@ -143,16 +140,17 @@ class ForeignKeyReferenceTracker:
         кэш такой родительской таблицы удаляется целиком.
         """
 
-        parent_tables_referenced_by_child = {
-            table_column.foreign_key.full_table_name
-            for table_column in table.columns
-            if table_column.foreign_key
-        }
+        parent_tables_referenced_by_child: set[str] = set()
+        for table_column in table.columns:
+            foreign_key_spec = table_column.foreign_key
+            if foreign_key_spec is None:
+                continue
+            parent_tables_referenced_by_child.add(foreign_key_spec.table_name)
 
         for parent_table_name in parent_tables_referenced_by_child:
             parent_state = self.state_by_parent_table.get(parent_table_name)
             if not parent_state:
-                raise RuntimeError(f"Missing foreign key tracker state for table {parent_table_name}")
+                raise GenerationInvariantError(f"Missing foreign key tracker state for table {parent_table_name}")
 
             if parent_state.remaining_dependent_table_count > 1:
                 parent_state.remaining_dependent_table_count -= 1

@@ -1,8 +1,9 @@
 import time
 
 from app.core.application.constants import ExecutionStatus
+from app.core.application.dto.pipeline import ComparisonQuerySpec
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
-from app.core.application.dto.execution import ExecutionResult
+from app.core.application.dto.execution_result import ExecutionResult
 from app.core.application.dto.publication import EnginePair, TablePublication
 from app.infrastructure.airflow.airflow_dag_payload_builder import AirflowDagPayloadBuilder
 from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
@@ -137,6 +138,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         self,
         artifact_layout: RunArtifactKeyLayout,
         publications: list[TablePublication],
+        comparison_spec: ComparisonQuerySpec,
         comparison_query_uris: EnginePair[str],
         timeout_seconds: int,
     ) -> ExecutionResult:
@@ -144,6 +146,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         payload = self.payload_builder.build(
             artifact_layout=artifact_layout,
             publications=publications,
+            comparison_spec=comparison_spec,
             comparison_query_uris=comparison_query_uris,
         )
 

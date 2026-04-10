@@ -15,6 +15,18 @@ class DataType(Enum):
     BOOLEAN = "BOOLEAN"
 
 
+class EngineScope(str, Enum):
+    BOTH = "both"
+    HIVE_ONLY = "hive_only"
+    ICEBERG_ONLY = "iceberg_only"
+
+
+class DerivationRule(str, Enum):
+    YYYYMMDD = "YYYYMMDD"
+    YYYY = "YYYY"
+    MM = "MM"
+
+
 class CharacterSet(Enum):
     DIGITS = "digits"
     LETTERS = "letters"

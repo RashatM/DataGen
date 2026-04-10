@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.core.application.dto.pipeline import TableLoadSpec
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
-from app.core.application.dto.publication import EngineLoadPayload, EnginePair, TablePublication
+from app.core.application.dto.publication import EnginePair, TablePublication
 from app.core.domain.entities import GeneratedTableData
 
 
@@ -12,7 +13,7 @@ class ArtifactPublicationRepositoryPort(ABC):
         self,
         table_data: GeneratedTableData,
         artifact_layout: RunArtifactKeyLayout,
-        engine_load_payloads: EnginePair[EngineLoadPayload],
+        load_spec: TableLoadSpec,
     ) -> TablePublication:
         pass
 
@@ -27,7 +28,6 @@ class ArtifactPublicationRepositoryPort(ABC):
     @abstractmethod
     def commit_pointer(
         self,
-        schema_name: str,
         table_name: str,
         run_id: str,
     ) -> None:
@@ -36,7 +36,6 @@ class ArtifactPublicationRepositoryPort(ABC):
     @abstractmethod
     def get_latest_run_id(
         self,
-        schema_name: str,
         table_name: str,
     ) -> str | None:
         pass
@@ -44,7 +43,6 @@ class ArtifactPublicationRepositoryPort(ABC):
     @abstractmethod
     def read_table_data(
         self,
-        schema_name: str,
         table_name: str,
         run_id: str,
     ) -> dict[str, Any]:
