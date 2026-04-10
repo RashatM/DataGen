@@ -4,6 +4,14 @@ from typing import Generic
 from app.core.domain.constraints import OutputConstraints
 from app.core.domain.enums import DataType, DerivationRule, RelationType
 from app.core.domain.typevars import TConstraints
+from app.core.domain.validation_errors import (
+    DuplicateColumnSpecInTableError,
+    DuplicateTableSpecInRunError,
+    InvalidConstraintsError,
+    InvalidDerivationError,
+    InvalidEntityError,
+    InvalidForeignKeyError,
+)
 from app.core.domain.value_types import GeneratedColumnsByName
 
 
@@ -13,6 +21,12 @@ class TableForeignKeySpec:
     table_name: str
     column_name: str
     relation_type: RelationType
+
+    def __post_init__(self) -> None:
+        if not self.table_name.strip():
+            raise InvalidEntityError("Foreign key table_name must not be empty")
+        if not self.column_name.strip():
+            raise InvalidEntityError("Foreign key column_name must not be empty")
 
 
 @dataclass(frozen=True)
@@ -28,6 +42,10 @@ class TableDerivationSpec:
     source_column: str
     rule: DerivationRule
 
+    def __post_init__(self) -> None:
+        if not self.source_column.strip():
+            raise InvalidEntityError("Derived column source_column must not be empty")
+
 
 @dataclass
 class TableColumnSpec(Generic[TConstraints]):
@@ -41,14 +59,26 @@ class TableColumnSpec(Generic[TConstraints]):
     derivation: TableDerivationSpec | None = None
 
     def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise InvalidEntityError("Column name must not be empty")
         active_modes = sum(
             candidate is not None
             for candidate in (self.generation, self.foreign_key, self.derivation)
         )
         if active_modes != 1:
-            raise ValueError(
+            raise InvalidEntityError(
                 f"Column {self.name} must declare exactly one mode: generation, foreign_key or derivation"
             )
+        if self.is_foreign_key and self.is_primary_key:
+            raise InvalidForeignKeyError(f"Foreign key column {self.name} cannot be primary key")
+        if self.is_derived and self.is_primary_key:
+            raise InvalidDerivationError(f"Derived column {self.name} cannot be primary key")
+        if self.is_derived and self.output_constraints.is_unique:
+            raise InvalidDerivationError(f"Derived column {self.name} cannot be unique")
+        if self.is_primary_key and self.output_constraints.null_ratio != 0:
+            raise InvalidConstraintsError(f"Primary key column {self.name} must have null_ratio=0")
+        if self.is_primary_key and not self.output_constraints.is_unique:
+            raise InvalidConstraintsError(f"Primary key column {self.name} must be unique")
 
     @property
     def is_generated(self) -> bool:
@@ -84,7 +114,11 @@ class TableSpec:
 
     def __post_init__(self) -> None:
         if not self.table_name.strip():
-            raise ValueError("table_name must not be empty")
+            raise InvalidEntityError("table_name must not be empty")
+        if self.total_rows <= 0:
+            raise InvalidEntityError(f"Table {self.table_name} must have total_rows greater than 0")
+        if not self.columns:
+            raise InvalidEntityError(f"Table {self.table_name} must contain at least one column")
 
         seen: set[str] = set()
         duplicates: set[str] = set()
@@ -115,15 +149,6 @@ class GeneratedTableData:
     generated_data: GeneratedColumnsByName
 
 
-class DuplicateTableSpecInRunError(ValueError):
-    """Поднимается, когда один run пытается содержать две таблицы с одинаковым table_name."""
-    pass
-
-
-class DuplicateColumnSpecInTableError(ValueError):
-    """Поднимается, когда спецификация таблицы содержит повторяющиеся имена колонок."""
-    pass
-
 
 @dataclass
 class GenerationRun:
@@ -133,7 +158,9 @@ class GenerationRun:
 
     def __post_init__(self) -> None:
         if not self.run_id.strip():
-            raise ValueError("run_id must not be empty")
+            raise InvalidEntityError("run_id must not be empty")
+        if not self.tables:
+            raise InvalidEntityError("GenerationRun must contain at least one table")
 
         seen = set()
         duplicates = set()

@@ -185,10 +185,13 @@ def build_output_constraints(
             is_unique=True,
         )
 
-    return OutputConstraints(
-        null_ratio=null_ratio,
-        is_unique=is_unique,
-    )
+    try:
+        return OutputConstraints(
+            null_ratio=null_ratio,
+            is_unique=is_unique,
+        )
+    except InvalidConstraintsError as exc:
+        raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
 
 
 def resolve_data_types(
@@ -329,7 +332,7 @@ def build_string_constraints(
                 f"Column {column_name} regular_expr",
             ),
         )
-    except InvalidConstraintsError as exc:
+    except (InvalidConstraintsError, ValueError) as exc:
         raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
 
 
@@ -354,12 +357,15 @@ def build_generator_constraints(
         )
 
     if generator_data_type == DataType.FLOAT:
-        return FloatConstraints(
-            allowed_values=allowed_values,
-            min_value=require_number(constraints_data.get("min_value", 0), f"Column {column_name} min_value"),
-            max_value=require_number(constraints_data.get("max_value", 1000), f"Column {column_name} max_value"),
-            precision=require_integer(constraints_data.get("precision", 2), f"Column {column_name} precision"),
-        )
+        try:
+            return FloatConstraints(
+                allowed_values=allowed_values,
+                min_value=require_number(constraints_data.get("min_value", 0), f"Column {column_name} min_value"),
+                max_value=require_number(constraints_data.get("max_value", 1000), f"Column {column_name} max_value"),
+                precision=require_integer(constraints_data.get("precision", 2), f"Column {column_name} precision"),
+            )
+        except InvalidConstraintsError as exc:
+            raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
 
     if generator_data_type == DataType.DATE:
         min_date = constraints_data.get("min_value")
@@ -368,17 +374,20 @@ def build_generator_constraints(
             tuple(parse_date_literal(column_name, "allowed_values", value) for value in allowed_values)
             if allowed_values else None
         )
-        return DateConstraints(
-            allowed_values=normalized_date_values,
-            min_date=parse_date_literal(column_name, "min_value", min_date) if min_date is not None
-            else date(date.today().year, 1, 1),
-            max_date=parse_date_literal(column_name, "max_value", max_date) if max_date is not None
-            else date(date.today().year, 12, 31),
-            date_format=require_non_empty_string(
-                constraints_data.get("date_format", "%Y-%m-%d"),
-                f"Column {column_name} date_format",
-            ),
-        )
+        try:
+            return DateConstraints(
+                allowed_values=normalized_date_values,
+                min_date=parse_date_literal(column_name, "min_value", min_date) if min_date is not None
+                else date(date.today().year, 1, 1),
+                max_date=parse_date_literal(column_name, "max_value", max_date) if max_date is not None
+                else date(date.today().year, 12, 31),
+                date_format=require_non_empty_string(
+                    constraints_data.get("date_format", "%Y-%m-%d"),
+                    f"Column {column_name} date_format",
+                ),
+            )
+        except InvalidConstraintsError as exc:
+            raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
 
     if generator_data_type == DataType.TIMESTAMP:
         min_timestamp = constraints_data.get("min_timestamp")
@@ -388,17 +397,20 @@ def build_generator_constraints(
             if allowed_values else None
         )
         current_year = datetime.now().year
-        return TimestampConstraints(
-            allowed_values=normalized_timestamp_values,
-            min_timestamp=parse_timestamp_literal(column_name, "min_timestamp", min_timestamp)
-            if min_timestamp is not None else datetime(current_year, 1, 1, 0, 0, 0),
-            max_timestamp=parse_timestamp_literal(column_name, "max_timestamp", max_timestamp)
-            if max_timestamp is not None else datetime(current_year, 12, 31, 23, 59, 59),
-            timestamp_format=require_non_empty_string(
-                constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
-                f"Column {column_name} timestamp_format",
-            ),
-        )
+        try:
+            return TimestampConstraints(
+                allowed_values=normalized_timestamp_values,
+                min_timestamp=parse_timestamp_literal(column_name, "min_timestamp", min_timestamp)
+                if min_timestamp is not None else datetime(current_year, 1, 1, 0, 0, 0),
+                max_timestamp=parse_timestamp_literal(column_name, "max_timestamp", max_timestamp)
+                if max_timestamp is not None else datetime(current_year, 12, 31, 23, 59, 59),
+                timestamp_format=require_non_empty_string(
+                    constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
+                    f"Column {column_name} timestamp_format",
+                ),
+            )
+        except InvalidConstraintsError as exc:
+            raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
 
     if generator_data_type == DataType.BOOLEAN:
         return BooleanConstraints(allowed_values=allowed_values)
@@ -443,77 +455,214 @@ def build_generated_column_spec(
         constraints_data=constraints_data,
         is_primary_key=is_primary_key,
     )
-    ensure_final_uniqueness_supported(
-        source_type=generator_data_type,
-        target_type=output_data_type,
-        requires_unique_output=is_primary_key or output_constraints.is_unique,
-    )
-    generator_constraints = build_generator_constraints(
-        column_name=column_name,
-        generator_data_type=generator_data_type,
-        constraints_data=constraints_data,
-        allowed_values=normalized_allowed_values,
-    )
-    return TableColumnSpec(
-        name=column_name,
-        output_data_type=output_data_type,
-        output_constraints=output_constraints,
-        is_primary_key=is_primary_key,
-        generation=ColumnGenerationSpec(
-            source_data_type=generator_data_type,
-            constraints=generator_constraints,
-        ),
-    )
+    try:
+        ensure_final_uniqueness_supported(
+            source_type=generator_data_type,
+            target_type=output_data_type,
+            requires_unique_output=is_primary_key or output_constraints.is_unique,
+        )
+        generator_constraints = build_generator_constraints(
+            column_name=column_name,
+            generator_data_type=generator_data_type,
+            constraints_data=constraints_data,
+            allowed_values=normalized_allowed_values,
+        )
+        return TableColumnSpec(
+            name=column_name,
+            output_data_type=output_data_type,
+            output_constraints=output_constraints,
+            is_primary_key=is_primary_key,
+            generation=ColumnGenerationSpec(
+                source_data_type=generator_data_type,
+                constraints=generator_constraints,
+            ),
+        )
+    except SchemaValidationError:
+        raise
+    except ValueError as exc:
+        raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
+
+
+class WorkbookTableCompiler:
+    """Компилирует raw workbook-таблицы в доменные TableSpec по единому пути с поддержкой FK и derive."""
+
+    def __init__(self, raw_tables: Sequence[Mapping[str, Any]]) -> None:
+        self.raw_tables = list(raw_tables)
+        self.raw_tables_by_name: dict[str, dict[str, Any]] = {}
+        self.raw_columns_by_table: dict[str, dict[str, dict[str, Any]]] = {}
+        self.raw_columns_sequence_by_table: dict[str, list[dict[str, Any]]] = {}
+        self.resolved_columns: dict[tuple[str, str], TableColumnSpec[Any]] = {}
+        self.resolving_stack: set[tuple[str, str]] = set()
+
+        for table_data in self.raw_tables:
+            table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
+            if table_name in self.raw_tables_by_name:
+                raise SchemaValidationError(f"Duplicate table_name in workbook contract: {table_name}")
+
+            raw_columns = require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
+            raw_columns_by_name: dict[str, dict[str, Any]] = {}
+            for column_data in raw_columns:
+                column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
+                if column_name in raw_columns_by_name:
+                    raise SchemaValidationError(f"Duplicate column in workbook contract: {table_name}.{column_name}")
+                raw_columns_by_name[column_name] = column_data
+
+            self.raw_tables_by_name[table_name] = dict(table_data)
+            self.raw_columns_by_table[table_name] = raw_columns_by_name
+            self.raw_columns_sequence_by_table[table_name] = list(raw_columns)
+
+    def get_raw_columns(self, table_name: str) -> list[dict[str, Any]]:
+        raw_columns = self.raw_columns_sequence_by_table.get(table_name)
+        if raw_columns is None:
+            raise SchemaValidationError(f"Unknown table referenced in workbook contract: {table_name}")
+        return raw_columns
+
+    def resolve_column(self, table_name: str, column_name: str) -> TableColumnSpec[Any]:
+        cache_key = (table_name, column_name)
+        cached_column = self.resolved_columns.get(cache_key)
+        if cached_column is not None:
+            return cached_column
+
+        if cache_key in self.resolving_stack:
+            raise SchemaValidationError(
+                f"Circular column dependency detected while resolving {table_name}.{column_name}"
+            )
+
+        table_columns = self.raw_columns_by_table.get(table_name)
+        if table_columns is None:
+            raise SchemaValidationError(f"Unknown table referenced in workbook contract: {table_name}")
+
+        column_data = table_columns.get(column_name)
+        if column_data is None:
+            raise SchemaValidationError(f"Unknown column referenced in workbook contract: {table_name}.{column_name}")
+
+        self.resolving_stack.add(cache_key)
+        try:
+            constraints_data = get_constraints_data(column_name, column_data)
+            is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
+            raw_foreign_key = optional_mapping(
+                column_data.get("foreign_key"),
+                f"Column {table_name}.{column_name} foreign_key",
+            )
+            raw_derive = optional_mapping(
+                column_data.get("derive"),
+                f"Column {table_name}.{column_name} derive",
+            )
+
+            if raw_foreign_key:
+                unsupported_constraint_fields = sorted(
+                    set(constraints_data.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS
+                )
+                if unsupported_constraint_fields:
+                    unsupported_fields = ", ".join(unsupported_constraint_fields)
+                    raise SchemaValidationError(
+                        f"Foreign key column {column_name} supports only null_ratio constraint, got: {unsupported_fields}"
+                    )
+
+                parent_table_name = require_non_empty_string(
+                    raw_foreign_key.get("table_name"),
+                    f"Column {table_name}.{column_name} foreign_key table_name",
+                )
+                parent_column_name = require_non_empty_string(
+                    raw_foreign_key.get("column_name"),
+                    f"Column {table_name}.{column_name} foreign_key column_name",
+                )
+                parent_column = self.resolve_column(parent_table_name, parent_column_name)
+                resolved_column = TableColumnSpec(
+                    name=column_name,
+                    output_data_type=parent_column.output_data_type,
+                    output_constraints=build_output_constraints(
+                        column_name=column_name,
+                        constraints_data=constraints_data,
+                        is_primary_key=is_primary_key,
+                    ),
+                    is_primary_key=is_primary_key,
+                    foreign_key=build_foreign_key_spec(column_name, raw_foreign_key),
+                )
+            elif raw_derive:
+                if constraints_data:
+                    raise SchemaValidationError(f"Derived column {column_name} cannot define constraints")
+
+                output_raw = column_data.get("output_data_type")
+                if not output_raw:
+                    raise SchemaValidationError(f"Derived column {column_name} must declare output_data_type")
+
+                source_column_name = require_non_empty_string(
+                    raw_derive.get("source_column"),
+                    f"Derived column {table_name}.{column_name} source_column",
+                )
+                source_column = self.resolve_column(table_name, source_column_name)
+                derivation = TableDerivationSpec(
+                    source_column=source_column_name,
+                    rule=DerivationRule(
+                        require_non_empty_string(
+                            raw_derive.get("rule"),
+                            f"Derived column {table_name}.{column_name} rule",
+                        )
+                    ),
+                )
+                output_data_type = DataType(
+                    require_non_empty_string(
+                        output_raw,
+                        f"Derived column {table_name}.{column_name} output_data_type",
+                    ).upper()
+                )
+                try:
+                    DERIVATION_POLICY.validate_derived_column_spec(
+                        column_name=column_name,
+                        source_column=source_column,
+                        derivation=derivation,
+                        output_data_type=output_data_type,
+                    )
+                except InvalidDerivationError as exc:
+                    raise SchemaValidationError(str(exc)) from exc
+
+                resolved_column = TableColumnSpec(
+                    name=column_name,
+                    output_data_type=output_data_type,
+                    output_constraints=DERIVATION_POLICY.derive_output_constraints_from_source(source_column),
+                    derivation=derivation,
+                )
+            else:
+                resolved_column = build_generated_column_spec(column_data=column_data)
+
+            self.resolved_columns[cache_key] = resolved_column
+            return resolved_column
+        except SchemaValidationError:
+            raise
+        except ValueError as exc:
+            raise SchemaValidationError(str(exc)) from exc
+        finally:
+            self.resolving_stack.remove(cache_key)
+
+    def build_table_spec(self, table_name: str) -> TableSpec:
+        raw_table = self.raw_tables_by_name.get(table_name)
+        if raw_table is None:
+            raise SchemaValidationError(f"Unknown table referenced in workbook contract: {table_name}")
+
+        raw_columns = self.get_raw_columns(table_name)
+        try:
+            return TableSpec(
+                table_name=table_name,
+                columns=[
+                    self.resolve_column(
+                        table_name=table_name,
+                        column_name=require_non_empty_string(column_data.get("name"), f"Table {table_name} column name"),
+                    )
+                    for column_data in raw_columns
+                ],
+                total_rows=require_integer(raw_table.get("total_rows"), f"Table {table_name} total_rows"),
+            )
+        except SchemaValidationError:
+            raise
+        except ValueError as exc:
+            raise SchemaValidationError(str(exc)) from exc
 
 
 def convert_to_table_spec(table_data: Mapping[str, Any]) -> TableSpec:
+    compiler = WorkbookTableCompiler([table_data])
     table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
-    total_rows = require_integer(table_data.get("total_rows"), f"Table {table_name} total_rows")
-    table_columns = []
-
-    for column_data in require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns"):
-        column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
-        foreign_key_data = optional_mapping(
-            column_data.get("foreign_key"),
-            f"Column {column_name} foreign_key",
-        )
-        if foreign_key_data:
-            constraints_data = get_constraints_data(column_name, column_data)
-            _, output_data_type = resolve_data_types(column_data, constraints_data)
-            is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
-            output_constraints = build_output_constraints(
-                column_name=column_name,
-                constraints_data=constraints_data,
-                is_primary_key=is_primary_key,
-            )
-            unsupported_constraint_fields = sorted(
-                set(constraints_data.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS
-            )
-            if unsupported_constraint_fields:
-                unsupported_fields = ", ".join(unsupported_constraint_fields)
-                raise SchemaValidationError(
-                    f"Foreign key column {column_name} supports only null_ratio constraint, "
-                    f"got: {unsupported_fields}"
-                )
-
-            table_columns.append(
-                TableColumnSpec(
-                    name=column_name,
-                    output_data_type=output_data_type,
-                    output_constraints=output_constraints,
-                    is_primary_key=is_primary_key,
-                    foreign_key=build_foreign_key_spec(column_name, foreign_key_data),
-                )
-            )
-            continue
-
-        table_columns.append(build_generated_column_spec(column_data))
-
-    return TableSpec(
-        table_name=table_name,
-        columns=table_columns,
-        total_rows=total_rows,
-    )
+    return compiler.build_table_spec(table_name)
 
 
 def parse_engine_scope(
@@ -522,9 +671,10 @@ def parse_engine_scope(
     column_data: Mapping[str, Any],
 ) -> EngineScope:
     try:
+        raw_engine_scope = column_data.get("engine_scope") or EngineScope.BOTH.value
         return EngineScope(
             require_non_empty_string(
-                column_data.get("engine_scope"),
+                raw_engine_scope,
                 f"Column {table_name}.{column_name} engine_scope",
             )
         )
@@ -589,7 +739,13 @@ def validate_engine_load_columns(
 
 
 def convert_to_generation_run(run_id: str, raw_tables: Sequence[Mapping[str, Any]]) -> GenerationRun:
-    tables = [convert_to_table_spec(table_data) for table_data in raw_tables]
+    compiler = WorkbookTableCompiler(raw_tables)
+    tables = [
+        compiler.build_table_spec(
+            require_non_empty_string(table_data.get("table_name"), "Table table_name")
+        )
+        for table_data in raw_tables
+    ]
     return GenerationRun(run_id=run_id, tables=tables)
 
 
@@ -609,160 +765,13 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
     )
 
     raw_tables = require_list_of_mappings(raw_workbook_spec.get("tables"), "Workbook tables")
-    raw_tables_by_name: dict[str, dict[str, Any]] = {}
-    raw_columns_by_table: dict[str, dict[str, dict[str, Any]]] = {}
-
-    for table_data in raw_tables:
-        table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
-        raw_tables_by_name[table_name] = table_data
-
-        table_columns = require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
-        raw_columns_by_table[table_name] = {}
-        for column_data in table_columns:
-            column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
-            raw_columns_by_table[table_name][column_name] = column_data
-
-    resolved_columns: dict[tuple[str, str], TableColumnSpec[Any]] = {}
-    resolving_stack: set[tuple[str, str]] = set()
-
-    def resolve_column(table_name: str, column_name: str) -> TableColumnSpec[Any]:
-        cache_key = (table_name, column_name)
-        cached_column = resolved_columns.get(cache_key)
-        if cached_column is not None:
-            return cached_column
-
-        if cache_key in resolving_stack:
-            raise SchemaValidationError(
-                f"Circular column dependency detected while resolving {table_name}.{column_name}"
-            )
-
-        table_columns = raw_columns_by_table.get(table_name)
-        if table_columns is None:
-            raise SchemaValidationError(f"Unknown table referenced in workbook contract: {table_name}")
-
-        column_data = table_columns.get(column_name)
-        if column_data is None:
-            raise SchemaValidationError(f"Unknown column referenced in workbook contract: {table_name}.{column_name}")
-
-        resolving_stack.add(cache_key)
-        try:
-            constraints_data = get_constraints_data(column_name, column_data)
-            is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
-            raw_foreign_key = optional_mapping(
-                column_data.get("foreign_key"),
-                f"Column {table_name}.{column_name} foreign_key",
-            )
-            raw_derive = optional_mapping(
-                column_data.get("derive"),
-                f"Column {table_name}.{column_name} derive",
-            )
-
-            if raw_foreign_key:
-                unsupported_constraint_fields = sorted(
-                    set(constraints_data.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS
-                )
-                if unsupported_constraint_fields:
-                    unsupported_fields = ", ".join(unsupported_constraint_fields)
-                    raise SchemaValidationError(
-                        f"Foreign key column {column_name} supports only null_ratio constraint, "
-                        f"got: {unsupported_fields}"
-                    )
-
-                parent_column = resolve_column(
-                    require_non_empty_string(
-                        raw_foreign_key.get("table_name"),
-                        f"Column {table_name}.{column_name} foreign_key table_name",
-                    ),
-                    require_non_empty_string(
-                        raw_foreign_key.get("column_name"),
-                        f"Column {table_name}.{column_name} foreign_key column_name",
-                    ),
-                )
-                resolved_column = TableColumnSpec(
-                    name=column_name,
-                    output_data_type=parent_column.output_data_type,
-                    output_constraints=build_output_constraints(
-                        column_name=column_name,
-                        constraints_data=constraints_data,
-                        is_primary_key=is_primary_key,
-                    ),
-                    is_primary_key=is_primary_key,
-                    foreign_key=build_foreign_key_spec(column_name, raw_foreign_key),
-                )
-            elif raw_derive:
-                if constraints_data:
-                    raise SchemaValidationError(
-                        f"Derived column {column_name} cannot define constraints"
-                    )
-                if is_primary_key:
-                    raise SchemaValidationError(
-                        f"Derived column {column_name} cannot be primary key"
-                    )
-                output_raw = column_data.get("output_data_type")
-                if not output_raw:
-                    raise SchemaValidationError(
-                        f"Derived column {column_name} must declare output_data_type"
-                    )
-
-                source_column_name = require_non_empty_string(
-                    raw_derive.get("source_column"),
-                    f"Derived column {table_name}.{column_name} source_column",
-                )
-                source_column = resolve_column(table_name, source_column_name)
-                derivation = TableDerivationSpec(
-                    source_column=source_column_name,
-                    rule=DerivationRule(
-                        require_non_empty_string(
-                            raw_derive.get("rule"),
-                            f"Derived column {table_name}.{column_name} rule",
-                        )
-                    ),
-                )
-                output_data_type = DataType(
-                    require_non_empty_string(
-                        output_raw,
-                        f"Derived column {table_name}.{column_name} output_data_type",
-                    ).upper()
-                )
-                try:
-                    DERIVATION_POLICY.validate_derived_column_spec(
-                        column_name=column_name,
-                        source_column=source_column,
-                        derivation=derivation,
-                        output_data_type=output_data_type,
-                    )
-                except InvalidDerivationError as exc:
-                    raise SchemaValidationError(str(exc)) from exc
-                resolved_column = TableColumnSpec(
-                    name=column_name,
-                    output_data_type=output_data_type,
-                    output_constraints=DERIVATION_POLICY.derive_output_constraints_from_source(source_column),
-                    derivation=derivation,
-                )
-            else:
-                resolved_column = build_generated_column_spec(column_data=column_data)
-
-            resolved_columns[cache_key] = resolved_column
-            return resolved_column
-        finally:
-            resolving_stack.remove(cache_key)
+    compiler = WorkbookTableCompiler(raw_tables)
 
     execution_tables: list[TableExecutionSpec] = []
     for table_data in raw_tables:
         table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
-        table_columns_data = require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
-
-        table_spec = TableSpec(
-            table_name=table_name,
-            columns=[
-                resolve_column(
-                    table_name,
-                    require_non_empty_string(column_data.get("name"), f"Table {table_name} column name"),
-                )
-                for column_data in table_columns_data
-            ],
-            total_rows=require_integer(table_data.get("total_rows"), f"Table {table_name} total_rows"),
-        )
+        table_columns_data = compiler.get_raw_columns(table_name)
+        table_spec = compiler.build_table_spec(table_name)
         try:
             write_mode = WriteMode(require_non_empty_string(table_data.get("write_mode"), f"Table {table_name} write_mode"))
         except ValueError as exc:
