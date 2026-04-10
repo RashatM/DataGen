@@ -8,6 +8,7 @@ import yaml
 
 @dataclass(slots=True)
 class S3Config:
+    """Конфигурация подключения к object storage, совместимому с S3 API."""
     bucket: str
     endpoint_url: str
     region_name: str
@@ -19,6 +20,7 @@ class S3Config:
 
 @dataclass(slots=True)
 class AirflowConfig:
+    """Конфигурация подключения к Airflow и параметров ожидания DAG-run."""
     url: str
     dag_id: str
     username: str
@@ -32,11 +34,13 @@ class AirflowConfig:
 
 @dataclass(slots=True)
 class AppConfig:
+    """Собранная конфигурация приложения: object storage и Airflow."""
     s3: S3Config
     airflow: AirflowConfig
 
 
 class ConfigurationError(ValueError):
+    """Поднимается, когда config.yaml или обязательные env vars неполны либо неконсистентны."""
     pass
 
 

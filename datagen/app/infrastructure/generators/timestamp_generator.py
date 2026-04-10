@@ -8,6 +8,7 @@ from app.shared.utils import random_choices_from_constants
 
 
 class TimestampDataGenerator(DataGeneratorPort[TimestampConstraints]):
+    """Генератор timestamp-значений по диапазону времени или fixed allowed_values."""
     def __init__(self, rng: random.Random) -> None:
         self.rng = rng
 

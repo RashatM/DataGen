@@ -7,6 +7,7 @@ from app.infrastructure.errors import ConverterRegistrationError
 
 
 class ValueConverterFactory:
+    """Собирает registry конвертеров и создаёт готовый ColumnValueConverter для application-слоя."""
     def __init__(self):
         self.source_converters: dict[DataType, SourceTypeValueConverter[Any]] = {}
 

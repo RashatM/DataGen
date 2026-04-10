@@ -7,6 +7,7 @@ from app.core.domain.validation_errors import InvalidForeignKeyError
 
 
 class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
+    """Строит порядок генерации таблиц по графу зависимостей внешних ключей."""
     @staticmethod
     def can_skip_planning(tables: list[TableSpec]) -> bool:
         return len(tables) == 1 and all(column.foreign_key is None for column in tables[0].columns)
@@ -19,6 +20,7 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
         table_column_specs: dict[str, dict[str, TableColumnSpec]],
         graph: nx.DiGraph,
     ) -> list[str]:
+        """Проверяет FK-ссылки до сортировки и одновременно наполняет граф только валидными рёбрами зависимостей."""
         invalid_references: list[str] = []
 
         for table in tables:
@@ -89,6 +91,7 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
         return invalid_references
 
     def plan(self, tables: list[TableSpec]) -> list[TableSpec]:
+        """Возвращает topological order таблиц либо падает на некорректных FK-ссылках и циклах."""
         if self.can_skip_planning(tables):
             return tables
 

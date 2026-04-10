@@ -12,6 +12,7 @@ from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 
 
 class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
+    """Читает comparison_result.json из S3 и валидирует его структурно на уровне infrastructure."""
 
     def __init__(self, object_storage: S3StorageAdapter):
         self.object_storage = object_storage
@@ -59,6 +60,7 @@ class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
         )
 
     def parse_report(self, payload: dict, expected_run_id: str) -> ComparisonReport:
+        """Преобразует сырой JSON comparison-report в типизированный DTO и проверяет базовые поля контракта."""
         run_id = self.require_string(payload, "run_id")
         if run_id != expected_run_id:
             raise ObjectPayloadFormatError(
@@ -95,5 +97,6 @@ class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
         )
 
     def load_report(self, report_key: str, expected_run_id: str) -> ComparisonReport:
+        """Загружает comparison-report из S3 и парсит его в application DTO."""
         payload = self.object_storage.get_json(key=report_key)
         return self.parse_report(payload, expected_run_id=expected_run_id)

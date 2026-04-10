@@ -519,6 +519,35 @@ def convert_to_table_spec(table_data: Mapping[str, Any]) -> TableSpec:
     )
 
 
+def build_hive_load_columns(table: TableSpec) -> tuple[str, ...]:
+    return tuple(
+        column.name
+        for column in table.columns
+        if column.engine_scope in {EngineScope.BOTH, EngineScope.HIVE_ONLY}
+    )
+
+
+def build_iceberg_load_columns(table: TableSpec) -> tuple[str, ...]:
+    return tuple(
+        column.name
+        for column in table.columns
+        if column.engine_scope in {EngineScope.BOTH, EngineScope.ICEBERG_ONLY}
+    )
+
+
+def validate_engine_load_columns(
+    table_name: str,
+    engine_name: str,
+    load_columns: tuple[str, ...],
+) -> tuple[str, ...]:
+    if not load_columns:
+        raise SchemaValidationError(
+            f"Table {table_name} has no load columns for engine={engine_name}"
+        )
+
+    return load_columns
+
+
 def convert_to_generation_run(run_id: str, raw_tables: Sequence[Mapping[str, Any]]) -> GenerationRun:
     tables = [convert_to_table_spec(table_data) for table_data in raw_tables]
     return GenerationRun(run_id=run_id, tables=tables)
@@ -729,14 +758,16 @@ def convert_to_pipeline_execution_spec(raw_workbook_spec: Mapping[str, Any]) -> 
                         f"Table {table_name} iceberg_target_table",
                     ),
                     write_mode=write_mode,
-                    hive_partition_columns=tuple(require_string_list(
-                        table_data.get("hive_partition_columns"),
-                        f"Table {table_name} hive_partition_columns",
-                    )),
-                    iceberg_partition_columns=tuple(require_string_list(
-                        table_data.get("iceberg_partition_columns"),
-                        f"Table {table_name} iceberg_partition_columns",
-                    )),
+                    hive_columns=validate_engine_load_columns(
+                        table_name=table_name,
+                        engine_name="hive",
+                        load_columns=build_hive_load_columns(table_spec),
+                    ),
+                    iceberg_columns=validate_engine_load_columns(
+                        table_name=table_name,
+                        engine_name="iceberg",
+                        load_columns=build_iceberg_load_columns(table_spec),
+                    ),
                 ),
             )
         )

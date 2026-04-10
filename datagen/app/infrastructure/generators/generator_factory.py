@@ -8,6 +8,7 @@ from app.infrastructure.errors import DataGeneratorNotRegisteredError
 
 
 class DataGeneratorFactory(DataGeneratorFactoryPort):
+    """Регистрирует и выдаёт генераторы по логическому source data type."""
     def __init__(self):
         self.data_generators: dict[DataType, DataGeneratorPort[Any]] = {}
 

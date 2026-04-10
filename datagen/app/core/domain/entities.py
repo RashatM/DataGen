@@ -9,6 +9,7 @@ from app.core.domain.value_types import GeneratedColumnsByName
 
 @dataclass
 class TableForeignKeySpec:
+    """Описывает ссылку колонки на родительскую таблицу и тип кардинальности связи."""
     table_name: str
     column_name: str
     relation_type: RelationType
@@ -16,18 +17,21 @@ class TableForeignKeySpec:
 
 @dataclass(frozen=True)
 class ColumnGenerationSpec(Generic[TConstraints]):
+    """Хранит исходный тип генератора и его ограничения для обычной генерируемой колонки."""
     source_data_type: DataType
     constraints: TConstraints
 
 
 @dataclass(frozen=True)
 class TableDerivationSpec:
+    """Описывает правило вычисления производной колонки из уже сгенерированной исходной."""
     source_column: str
     rule: DerivationRule
 
 
 @dataclass
 class TableColumnSpec(Generic[TConstraints]):
+    """Единая спецификация колонки таблицы независимо от того, генерируется она, выводится или берётся из FK."""
     name: str
     output_data_type: DataType
     output_constraints: OutputConstraints
@@ -74,6 +78,7 @@ class TableColumnSpec(Generic[TConstraints]):
 
 @dataclass
 class TableSpec:
+    """Спецификация таблицы в доменной модели с уникальной идентичностью по table_name."""
     table_name: str
     columns: list[TableColumnSpec]
     total_rows: int
@@ -106,20 +111,24 @@ class TableSpec:
 
 @dataclass
 class GeneratedTableData:
+    """Готовый результат генерации одной таблицы: доменная схема плюс значения по колонкам."""
     table: TableSpec
     generated_data: GeneratedColumnsByName
 
 
 class DuplicateTableSpecInRunError(ValueError):
+    """Поднимается, когда один run пытается содержать две таблицы с одинаковым table_name."""
     pass
 
 
 class DuplicateColumnSpecInTableError(ValueError):
+    """Поднимается, когда спецификация таблицы содержит повторяющиеся имена колонок."""
     pass
 
 
 @dataclass
 class GenerationRun:
+    """Корневой объект генерации, объединяющий run_id и набор таблиц для одного запуска."""
     run_id: str
     tables: list[TableSpec]
 

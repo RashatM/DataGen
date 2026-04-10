@@ -8,6 +8,7 @@ from app.infrastructure.converters.source_type_value_converter import SourceType
 
 
 class TimestampSourceValueConverter(SourceTypeValueConverter[TimestampConstraints]):
+    """Конвертирует TIMESTAMP source values в STRING, INT или DATE с учётом заданного формата."""
     @property
     def source_type(self) -> DataType:
         return DataType.TIMESTAMP

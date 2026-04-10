@@ -9,6 +9,7 @@ from app.infrastructure.errors import ObjectNotFoundError, ObjectPayloadFormatEr
 
 
 class S3StorageAdapter:
+    """Тонкий адаптер над boto3 S3 client для типовых операций чтения и записи объектов проекта."""
 
     def __init__(self, bucket: str, s3_client: S3Client):
         self.bucket = bucket
@@ -51,6 +52,7 @@ class S3StorageAdapter:
         stream: IO[bytes],
         content_type: str = "application/octet-stream",
     ) -> str:
+        """Загружает файловый поток в S3 без промежуточной материализации в bytes."""
         stream.seek(0)
         self.s3_client.upload_fileobj(
             Fileobj=stream,
@@ -76,6 +78,7 @@ class S3StorageAdapter:
             return stream.read()
 
     def get_json(self, key: str) -> dict[str, Any]:
+        """Читает объект как JSON и гарантирует, что верхний уровень — именно объект, а не список или строка."""
         body = self.get_bytes(key)
         loaded = json.loads(body.decode())
         if not isinstance(loaded, dict):
@@ -85,6 +88,7 @@ class S3StorageAdapter:
         return loaded
 
     def delete_prefix(self, prefix: str) -> int:
+        """Удаляет все объекты под prefix батчами по 1000 ключей и возвращает число реально удалённых объектов."""
         paginator = self.s3_client.get_paginator("list_objects_v2")
         deleted_total = 0
 

@@ -15,6 +15,7 @@ logger = airflow_logger
 
 
 class AirflowDagRunner(ExecutionRunnerPort):
+    """Адаптер application-слоя к Airflow: триггерит DAG и ждёт его terminal state."""
     HEARTBEAT_LOG_INTERVAL_SECONDS = 120
     QUEUED_STATE = "queued"
     RUNNING_STATE = "running"
@@ -42,6 +43,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         dag_run_state: DagRunState,
         total_seconds: int | None = None,
     ) -> ExecutionResult:
+        """Преобразует сырое состояние DAG-run в application-level ExecutionResult с логированием."""
         total_text = f", total={total_seconds}s" if total_seconds is not None else ""
         if dag_run_state.is_success():
             status = ExecutionStatus.SUCCESS
@@ -76,6 +78,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         dag_run_id: str,
         timeout_seconds: int,
     ) -> ExecutionResult:
+        """Опрашивает Airflow до terminal state или таймаута и пишет heartbeat-логи на длинных запусках."""
         poll_interval = self.client.poll_interval()
         start = time.monotonic()
         deadline = start + timeout_seconds
@@ -142,6 +145,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         comparison_query_uris: EnginePair[str],
         timeout_seconds: int,
     ) -> ExecutionResult:
+        """Формирует DAG payload, отправляет запуск и синхронно ждёт завершения внешнего исполнения."""
         dag_run_id = self.client.build_dag_run_id(artifact_layout.run_id)
         payload = self.payload_builder.build(
             artifact_layout=artifact_layout,

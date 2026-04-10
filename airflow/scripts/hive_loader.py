@@ -1,7 +1,6 @@
 import argparse
 from contextlib import contextmanager
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.types import StructType
 
 from base_loader import BaseSynthLoader
 from job_common import logger, parse_job_contract
@@ -21,7 +20,7 @@ def open_spark_session(app_name: str):
         .config("spark.sql.parquet.filterPushdown", True)
         .config("spark.sql.orc.filterPushdown", False)
         .config("spark.sql.orc.mergeSchema", True)
-        .config("spark.sql.orc.compression.codec", 'snappy')
+        .config("spark.sql.orc.compression.codec", "snappy")
         .config("spark.sql.optimizer.dynamicPartitionPruning.enabled", True)
         .config("spark.sql.optimizer.dynamicPartitionPruning.fallbackFilterRatio", "0.5")
         .config("spark.sql.adaptive.enabled", True)
@@ -49,13 +48,29 @@ def parse_args() -> argparse.Namespace:
 
 
 class HiveSynthLoader(BaseSynthLoader):
+    """Реализация загрузчика для Hive на Hadoop через insertInto и переключение partition overwrite mode."""
+    technical_compare_excludes = frozenset({"date_part", "month_part", "year_part", "load_part"})
 
-    def build_create_table_sql(self, schema: StructType, table_name: str) -> str:
-        cols = ", ".join(f"`{field.name}` {field.dataType.simpleString()}" for field in schema)
-        return f"CREATE TABLE {table_name} ({cols}) STORED AS PARQUET"
+    @contextmanager
+    def partition_overwrite_mode(self, mode: str):
+        """Временно переключает режим overwrite партиций для Hive-записи через insertInto."""
+        previous_mode = self.spark.conf.get("spark.sql.sources.partitionOverwriteMode", "static")
+        self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", mode)
+        try:
+            yield
+        finally:
+            self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", previous_mode)
 
-    def load_into_table(self, df: DataFrame, table_name: str) -> None:
-        df.write.insertInto(table_name, overwrite=True)
+    def append_to_table(self, df: DataFrame, table_name: str) -> None:
+        df.write.insertInto(table_name, overwrite=False)
+
+    def overwrite_table(self, df: DataFrame, table_name: str) -> None:
+        with self.partition_overwrite_mode("static"):
+            df.write.insertInto(table_name, overwrite=True)
+
+    def overwrite_partitions(self, df: DataFrame, table_name: str) -> None:
+        with self.partition_overwrite_mode("dynamic"):
+            df.write.insertInto(table_name, overwrite=True)
 
 
 if __name__ == "__main__":
@@ -64,6 +79,6 @@ if __name__ == "__main__":
 
     with open_spark_session(args.app_name) as spark_session:
         loader = HiveSynthLoader(spark_session, run_id=contract.run_id)
-        tables = contract.build_table_contracts("hive")
+        tables = contract.build_load_contracts("hive")
         loader.publish_tables(tables)
         loader.materialize_comparison_result(contract.comparison, "hive")

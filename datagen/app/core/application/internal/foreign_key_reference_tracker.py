@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
+from typing import TypeGuard
 
 from app.core.application.errors import GenerationInvariantError
 from app.core.domain.entities import TableColumnSpec, TableSpec
-from app.core.domain.value_types import ColumnValues, GeneratedColumnsByName
+from app.core.domain.value_types import ColumnValues, GeneratedColumnsByName, NonNullColumnValues
 
 
 @dataclass(slots=True)
@@ -35,7 +36,7 @@ class ParentTableReferenceState:
 
     required_columns: frozenset[str]
     remaining_dependent_table_count: int
-    cached_values_by_column: dict[str, ColumnValues] = field(default_factory=dict)
+    cached_values_by_column: dict[str, NonNullColumnValues] = field(default_factory=dict)
 
 
 class ForeignKeyReferenceTracker:
@@ -88,7 +89,7 @@ class ForeignKeyReferenceTracker:
         }
         return cls(state_by_parent_table)
 
-    def get_cached_parent_values(self, table_column: TableColumnSpec) -> ColumnValues:
+    def get_cached_parent_values(self, table_column: TableColumnSpec) -> NonNullColumnValues:
         """Возвращает значения родительской колонки для одной FK-колонки дочерней таблицы.
 
         Используется в момент генерации внешнего ключа, когда дочерней колонке нужно
@@ -111,6 +112,10 @@ class ForeignKeyReferenceTracker:
             f"Missing cached foreign key values for {foreign_key_spec.table_name}.{foreign_key_spec.column_name}"
         )
 
+    @staticmethod
+    def is_non_null_column_values(values: ColumnValues) -> TypeGuard[NonNullColumnValues]:
+        return all(value is not None for value in values)
+
     def cache_parent_values(
             self,
             table: TableSpec,
@@ -127,10 +132,16 @@ class ForeignKeyReferenceTracker:
         if not parent_state:
             return
 
-        parent_state.cached_values_by_column = {
-            column_name: generated_columns_by_name[column_name]
-            for column_name in parent_state.required_columns
-        }
+        cached_values_by_column: dict[str, NonNullColumnValues] = {}
+        for column_name in parent_state.required_columns:
+            column_values = generated_columns_by_name[column_name]
+            if not self.is_non_null_column_values(column_values):
+                raise GenerationInvariantError(
+                    f"Foreign key parent cache contains nulls for {table.table_name}.{column_name}"
+                )
+            cached_values_by_column[column_name] = column_values
+
+        parent_state.cached_values_by_column = cached_values_by_column
 
     def release_parent_cache_for_child(self, table: TableSpec) -> None:
         """Обновляет счётчики зависимостей после обработки дочерней таблицы.

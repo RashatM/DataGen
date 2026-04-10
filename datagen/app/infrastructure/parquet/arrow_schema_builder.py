@@ -4,6 +4,7 @@ from app.core.domain.enums import DataType
 
 
 class ArrowSchemaBuilder:
+    """Строит Arrow schema для parquet-публикации из доменной спецификации таблицы."""
     ARROW_MAPPING: dict[DataType, pa.DataType] = {
         DataType.INT: pa.int64(),
         DataType.STRING: pa.string(),
@@ -14,6 +15,7 @@ class ArrowSchemaBuilder:
     }
 
     def build_schema(self, table: TableSpec) -> pa.Schema:
+        """Преобразует output-типы и nullable-контракт доменных колонок в Arrow schema."""
         fields = []
         for column in table.columns:
             arrow_type = self.ARROW_MAPPING[column.output_data_type]

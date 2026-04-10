@@ -17,8 +17,6 @@ WORKBOOK_TABLES_HEADER_FIELDS = {
     "hive_target_table",
     "iceberg_target_table",
     "write_mode",
-    "hive_partition_columns",
-    "iceberg_partition_columns",
 }
 WORKBOOK_QUERIES_HEADER_FIELDS = {
     "hive_sql",
@@ -89,8 +87,6 @@ HEADER_ALIASES = {
     "hive_target_table": "hive_target_table",
     "iceberg_target_table": "iceberg_target_table",
     "write_mode": "write_mode",
-    "hive_partition_columns": "hive_partition_columns",
-    "iceberg_partition_columns": "iceberg_partition_columns",
     "hive_sql": "hive_sql",
     "iceberg_sql": "iceberg_sql",
     "hive_exclude_columns": "hive_exclude_columns",

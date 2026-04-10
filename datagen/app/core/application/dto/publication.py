@@ -9,7 +9,7 @@ T = TypeVar("T")
 
 @dataclass(slots=True)
 class EnginePair(Generic[T]):
-    """Fixed pair of supported engines: hive and iceberg."""
+    """Фиксированная пара значений для двух поддерживаемых движков: Hive и Iceberg."""
 
     hive: T
     iceberg: T
@@ -22,6 +22,7 @@ class EnginePair(Generic[T]):
 
 @dataclass(slots=True)
 class TablePublication:
+    """Результат staging-этапа для одной таблицы: где лежит parquet и как его надо загрузить."""
     table_name: str
     run_id: str
     data_uri: str

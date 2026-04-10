@@ -44,6 +44,7 @@ FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
 
 @dataclass(frozen=True)
 class TableMeta:
+    """Метаданные legacy-листа таблицы, где sheet name строится как schema.table."""
     schema_name: str
     table_name: str
     total_rows: int
@@ -54,6 +55,7 @@ class TableMeta:
 
 
 class WorkbookValidationError(ValueError):
+    """Ошибки валидации legacy workbook-формата с агрегацией нескольких проблем сразу."""
 
     def __init__(self, issues: list[str]):
         self.issues = issues
@@ -62,13 +64,12 @@ class WorkbookValidationError(ValueError):
 
 @dataclass(frozen=True)
 class WorkbookTableMeta:
+    """Метаданные таблицы из актуального workbook-формата с target tables и write mode."""
     table_name: str
     total_rows: int
     hive_target_table: str
     iceberg_target_table: str
     write_mode: str
-    hive_partition_columns: list[str]
-    iceberg_partition_columns: list[str]
 
     @property
     def sheet_name(self) -> str:
@@ -76,6 +77,7 @@ class WorkbookTableMeta:
 
 
 class WorkbookSpecValidationError(ValueError):
+    """Ошибки валидации нового workbook-spec формата с накоплением всех найденных проблем."""
 
     def __init__(self, issues: list[str]):
         self.issues = issues
@@ -83,10 +85,12 @@ class WorkbookSpecValidationError(ValueError):
 
 
 class ExcelToRawTablesConverter:
+    """Читает legacy Excel workbook и преобразует его в список raw-table payload для schema converter."""
     def __init__(self, excel_path: str | Path) -> None:
         self._excel_path = Path(excel_path)
 
     def convert(self, validate_schema: bool = True) -> list[dict[str, Any]]:
+        """Загружает workbook, валидирует его построчно и при необходимости прогоняет через schema converter."""
         try:
             xls = pd.ExcelFile(self._excel_path)
         except FileNotFoundError as exc:
@@ -116,6 +120,7 @@ class ExcelToRawTablesConverter:
         return raw_tables
 
     def _read_table_specs(self, xls: pd.ExcelFile) -> list[TableMeta]:
+        """Читает лист Tables legacy-формата и строит список таблиц с уникальностью по table_name."""
         tables_df = self.read_sheet(xls, SHEET_TABLES, header=None)
         try:
             header_row, header_map = find_tables_header(tables_df)
@@ -172,6 +177,7 @@ class ExcelToRawTablesConverter:
         return table_specs
 
     def build_table_payload(self, xls: pd.ExcelFile, table_meta: TableMeta) -> dict[str, Any]:
+        """Собирает raw payload одной таблицы из её data sheet в legacy-формате."""
         sheet_df = normalize_sheet(self.read_sheet(xls, table_meta.sheet_name))
         missing_fields = sorted(DATA_SHEET_REQUIRED_FIELDS - set(sheet_df.columns))
         if missing_fields:
@@ -209,6 +215,7 @@ class ExcelToRawTablesConverter:
 
     @staticmethod
     def build_column_payload(table_meta: TableMeta, row: pd.Series) -> dict[str, Any]:
+        """Преобразует одну строку листа таблицы в raw column payload legacy-контракта."""
         column_name = normalize_text(row.get("column_name"))
         if not column_name:
             raise ValueError("column_name must not be empty")
@@ -255,10 +262,12 @@ class ExcelToRawTablesConverter:
 
 
 class ExcelWorkbookSpecConverter:
+    """Читает актуальный workbook-формат с engine-specific target tables, scopes и comparison query."""
     def __init__(self, excel_path: str | Path) -> None:
         self._excel_path = Path(excel_path)
 
     def convert(self) -> dict[str, Any]:
+        """Преобразует workbook в структуру {'tables': ..., 'queries': ...} для дальнейшего schema conversion."""
         try:
             xls = pd.ExcelFile(self._excel_path)
         except FileNotFoundError as exc:
@@ -286,6 +295,7 @@ class ExcelWorkbookSpecConverter:
         }
 
     def _read_table_specs(self, xls: pd.ExcelFile) -> list[WorkbookTableMeta]:
+        """Читает лист Tables нового формата и валидирует routing полей для Hive и Iceberg."""
         tables_df = self.read_sheet(xls, SHEET_TABLES, header=None)
         try:
             header_row, header_map = find_required_header(tables_df, WORKBOOK_TABLES_HEADER_FIELDS)
@@ -302,13 +312,10 @@ class ExcelWorkbookSpecConverter:
             hive_target_table = normalize_text(tables_df.iat[row_index, header_map["hive_target_table"]])
             iceberg_target_table = normalize_text(tables_df.iat[row_index, header_map["iceberg_target_table"]])
             write_mode_raw = tables_df.iat[row_index, header_map["write_mode"]]
-            hive_partition_columns_raw = tables_df.iat[row_index, header_map["hive_partition_columns"]]
-            iceberg_partition_columns_raw = tables_df.iat[row_index, header_map["iceberg_partition_columns"]]
 
             if (
                 not table_name and is_blank(total_rows_raw) and not hive_target_table and not iceberg_target_table
-                and is_blank(write_mode_raw) and is_blank(hive_partition_columns_raw)
-                and is_blank(iceberg_partition_columns_raw)
+                and is_blank(write_mode_raw)
             ):
                 continue
 
@@ -332,27 +339,6 @@ class ExcelWorkbookSpecConverter:
                 issues.append(format_issue(SHEET_TABLES, str(exc), row=row_index + 1))
                 continue
 
-            hive_partition_columns = parse_csv_list(hive_partition_columns_raw)
-            iceberg_partition_columns = parse_csv_list(iceberg_partition_columns_raw)
-
-            if write_mode in {"OVERWRITE_PARTITIONS", "APPEND_DISTINCT_PARTITIONS"}:
-                if not hive_partition_columns:
-                    issues.append(
-                        format_issue(
-                            SHEET_TABLES,
-                            f"hive_partition_columns is required for {write_mode}",
-                            row=row_index + 1,
-                        )
-                    )
-                if not iceberg_partition_columns:
-                    issues.append(
-                        format_issue(
-                            SHEET_TABLES,
-                            f"iceberg_partition_columns is required for {write_mode}",
-                            row=row_index + 1,
-                        )
-                    )
-
             if table_name in seen_table_names:
                 issues.append(format_issue(SHEET_TABLES, f"duplicate table_name: {table_name}", row=row_index + 1))
                 continue
@@ -365,8 +351,6 @@ class ExcelWorkbookSpecConverter:
                     hive_target_table=hive_target_table,
                     iceberg_target_table=iceberg_target_table,
                     write_mode=write_mode,
-                    hive_partition_columns=hive_partition_columns,
-                    iceberg_partition_columns=iceberg_partition_columns,
                 )
             )
 
@@ -379,6 +363,7 @@ class ExcelWorkbookSpecConverter:
         return table_specs
 
     def _read_queries_spec(self, xls: pd.ExcelFile) -> dict[str, Any]:
+        """Читает единственную строку comparison query и исключаемых колонок из листа Queries."""
         queries_df = self.read_sheet(xls, SHEET_QUERIES, header=None)
         try:
             header_row, header_map = find_required_header(queries_df, WORKBOOK_QUERIES_HEADER_FIELDS)
@@ -424,6 +409,7 @@ class ExcelWorkbookSpecConverter:
         return query_rows[0]
 
     def build_table_payload(self, xls: pd.ExcelFile, table_meta: WorkbookTableMeta) -> dict[str, Any]:
+        """Собирает raw payload одной таблицы в новом workbook-формате с load spec полями."""
         sheet_df = normalize_sheet(self.read_sheet(xls, table_meta.sheet_name))
         missing_fields = sorted(WORKBOOK_DATA_SHEET_REQUIRED_FIELDS - set(sheet_df.columns))
         if missing_fields:
@@ -465,13 +451,12 @@ class ExcelWorkbookSpecConverter:
             "hive_target_table": table_meta.hive_target_table,
             "iceberg_target_table": table_meta.iceberg_target_table,
             "write_mode": table_meta.write_mode,
-            "hive_partition_columns": table_meta.hive_partition_columns,
-            "iceberg_partition_columns": table_meta.iceberg_partition_columns,
             "columns": columns,
         }
 
     @staticmethod
     def build_column_payload(row: pd.Series) -> dict[str, Any]:
+        """Нормализует одну строку описания колонки, включая FK, derive и engine_scope."""
         column_name = normalize_text(row.get("column_name"))
         if not column_name:
             raise ValueError("column_name must not be empty")
@@ -568,6 +553,7 @@ def load_raw_tables(
     input_path: str | Path | None = None,
     validate_schema: bool = True,
 ) -> list[dict[str, Any]]:
+    """Собирает raw tables из одного файла или директории workbook-ов legacy-формата."""
     if raw_tables is not None:
         return raw_tables
 
@@ -613,6 +599,7 @@ def load_raw_tables(
 def load_workbook_specs(
     input_path: str | Path,
 ) -> list[dict[str, Any]]:
+    """Собирает новый workbook-spec формат из директории Excel-файлов с проверкой конфликтов по table_name."""
     issues: list[str] = []
     workbook_specs: list[dict[str, Any]] = []
     seen_tables: dict[str, str] = {}
@@ -650,6 +637,7 @@ def load_workbook_specs(
 
 
 def find_excel_files(input_path: Path) -> list[Path]:
+    """Возвращает список Excel-файлов для обработки из файла или директории, исключая временные файлы Excel."""
     if input_path.is_dir():
         excel_files = sorted(
             path for path in input_path.iterdir()

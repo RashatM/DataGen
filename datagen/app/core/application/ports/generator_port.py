@@ -6,6 +6,7 @@ from app.core.domain.typevars import TConstraints
 
 
 class DataGeneratorPort(ABC, Generic[TConstraints]):
+    """Контракт генератора, который строит исходные значения колонки по её source constraints."""
     @abstractmethod
     def generate_values(
         self,

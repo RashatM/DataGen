@@ -23,6 +23,7 @@ DERIVATION_RULE_FORMATS: dict[DerivationRule, str] = {
 
 
 class DerivationPolicy:
+    """Инкапсулирует правила построения производных колонок из DATE/TIMESTAMP источников."""
     @staticmethod
     def derive_output_constraints_from_source(source_column: TableColumnSpec) -> OutputConstraints:
         return OutputConstraints(
@@ -113,6 +114,7 @@ class DerivationPolicy:
         table_column: TableColumnSpec,
         source_non_null_values: NonNullColumnValues,
     ) -> NonNullColumnValues:
+        """Применяет правило derivation ко всему non-null набору исходных значений одной колонки."""
         derivation = table_column.derivation
         if derivation is None:
             raise InvalidDerivationError(f"Column {table_column.name} is not derived")

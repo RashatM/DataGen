@@ -8,6 +8,7 @@ from app.core.domain.entities import GeneratedTableData
 
 
 class ArtifactPublicationRepositoryPort(ABC):
+    """Порт публикации артефактов run-а и управления per-table pointers."""
     @abstractmethod
     def stage_table_artifacts(
         self,

@@ -7,6 +7,7 @@ logger = comparison_logger
 
 
 class ComparisonReportService:
+    """Проверяет, интерпретирует и форматирует итоговый comparison-report после чтения из репозитория."""
     SHARE_EPSILON = 1e-6
 
     def __init__(self, repository: ComparisonReportRepositoryPort) -> None:
@@ -37,6 +38,7 @@ class ComparisonReportService:
         return ComparisonStatus.MISMATCH
 
     def validate_report(self, report: ComparisonReport) -> None:
+        """Проверяет внутреннюю согласованность полей comparison-report, а не только их наличие."""
         self.validate_count_summary(report.summary.row_count, "row_count")
         self.validate_count_summary(report.summary.exclusive_row_count, "exclusive_row_count")
         self.validate_ratio_summary(report.summary.exclusive_row_ratio, "exclusive_row_ratio")

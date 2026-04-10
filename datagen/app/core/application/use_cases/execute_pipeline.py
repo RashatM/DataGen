@@ -14,6 +14,15 @@ logger = pipeline_logger
 
 
 class ExecutePipelineUseCase:
+    """Склеивает генерацию, staging, запуск внешнего DAG и чтение итогового comparison-report.
+
+    Это главный orchestration use case проекта. Он отвечает за границы этапов:
+    - генерирует и публикует артефакты только один раз на run
+    - при ошибке staging чистит опубликованные артефакты
+    - запускает внешний runtime через ExecutionRunnerPort
+    - коммитит per-table pointers только после технически успешного выполнения DAG
+    - читает и валидирует comparison-report перед возвратом результата вызывающему коду
+    """
     def __init__(
         self,
         generation_service: DataGenerationService,
@@ -29,6 +38,7 @@ class ExecutePipelineUseCase:
         self.execution_timeout_seconds = execution_timeout_seconds
 
     def execute(self, run_id: str, pipeline_spec: PipelineExecutionSpec) -> PipelineExecutionResult:
+        """Выполняет pipeline end-to-end от доменной генерации до чтения финального comparison-report."""
         generation_run = GenerationRun(
             run_id=run_id,
             tables=[table_execution.table for table_execution in pipeline_spec.tables],
@@ -57,7 +67,6 @@ class ExecutePipelineUseCase:
                 artifact_layout=artifact_layout,
                 comparison_spec=pipeline_spec.comparison,
             )
-            self.artifact_publication_service.commit_pointers(table_publications)
         except Exception:
             logger.exception(f"Pipeline artifact staging failed: run_id={run_id}")
             self.artifact_publication_service.cleanup_run_artifacts(artifact_layout=artifact_layout)
@@ -87,6 +96,7 @@ class ExecutePipelineUseCase:
             )
             return PipelineExecutionResult(run_id=run_id, execution_result=execution_result)
 
+        self.artifact_publication_service.commit_pointers(table_publications)
         comparison_report = self.comparison_report_service.load_report(
             report_key=artifact_layout.comparison_report_key,
             run_id=run_id,

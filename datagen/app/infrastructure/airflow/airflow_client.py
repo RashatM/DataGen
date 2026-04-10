@@ -11,6 +11,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class AirflowClient:
+    """HTTP-клиент Airflow REST API с retry-логикой для trigger и poll операций."""
 
     def __init__(self, config: AirflowConfig) -> None:
         self.config = config
@@ -35,6 +36,7 @@ class AirflowClient:
             url: str,
             **kwargs,
     ) -> dict[str, Any]:
+        """Выполняет запрос к Airflow с экспоненциальной паузой между повторами."""
         last_error: Exception | None = None
 
         for attempt in range(1, self.config.max_retries + 1):
@@ -58,6 +60,7 @@ class AirflowClient:
             dag_run_id: str,
             payload: dict[str, Any],
     ) -> None:
+        """Создаёт новый DAG run с переданным runtime-contract в поле conf."""
         url = f"{self.config.url}/api/v1/dags/{self.config.dag_id}/dagRuns"
         body = {"dag_run_id": dag_run_id, "conf": payload}
         self.request_with_retry("POST", url=url, json=body)
@@ -74,6 +77,7 @@ class AirflowClient:
         )
 
     def get_failed_task_ids(self, dag_run_id: str) -> list[str]:
+        """Возвращает отсортированный список task_id, завершившихся со state=failed."""
         url = (
             f"{self.config.url}/api/v1/dags/"
             f"{self.config.dag_id}/dagRuns/{dag_run_id}/taskInstances"

@@ -6,7 +6,7 @@ from app.core.domain.typevars import TConstraints
 
 
 class SourceTypeValueConverter(ABC, Generic[TConstraints]):
-    """Internal converter contract selected by source data type."""
+    """Контракт внутреннего конвертера, который отвечает за один конкретный source data type."""
 
     @property
     @abstractmethod

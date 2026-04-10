@@ -7,6 +7,7 @@ from app.core.application.dto.publication import EnginePair, TablePublication
 
 
 class ExecutionRunnerPort(ABC):
+    """Порт запуска и ожидания внешнего runtime, который materializes load и compare стадии."""
 
     @abstractmethod
     def trigger_and_wait(

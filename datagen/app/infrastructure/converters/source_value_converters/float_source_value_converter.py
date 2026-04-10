@@ -8,6 +8,7 @@ from app.infrastructure.converters.source_type_value_converter import SourceType
 
 
 class FloatSourceValueConverter(SourceTypeValueConverter[FloatConstraints]):
+    """Конвертирует FLOAT source values в STRING или INT, когда это разрешено доменными правилами."""
     @property
     def source_type(self) -> DataType:
         return DataType.FLOAT

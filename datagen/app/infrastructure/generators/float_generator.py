@@ -7,6 +7,7 @@ from app.shared.utils import random_choices_from_constants
 
 
 class FloatDataGenerator(DataGeneratorPort[FloatConstraints]):
+    """Генератор вещественных чисел по диапазону, точности и optional allowed_values."""
     def __init__(self, rng: random.Random) -> None:
         self.rng = rng
 

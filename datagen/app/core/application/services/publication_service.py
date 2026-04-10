@@ -11,6 +11,7 @@ logger = publication_logger
 
 
 class ArtifactPublicationService:
+    """Application-сервис публикации parquet-артефактов, comparison SQL и per-table pointers."""
     def __init__(
             self,
             repository: ArtifactPublicationRepositoryPort,
@@ -26,15 +27,15 @@ class ArtifactPublicationService:
             self,
             table_name: str,
     ) -> dict[str, Any] | None:
-        latest_staged_run_id = self.repository.get_latest_run_id(
+        latest_run_id = self.repository.get_latest_run_id(
             table_name=table_name,
         )
-        if not latest_staged_run_id:
+        if not latest_run_id:
             return None
 
         return self.repository.read_table_data(
             table_name=table_name,
-            run_id=latest_staged_run_id,
+            run_id=latest_run_id,
         )
 
     def stage_table(
@@ -43,6 +44,7 @@ class ArtifactPublicationService:
         table_execution: TableExecutionSpec,
         table_data: GeneratedTableData,
     ) -> TablePublication:
+        """Публикует одну таблицу и возвращает publication-объект для построения runtime-contract."""
         table_publication = self.repository.stage_table_artifacts(
             table_data=table_data,
             artifact_layout=artifact_layout,
@@ -70,6 +72,7 @@ class ArtifactPublicationService:
         return comparison_query_uris
 
     def commit_pointers(self, table_publications: list[TablePublication]) -> None:
+        """Обновляет per-table pointers после технически успешного выполнения внешнего runtime."""
         for publication in table_publications:
             self.repository.commit_pointer(
                 table_name=publication.table_name,

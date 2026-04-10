@@ -8,12 +8,14 @@ from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 
 
 class AirflowDagPayloadBuilder:
+    """Собирает компактный runtime-contract для Airflow DAG из опубликованных артефактов и execution spec."""
 
     def __init__(self, object_storage: S3StorageAdapter) -> None:
         self.object_storage = object_storage
 
     @staticmethod
     def build_table_entry(publication: TablePublication) -> dict[str, Any]:
+        """Сериализует одну опубликованную таблицу в engine-specific load contract для DAG."""
         load_spec = publication.load_spec
         return {
             "table_name": publication.table_name,
@@ -22,12 +24,12 @@ class AirflowDagPayloadBuilder:
                 "hive": {
                     "target_table_name": load_spec.hive_target_table,
                     "write_mode": load_spec.write_mode.value,
-                    "partition_columns": list(load_spec.hive_partition_columns),
+                    "columns": list(load_spec.hive_columns),
                 },
                 "iceberg": {
                     "target_table_name": load_spec.iceberg_target_table,
                     "write_mode": load_spec.write_mode.value,
-                    "partition_columns": list(load_spec.iceberg_partition_columns),
+                    "columns": list(load_spec.iceberg_columns),
                 },
             },
         }
@@ -38,6 +40,7 @@ class AirflowDagPayloadBuilder:
         comparison_spec: ComparisonQuerySpec,
         comparison_query_uris: EnginePair[str],
     ) -> dict[str, Any]:
+        """Строит comparison-блок payload: query/result URIs, excludes и report URI."""
         return {
             "query_uris": {
                 engine_name.value: comparison_query_uris.get_value(engine_name)
@@ -63,6 +66,7 @@ class AirflowDagPayloadBuilder:
         comparison_spec: ComparisonQuerySpec,
         comparison_query_uris: EnginePair[str],
     ) -> dict[str, Any]:
+        """Собирает полный payload запуска DAG для одного run."""
         return {
             "run_id": artifact_layout.run_id,
             "tables": [self.build_table_entry(publication) for publication in publications],

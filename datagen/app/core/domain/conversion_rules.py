@@ -2,10 +2,12 @@ from app.core.domain.enums import DataType
 
 
 class ConversionNotAllowedError(ValueError):
+    """Поднимается, когда система вообще не поддерживает requested source -> target conversion."""
     pass
 
 
 class LossyUniqueOutputConversionError(ValueError):
+    """Поднимается, когда conversion допустим, но ломает гарантию уникальности итогового столбца."""
     pass
 
 

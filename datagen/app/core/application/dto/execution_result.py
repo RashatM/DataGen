@@ -6,6 +6,7 @@ from app.core.application.dto.comparison import ComparisonReport
 
 @dataclass(slots=True)
 class ExecutionResult:
+    """Технический результат исполнения внешнего runner-а без доменной интерпретации сверки."""
     run_id: str
     execution_id: str
     status: ExecutionStatus
@@ -20,6 +21,7 @@ class ExecutionResult:
 
 @dataclass(slots=True)
 class PipelineExecutionResult:
+    """Финальный результат use case-а: статус выполнения пайплайна и, при успехе, comparison-report."""
     run_id: str
     execution_result: ExecutionResult
     comparison_report: ComparisonReport | None = None

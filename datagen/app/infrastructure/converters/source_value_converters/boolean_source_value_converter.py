@@ -8,6 +8,7 @@ from app.infrastructure.converters.source_type_value_converter import SourceType
 
 
 class BooleanSourceValueConverter(SourceTypeValueConverter[BooleanConstraints]):
+    """Конвертирует BOOL source values в поддерживаемые output types без потери семантики."""
     @property
     def source_type(self) -> DataType:
         return DataType.BOOLEAN

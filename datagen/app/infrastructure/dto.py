@@ -6,6 +6,7 @@ SUCCESS_STATE = "success"
 
 @dataclass
 class DagRunState:
+    """Сырой state DAG-run из Airflow API с минимальными helper-методами."""
     dag_run_id: str
     state: str
 

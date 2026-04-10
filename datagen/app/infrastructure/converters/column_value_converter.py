@@ -8,6 +8,7 @@ from app.infrastructure.errors import SourceTypeValueConverterNotRegisteredError
 
 
 class ColumnValueConverter(ValueConverterPort):
+    """Выбирает source-type converter и выполняет приведение исходных значений к output type колонки."""
     def __init__(self, converter_by_source_type: dict[DataType, SourceTypeValueConverter[Any]]):
         self.converter_by_source_type = converter_by_source_type
 

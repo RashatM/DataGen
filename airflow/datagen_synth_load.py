@@ -77,20 +77,19 @@ def validate_table_contracts(conf: dict[str, Any]) -> None:
                     f"Unsupported write_mode in tables[{index}].load.{engine}: "
                     f"{engine_load['write_mode']}. Allowed: {allowed}"
                 )
-            partition_columns = engine_load.get("partition_columns", [])
-            if not isinstance(partition_columns, list):
+            columns = engine_load.get("columns")
+            if not isinstance(columns, list) or not columns:
                 raise ValueError(
-                    f"Contract is missing list 'tables[{index}].load.{engine}.partition_columns'"
+                    f"Contract is missing non-empty list 'tables[{index}].load.{engine}.columns'"
                 )
-            for column_index, column_name in enumerate(partition_columns):
+            for column_index, column_name in enumerate(columns):
                 require_non_empty_string(
                     column_name,
-                    f"tables[{index}].load.{engine}.partition_columns[{column_index}]",
+                    f"tables[{index}].load.{engine}.columns[{column_index}]",
                 )
-            if engine_load["write_mode"] in {"OVERWRITE_PARTITIONS", "APPEND_DISTINCT_PARTITIONS"} and not partition_columns:
+            if len(set(columns)) != len(columns):
                 raise ValueError(
-                    f"tables[{index}].load.{engine}.partition_columns must be non-empty "
-                    f"for write_mode={engine_load['write_mode']}"
+                    f"Contract has duplicate columns in tables[{index}].load.{engine}.columns"
                 )
 
 

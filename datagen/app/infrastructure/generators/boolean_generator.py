@@ -7,6 +7,7 @@ from app.shared.utils import random_choices_from_constants
 
 
 class BooleanDataGenerator(DataGeneratorPort[BooleanConstraints]):
+    """Генератор булевых значений с поддержкой allowed_values и режима уникальности."""
     def __init__(self, rng: random.Random) -> None:
         self.rng = rng
 

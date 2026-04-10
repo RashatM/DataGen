@@ -7,6 +7,7 @@ from app.core.domain.enums import DataType
 
 
 class DataGeneratorFactoryPort(ABC):
+    """Порт registry/factory для генераторов source data types."""
     @abstractmethod
     def register(self, data_type: DataType, data_generator: DataGeneratorPort[Any]) -> None:
         pass

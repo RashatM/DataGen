@@ -5,6 +5,7 @@ from app.core.application.constants import EngineName
 
 @dataclass(slots=True)
 class RunArtifactKeyLayout:
+    """Вычисляет S3-ключи всех артефактов, относящихся к одному run."""
     run_id: str
     run_prefix: str = field(init=False)
     comparison_report_key: str = field(init=False)
@@ -26,6 +27,7 @@ class RunArtifactKeyLayout:
 
 @dataclass(slots=True)
 class TableStateKeyLayout:
+    """Вычисляет S3-ключи состояния, живущего на уровне одной таблицы, а не целого run."""
     table_name: str
     pointer_key: str = field(init=False)
 

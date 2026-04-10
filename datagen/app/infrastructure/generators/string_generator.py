@@ -13,6 +13,7 @@ logger = generation_logger
 
 
 class StringDataGenerator(DataGeneratorPort[StringConstraints]):
+    """Генератор строк для фиксированной длины, allowed_values и части поддерживаемых regex-шаблонов."""
     FIXED_LENGTH_CHAR_CLASS_REGEX = re.compile(r"^\^(?P<char_class>\[[^]]+])\{(?P<length>\d+)}\$$")
     FIXED_LENGTH_CHAR_CLASS_POOLS = {
         "[0-9]": string.digits,
@@ -69,23 +70,22 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         if constraints.regular_expr and output_constraints.is_unique:
             raise InvalidConstraintsError("Unique regex generation is not deterministic and is not supported")
 
-    @staticmethod
     def generate_fixed_length_pool_values(
+        self,
         total_rows: int,
         pool: str,
         length: int,
         output_constraints: OutputConstraints,
-        rng: random.Random,
     ) -> list[str]:
         max_unique_values = len(pool) ** length
 
         if output_constraints.is_unique:
             if total_rows > max_unique_values:
                 raise UnsatisfiableConstraintsError("Not enough unique combinations")
-            sampled_indexes = rng.sample(range(max_unique_values), total_rows)
+            sampled_indexes = self.rng.sample(range(max_unique_values), total_rows)
             return [StringDataGenerator.encode_index(i, pool, length) for i in sampled_indexes]
 
-        return ["".join(rng.choices(pool, k=length)) for _ in range(total_rows)]
+        return ["".join(self.rng.choices(pool, k=length)) for _ in range(total_rows)]
 
     @classmethod
     def parse_fixed_length_char_class_regex(cls, regex: str | None) -> tuple[str, int] | None:
@@ -139,7 +139,6 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
                 pool=pool,
                 length=length,
                 output_constraints=output_constraints,
-                rng=self.rng,
             )
 
         if total_rows > 10000:
@@ -160,12 +159,11 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
 
         return result
 
-    @staticmethod
     def generate_digit_values(
+        self,
         total_rows: int,
         constraints: StringConstraints,
         output_constraints: OutputConstraints,
-        rng: random.Random,
     ) -> list[str]:
         length = constraints.length
         min_value = 0 if length == 1 else 10 ** (length - 1)
@@ -175,10 +173,10 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
         if output_constraints.is_unique:
             if total_rows > space:
                 raise UnsatisfiableConstraintsError("Not enough unique digit combinations")
-            sampled_numbers = rng.sample(range(min_value, max_value + 1), total_rows)
+            sampled_numbers = self.rng.sample(range(min_value, max_value + 1), total_rows)
             return [str(n) for n in sampled_numbers]
 
-        return [str(rng.randint(min_value, max_value)) for _ in range(total_rows)]
+        return [str(self.rng.randint(min_value, max_value)) for _ in range(total_rows)]
 
     def generate_letter_values(
         self,
@@ -192,7 +190,6 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
             pool=pool,
             length=constraints.length,
             output_constraints=output_constraints,
-            rng=self.rng,
         )
 
     def generate_values(
@@ -210,6 +207,6 @@ class StringDataGenerator(DataGeneratorPort[StringConstraints]):
             return self.generate_regex_values(total_rows, constraints, output_constraints)
 
         if constraints.character_set == CharacterSet.DIGITS:
-            return self.generate_digit_values(total_rows, constraints, output_constraints, self.rng)
+            return self.generate_digit_values(total_rows, constraints, output_constraints)
 
         return self.generate_letter_values(total_rows, constraints, output_constraints)

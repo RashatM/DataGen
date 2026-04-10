@@ -7,6 +7,7 @@ from app.shared.utils import random_choices_from_constants
 
 
 class IntDataGenerator(DataGeneratorPort[IntConstraints]):
+    """Генератор целых чисел по диапазону или заранее заданному набору допустимых значений."""
     def __init__(self, rng: random.Random) -> None:
         self.rng = rng
 

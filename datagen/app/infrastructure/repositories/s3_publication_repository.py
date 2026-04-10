@@ -21,14 +21,42 @@ from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 
 
 class S3PublicationRepository(ArtifactPublicationRepositoryPort):
+    """Публикует parquet-данные, comparison query и per-table pointers в S3."""
+    PARQUET_WRITE_BATCH_SIZE = 100_000
+
     def __init__(self, object_storage: S3StorageAdapter, schema_builder: ArrowSchemaBuilder):
         self.object_storage = object_storage
         self.schema_builder = schema_builder
 
+    @classmethod
+    def build_parquet_chunk(
+        cls,
+        table_data: GeneratedTableData,
+        schema: pa.Schema,
+        start: int,
+        stop: int,
+    ) -> pa.Table:
+        """Собирает маленький Arrow chunk из диапазона строк, чтобы не материализовывать всю таблицу целиком."""
+        return pa.table(
+            data={
+                column_name: table_data.generated_data[column_name][start:stop]
+                for column_name in schema.names
+            },
+            schema=schema,
+        )
+
     def write_parquet(self, table_data: GeneratedTableData, destination: IO[bytes]) -> None:
+        """Пишет parquet чанками в поток, уменьшая peak memory на больших таблицах."""
         schema = self.schema_builder.build_schema(table_data.table)
-        table = pa.table(data=table_data.generated_data, schema=schema)
-        pq.write_table(table, destination)
+        total_rows = table_data.table.total_rows
+
+        with pq.ParquetWriter(destination, schema=schema) as writer:
+            if total_rows == 0:
+                writer.write_table(self.build_parquet_chunk(table_data, schema, 0, 0))
+            else:
+                for start in range(0, total_rows, self.PARQUET_WRITE_BATCH_SIZE):
+                    stop = min(start + self.PARQUET_WRITE_BATCH_SIZE, total_rows)
+                    writer.write_table(self.build_parquet_chunk(table_data, schema, start, stop))
         destination.flush()
 
     @staticmethod
@@ -37,6 +65,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         return table.to_pydict()
 
     def stage_data_artifact(self, table_data: GeneratedTableData, artifact_layout: RunArtifactKeyLayout) -> str:
+        """Публикует parquet-артефакт одной таблицы и возвращает S3 URI для DAG contract."""
         table = table_data.table
         data_key = artifact_layout.data_key(table.table_name)
         with TemporaryFile(mode="w+b") as temp_file:
@@ -52,6 +81,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         engine_name: EngineName,
         rendered_query: str,
     ) -> str:
+        """Публикует comparison SQL конкретного движка как отдельный текстовый артефакт."""
         return self.object_storage.put_text(
             key=artifact_layout.comparison_query_key(engine_name),
             content=f"{rendered_query.strip()}\n",
@@ -63,6 +93,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
             artifact_layout: RunArtifactKeyLayout,
             load_spec: TableLoadSpec,
     ) -> TablePublication:
+        """Публикует данные таблицы и возвращает publication-объект для дальнейшего построения DAG payload."""
         data_uri = self.stage_data_artifact(table_data, artifact_layout)
         table = table_data.table
         return TablePublication(
@@ -91,6 +122,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         )
 
     def commit_pointer(self, table_name: str, run_id: str) -> None:
+        """Обновляет per-table pointer на последний технически успешный run."""
         state_layout = TableStateKeyLayout(table_name=table_name)
         pointer_key = state_layout.pointer_key
         previous_run_id = self.get_latest_run_id(table_name)
@@ -105,6 +137,7 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         )
 
     def get_latest_run_id(self, table_name: str) -> str | None:
+        """Читает текущий per-table pointer и возвращает последний известный run_id для таблицы."""
         state_layout = TableStateKeyLayout(table_name=table_name)
         pointer_key = state_layout.pointer_key
         try:
@@ -118,10 +151,12 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
         return run_id
 
     def read_table_data(self, table_name: str, run_id: str) -> GeneratedColumnsByName:
+        """Загружает опубликованный parquet таблицы назад в python-словарь колонок."""
         artifact_layout = RunArtifactKeyLayout(run_id=run_id)
         key = artifact_layout.data_key(table_name)
         payload = self.object_storage.get_bytes(key=key)
         return self.deserialize_parquet(payload)
 
     def cleanup_run_artifacts(self, artifact_layout: RunArtifactKeyLayout) -> None:
+        """Удаляет все опубликованные артефакты конкретного run по его S3 prefix."""
         self.object_storage.delete_prefix(artifact_layout.run_prefix)

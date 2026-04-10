@@ -8,6 +8,7 @@ from app.infrastructure.converters.source_type_value_converter import SourceType
 
 
 class StringSourceValueConverter(SourceTypeValueConverter[StringConstraints]):
+    """Конвертирует STRING source values в STRING или INT с fail-fast ошибкой на плохих значениях."""
     @property
     def source_type(self) -> DataType:
         return DataType.STRING
