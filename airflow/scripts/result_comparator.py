@@ -5,6 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pyspark.sql import DataFrame, SparkSession
 import pyspark.sql.functions as f
+from pyspark.sql.types import *
 
 from job_common import ComparisonContract, logger, parse_job_contract, write_json_to_uri
 
@@ -19,19 +20,11 @@ def open_spark_session(app_name: str):
         .getOrCreate()
     )
     try:
-        spark.sparkContext.setLogLevel("INFO")
         logger.info("Spark session opened.")
         yield spark
     finally:
         spark.stop()
         logger.info("Spark session closed.")
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="DataGen: compare Hive and Iceberg query results")
-    parser.add_argument("--app_name", required=True)
-    parser.add_argument("--contract", required=True)
-    return parser.parse_args()
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,13 +56,13 @@ class ComparisonMetrics:
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedComparisonData:
-    """Промежуточный результат подготовки двух parquet-результатов к честной сверке."""
+class PreparedComparison:
+    """Промежуточный результат подготовки двух parquet-результатов к сверке."""
     hive_df: DataFrame
     iceberg_df: DataFrame
-    hive_ignored_by_name: tuple[str, ...]
-    iceberg_ignored_by_name: tuple[str, ...]
-    ignored_by_temporal_type: tuple[str, ...]
+    hive_excluded_by_name: tuple[str, ...]
+    iceberg_excluded_by_name: tuple[str, ...]
+    excluded_by_temporal_type: tuple[str, ...]
 
 
 class ComparisonReportBuilder:
@@ -120,15 +113,22 @@ class ComparisonReportBuilder:
 class ResultComparator:
     """Сверяет materialized query results двух движков и формирует comparison_result.json.
 
-    Компаратор работает не напрямую с SQL, а с уже записанными parquet-результатами запросов.
+    Компаратор работает не напрямую с SQL, а с raw parquet-результатами запросов.
     Его этапы такие:
-    - применить engine-specific exclude_columns по именам
-    - автоматически исключить колонки, если хотя бы с одной стороны тип temporal
+    - применить technical и contract-level excludes по именам
+    - исключить колонки, если хотя бы с одной стороны Spark считает тип temporal
+    - нормализовать primitive-типы оставшихся колонок
     - проверить совпадение сравнимых колонок и их схем после нормализации
     - посчитать двусторонние exceptAll-метрики
     - записать итоговый report обратно в object storage
     """
     TEMPORAL_TYPE_NAMES = frozenset({"timestamp", "timestamp_ntz", "date"})
+    NORMALIZED_INTEGER_TYPE = "bigint"
+    NORMALIZED_DECIMAL_TYPE = "decimal(38,18)"
+    TECHNICAL_COMPARE_EXCLUDES_BY_ENGINE = {
+        "hive": frozenset({"date_part", "month_part", "year_part", "load_part"}),
+        "iceberg": frozenset({"sys_insert_stamp", "sys_update_stamp", "src_modified_stamp", "job_insert_id"}),
+    }
 
     def __init__(
         self,
@@ -138,20 +138,36 @@ class ResultComparator:
         self.spark = spark
         self.report_builder = report_builder
 
+    def build_excluded_columns(self, engine: str, contract_excludes: tuple[str, ...]) -> set[str]:
+        """Объединяет technical excludes движка и exclude_columns из runtime-контракта."""
+        technical_excludes = self.TECHNICAL_COMPARE_EXCLUDES_BY_ENGINE.get(engine)
+        if technical_excludes is None:
+            raise ValueError(f"Unsupported engine={engine}")
+        return set(technical_excludes) | set(contract_excludes)
+
     @staticmethod
-    def filter_ignored_columns(df: DataFrame, ignored_columns: tuple[str, ...]) -> tuple[DataFrame, tuple[str, ...]]:
-        """Удаляет из сравнения колонки, явно перечисленные в exclude_columns для конкретного движка."""
-        ignored_names = {column_name.lower() for column_name in ignored_columns}
+    def drop_excluded_columns_by_name(
+        df: DataFrame,
+        excluded_columns: set[str],
+    ) -> tuple[DataFrame, tuple[str, ...]]:
+        """Удаляет из сверки technical и contract-level exclude columns по имени."""
+        if not excluded_columns:
+            return df, ()
+
+        excluded_names = {column_name.lower() for column_name in excluded_columns}
         kept_columns: list[str] = []
-        ignored_by_name: list[str] = []
+        excluded_by_name: list[str] = []
 
         for column_name in df.columns:
-            if column_name.lower() in ignored_names:
-                ignored_by_name.append(column_name)
+            if column_name.lower() in excluded_names:
+                excluded_by_name.append(column_name)
                 continue
             kept_columns.append(column_name)
 
-        return df.select(*(f.col(column_name) for column_name in kept_columns)), tuple(ignored_by_name)
+        if not excluded_by_name:
+            return df, ()
+
+        return df.select(*(f.col(column_name) for column_name in kept_columns)), tuple(excluded_by_name)
 
     @staticmethod
     def validate_column_sets(hive_df: DataFrame, iceberg_df: DataFrame) -> None:
@@ -161,97 +177,130 @@ class ResultComparator:
                 f"hive={sorted(hive_df.columns)}, iceberg={sorted(iceberg_df.columns)}"
             )
 
-    @classmethod
-    def exclude_temporal_columns(cls, hive_df: DataFrame, iceberg_df: DataFrame) -> tuple[DataFrame, DataFrame, tuple[str, ...]]:
+    def drop_temporal_columns(
+        self,
+        hive_df: DataFrame,
+        iceberg_df: DataFrame,
+    ) -> tuple[DataFrame, DataFrame, tuple[str, ...]]:
         """Исключает из сверки колонки, если хотя бы на одной стороне Spark считает их temporal-типом."""
-        cls.validate_column_sets(hive_df, iceberg_df)
+        self.validate_column_sets(hive_df, iceberg_df)
 
         hive_types = {field.name: field.dataType.typeName() for field in hive_df.schema.fields}
         iceberg_types = {field.name: field.dataType.typeName() for field in iceberg_df.schema.fields}
+        temporal_column_names: list[str] = []
 
-        ignored_by_temporal_type = tuple(
-            sorted(
-                column_name
-                for column_name in hive_types
-                if hive_types[column_name] in cls.TEMPORAL_TYPE_NAMES
-                or iceberg_types[column_name] in cls.TEMPORAL_TYPE_NAMES
-            )
-        )
-        if not ignored_by_temporal_type:
-            return hive_df, iceberg_df, ignored_by_temporal_type
+        for column_name in hive_types:
+            hive_type = hive_types[column_name]
+            iceberg_type = iceberg_types[column_name]
+            if hive_type in self.TEMPORAL_TYPE_NAMES or iceberg_type in self.TEMPORAL_TYPE_NAMES:
+                temporal_column_names.append(column_name)
 
-        kept_columns = [column_name for column_name in hive_df.columns if column_name not in ignored_by_temporal_type]
+        excluded_by_temporal_type = tuple(sorted(temporal_column_names))
+        if not excluded_by_temporal_type:
+            return hive_df, iceberg_df, excluded_by_temporal_type
+
+        excluded_temporal_names = set(excluded_by_temporal_type)
+        kept_columns = [
+            column_name
+            for column_name in hive_df.columns
+            if column_name not in excluded_temporal_names
+        ]
         return (
             hive_df.select(*(f.col(column_name) for column_name in kept_columns)),
             iceberg_df.select(*(f.col(column_name) for column_name in kept_columns)),
-            ignored_by_temporal_type,
+            excluded_by_temporal_type,
         )
 
-    @staticmethod
-    def validate_schemas(hive_df: DataFrame, iceberg_df: DataFrame) -> None:
+    def normalize_comparable_types(self, df: DataFrame) -> DataFrame:
+        """Нормализует primitive-типы сравнимых колонок перед schema validation и exceptAll."""
+        expressions = []
+        for schema_field in df.schema.fields:
+            column = f.col(schema_field.name)
+            data_type = schema_field.dataType
+
+            if isinstance(data_type, (ArrayType, MapType, StructType)):
+                raise ValueError(
+                    f"Complex type is not supported for comparison: "
+                    f"column={schema_field.name}, type={data_type.simpleString()}"
+                )
+
+            if isinstance(data_type, (ByteType, ShortType, IntegerType, LongType)):
+                expressions.append(column.cast(self.NORMALIZED_INTEGER_TYPE).alias(schema_field.name))
+                continue
+
+            if isinstance(data_type, (FloatType, DoubleType, DecimalType)):
+                expressions.append(column.cast(self.NORMALIZED_DECIMAL_TYPE).alias(schema_field.name))
+                continue
+
+            if isinstance(data_type, BooleanType):
+                expressions.append(f.lower(column.cast("string")).alias(schema_field.name))
+                continue
+
+            expressions.append(column)
+
+        return df.select(*expressions)
+
+    def validate_schemas(self, hive_df: DataFrame, iceberg_df: DataFrame) -> None:
         """Проверяет, что после всех исключений и нормализации обе стороны сравниваются по одинаковой схеме."""
-        ResultComparator.validate_column_sets(hive_df, iceberg_df)
+        self.validate_column_sets(hive_df, iceberg_df)
         hive_types = {field.name: field.dataType.simpleString() for field in hive_df.schema.fields}
         iceberg_types = {field.name: field.dataType.simpleString() for field in iceberg_df.schema.fields}
         mismatched = {
-            col: (hive_types[col], iceberg_types[col])
-            for col in hive_types
-            if hive_types[col] != iceberg_types[col]
+            col: (hive_types[col], iceberg_types[col]) for col in hive_types if hive_types[col] != iceberg_types[col]
         }
         if mismatched:
             raise ValueError(f"Schema mismatch after normalization and temporal exclusion: {mismatched}")
 
-    @staticmethod
-    def align_columns(hive_df: DataFrame, iceberg_df: DataFrame) -> tuple[DataFrame, DataFrame]:
-        ordered_columns = sorted(hive_df.columns)
-        return (
-            hive_df.select(*ordered_columns),
-            iceberg_df.select(*ordered_columns),
-        )
-
-    @classmethod
     def prepare_for_comparison(
-        cls,
+        self,
         comparison_contract: ComparisonContract,
         hive_df: DataFrame,
         iceberg_df: DataFrame,
-    ) -> PreparedComparisonData:
+    ) -> PreparedComparison:
         """Готовит обе стороны к сверке: применяет excludes, temporal-policy и schema validation."""
         hive_contract = comparison_contract.get_engine_contract("hive")
         iceberg_contract = comparison_contract.get_engine_contract("iceberg")
 
-        filtered_hive_df, hive_ignored_by_name = cls.filter_ignored_columns(
+        hive_excluded_columns = self.build_excluded_columns(
+            engine="hive",
+            contract_excludes=hive_contract.excluded_columns,
+        )
+        iceberg_excluded_columns = self.build_excluded_columns(
+            engine="iceberg",
+            contract_excludes=iceberg_contract.excluded_columns,
+        )
+        filtered_hive_df, hive_excluded_by_name = self.drop_excluded_columns_by_name(
             df=hive_df,
-            ignored_columns=hive_contract.exclude_columns,
+            excluded_columns=hive_excluded_columns,
         )
-        filtered_iceberg_df, iceberg_ignored_by_name = cls.filter_ignored_columns(
+        filtered_iceberg_df, iceberg_excluded_by_name = self.drop_excluded_columns_by_name(
             df=iceberg_df,
-            ignored_columns=iceberg_contract.exclude_columns,
+            excluded_columns=iceberg_excluded_columns,
         )
-        comparable_hive_df, comparable_iceberg_df, ignored_by_temporal_type = cls.exclude_temporal_columns(
+        non_temporal_hive_df, non_temporal_iceberg_df, excluded_by_temporal_type = self.drop_temporal_columns(
             hive_df=filtered_hive_df,
             iceberg_df=filtered_iceberg_df,
         )
-        cls.validate_schemas(
-            hive_df=comparable_hive_df,
-            iceberg_df=comparable_iceberg_df,
+        normalized_hive_df = self.normalize_comparable_types(non_temporal_hive_df)
+        normalized_iceberg_df = self.normalize_comparable_types(non_temporal_iceberg_df)
+        self.validate_schemas(
+            hive_df=normalized_hive_df,
+            iceberg_df=normalized_iceberg_df,
         )
 
-        return PreparedComparisonData(
-            hive_df=comparable_hive_df,
-            iceberg_df=comparable_iceberg_df,
-            hive_ignored_by_name=hive_ignored_by_name,
-            iceberg_ignored_by_name=iceberg_ignored_by_name,
-            ignored_by_temporal_type=ignored_by_temporal_type,
+        return PreparedComparison(
+            hive_df=normalized_hive_df,
+            iceberg_df=normalized_iceberg_df,
+            hive_excluded_by_name=hive_excluded_by_name,
+            iceberg_excluded_by_name=iceberg_excluded_by_name,
+            excluded_by_temporal_type=excluded_by_temporal_type,
         )
 
-    @staticmethod
-    def calculate_metrics(hive_df: DataFrame, iceberg_df: DataFrame) -> ComparisonMetrics:
+    def calculate_metrics(self, hive_df: DataFrame, iceberg_df: DataFrame) -> ComparisonMetrics:
         """Считает row counts и двусторонние exclusive counts через persist + bilateral exceptAll."""
-        hive_df, iceberg_df = ResultComparator.align_columns(
-            hive_df=hive_df,
-            iceberg_df=iceberg_df,
-        )
+        ordered_columns = sorted(hive_df.columns)
+        hive_df = hive_df.select(*ordered_columns)
+        iceberg_df = iceberg_df.select(*ordered_columns)
         hive_df.persist()
         iceberg_df.persist()
         try:
@@ -270,8 +319,8 @@ class ResultComparator:
                     iceberg=iceberg_exclusive_row_count,
                 ),
                 exclusive_row_ratio=EngineRatios(
-                    hive=ComparisonReportBuilder.calculate_ratio(hive_exclusive_row_count, hive_row_count),
-                    iceberg=ComparisonReportBuilder.calculate_ratio(iceberg_exclusive_row_count, iceberg_row_count),
+                    hive=self.report_builder.calculate_ratio(hive_exclusive_row_count, hive_row_count),
+                    iceberg=self.report_builder.calculate_ratio(iceberg_exclusive_row_count, iceberg_row_count),
                 ),
             )
         finally:
@@ -282,16 +331,16 @@ class ResultComparator:
     def build_outcome_message(
         run_id: str,
         metrics: ComparisonMetrics,
-        prepared_data: PreparedComparisonData,
+        prepared_data: PreparedComparison,
     ) -> str:
         status_line = "Comparison passed." if metrics.status() == "MATCH" else "Comparison mismatch detected."
         return (
             f"{status_line}\n"
             f"run_id: {run_id}\n"
-            f"ignored_by_name:\n"
-            f"  hive: {list(prepared_data.hive_ignored_by_name)}\n"
-            f"  iceberg: {list(prepared_data.iceberg_ignored_by_name)}\n"
-            f"ignored_by_temporal_type: {list(prepared_data.ignored_by_temporal_type)}\n"
+            f"excluded_by_name:\n"
+            f"  hive: {list(prepared_data.hive_excluded_by_name)}\n"
+            f"  iceberg: {list(prepared_data.iceberg_excluded_by_name)}\n"
+            f"excluded_by_temporal_type: {list(prepared_data.excluded_by_temporal_type)}\n"
             f"row_count:\n"
             f"  hive: {metrics.row_count.hive}\n"
             f"  iceberg: {metrics.row_count.iceberg}\n"
@@ -310,7 +359,7 @@ class ResultComparator:
         iceberg_contract = comparison_contract.get_engine_contract("iceberg")
 
         logger.info(
-            f"Comparison started. run_id={run_id}, hive_result_uri={hive_contract.result_uri}, "
+            f"Comparison started: run_id={run_id}, hive_result_uri={hive_contract.result_uri}, "
             f"iceberg_result_uri={iceberg_contract.result_uri}"
         )
 
@@ -342,6 +391,13 @@ class ResultComparator:
             f"{self.build_outcome_message(run_id=run_id, metrics=metrics, prepared_data=prepared_data)}\n"
             f"report_uri: {comparison_contract.report_uri}"
         )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="DataGen: compare Hive and Iceberg query results")
+    parser.add_argument("--app_name", required=True)
+    parser.add_argument("--contract", required=True)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":

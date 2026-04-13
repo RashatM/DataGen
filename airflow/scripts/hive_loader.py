@@ -40,16 +40,8 @@ def open_spark_session(app_name: str):
         logger.info("Spark session closed.")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="DataGen: S3 to Hive loader")
-    parser.add_argument("--app_name", required=True)
-    parser.add_argument("--contract", required=True)
-    return parser.parse_args()
-
-
 class HiveSynthLoader(BaseSynthLoader):
     """Реализация загрузчика для Hive на Hadoop через insertInto и переключение partition overwrite mode."""
-    technical_compare_excludes = frozenset({"date_part", "month_part", "year_part", "load_part"})
 
     @contextmanager
     def partition_overwrite_mode(self, mode: str):
@@ -71,6 +63,13 @@ class HiveSynthLoader(BaseSynthLoader):
     def overwrite_partitions(self, df: DataFrame, table_name: str) -> None:
         with self.partition_overwrite_mode("dynamic"):
             df.write.insertInto(table_name, overwrite=True)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="DataGen: S3 to Hive loader")
+    parser.add_argument("--app_name", required=True)
+    parser.add_argument("--contract", required=True)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":

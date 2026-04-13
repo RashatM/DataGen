@@ -29,20 +29,8 @@ def open_spark_session(app_name: str):
         logger.info("Spark session closed.")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="DataGen: S3 to Iceberg loader")
-    parser.add_argument("--app_name", required=True)
-    parser.add_argument("--contract", required=True)
-    return parser.parse_args()
-
-
 class IcebergSynthLoader(BaseSynthLoader):
     """Реализация загрузчика для Iceberg через DataFrameWriterV2 и встроенные overwrite semantics движка."""
-    technical_compare_excludes = frozenset(
-        {
-            "sys_insert_stamp", "sys_update_stamp", "src_modified_stamp", "job_insert_id"
-        }
-    )
 
     def append_to_table(self, df: DataFrame, table_name: str) -> None:
         df.writeTo(table_name).append()
@@ -52,6 +40,13 @@ class IcebergSynthLoader(BaseSynthLoader):
 
     def overwrite_partitions(self, df: DataFrame, table_name: str) -> None:
         df.writeTo(table_name).overwritePartitions()
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="DataGen: S3 to Iceberg loader")
+    parser.add_argument("--app_name", required=True)
+    parser.add_argument("--contract", required=True)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":

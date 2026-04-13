@@ -73,7 +73,7 @@ class EngineComparisonContract:
     """Ссылки и настройки comparison для одного конкретного движка."""
     query_uri: str
     result_uri: str
-    exclude_columns: tuple[str, ...]
+    excluded_columns: tuple[str, ...]
 
 
 @dataclass
@@ -97,7 +97,7 @@ class ComparisonContract:
         return EngineComparisonContract(
             query_uri=query_uri,
             result_uri=result_uri,
-            exclude_columns=tuple(self.exclude_columns.get(engine, ())),
+            excluded_columns=tuple(self.exclude_columns.get(engine, ())),
         )
 
 

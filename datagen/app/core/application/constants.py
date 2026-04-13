@@ -23,7 +23,7 @@ class EngineName(str, Enum):
 
 
 class EngineScope(str, Enum):
-    """Input-level правило, в какой engine-specific load projection должна попасть колонка."""
+    """Input-level правило, в какой engine-specific список загрузки должна попасть колонка."""
     BOTH = "both"
     HIVE_ONLY = "hive_only"
     ICEBERG_ONLY = "iceberg_only"
