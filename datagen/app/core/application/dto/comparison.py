@@ -25,6 +25,14 @@ class ComparisonReportArtifacts:
 
 
 @dataclass(slots=True)
+class ComparisonReportExcludedColumns:
+    """Колонки, исключённые из итоговой сверки по engine-specific и temporal-правилам."""
+    hive: list[str]
+    iceberg: list[str]
+    temporal: list[str]
+
+
+@dataclass(slots=True)
 class ComparisonReportSummary:
     """Сводная часть comparison_result.json.
 
@@ -52,6 +60,7 @@ class ComparisonReport:
     status: ComparisonStatus
     summary: ComparisonReportSummary
     artifacts: ComparisonReportArtifacts
+    excluded_columns: ComparisonReportExcludedColumns
 
     def is_match(self) -> bool:
         return self.status == ComparisonStatus.MATCH

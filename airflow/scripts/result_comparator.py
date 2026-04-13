@@ -95,6 +95,7 @@ class ComparisonReportBuilder:
         hive_result_uri: str,
         iceberg_result_uri: str,
         metrics: ComparisonMetrics,
+        column_plan: ComparisonColumnPlan,
     ) -> dict[str, object]:
         return {
             "run_id": run_id,
@@ -118,6 +119,11 @@ class ComparisonReportBuilder:
             "artifacts": {
                 "hive_result_uri": hive_result_uri,
                 "iceberg_result_uri": iceberg_result_uri,
+            },
+            "excluded_columns": {
+                "hive": column_plan.hive_excluded_columns,
+                "iceberg": column_plan.iceberg_excluded_columns,
+                "temporal": column_plan.temporal_excluded_columns,
             },
         }
 
@@ -163,10 +169,26 @@ class ComparisonColumnPlanner:
         )
 
     @staticmethod
+    def validate_unique_columns(engine: str, columns: list[str]) -> None:
+        seen_columns: set[str] = set()
+        duplicate_columns: set[str] = set()
+        for column_name in columns:
+            if column_name in seen_columns:
+                duplicate_columns.add(column_name)
+                continue
+            seen_columns.add(column_name)
+
+        duplicates = sorted(duplicate_columns)
+        if duplicates:
+            raise ValueError(f"{engine} result contains duplicate column names: {duplicates}")
+
+    @staticmethod
     def build_common_columns(
         hive_columns: list[str],
         iceberg_columns: list[str],
     ) -> list[str]:
+        ComparisonColumnPlanner.validate_unique_columns("Hive", hive_columns)
+        ComparisonColumnPlanner.validate_unique_columns("Iceberg", iceberg_columns)
         if set(hive_columns) != set(iceberg_columns):
             raise ValueError(
                 "Hive and Iceberg results must have identical comparable column names: "
@@ -380,6 +402,7 @@ class ResultComparator:
             hive_result_uri=hive_contract.result_uri,
             iceberg_result_uri=iceberg_contract.result_uri,
             metrics=metrics,
+            column_plan=column_plan,
         )
         write_json_to_uri(
             spark=self.spark,

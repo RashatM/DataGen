@@ -2,6 +2,7 @@ from app.core.application.constants import ComparisonStatus
 from app.core.application.dto.comparison import (
     ComparisonReport,
     ComparisonReportArtifacts,
+    ComparisonReportExcludedColumns,
     ComparisonReportSummary,
     EngineCountSummary,
     EngineRatioSummary,
@@ -45,6 +46,16 @@ class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
             raise ObjectPayloadFormatError(f"Comparison report field '{key}' must be number")
         return float(value)
 
+    @staticmethod
+    def require_string_list(payload: dict, key: str) -> list[str]:
+        value = payload.get(key)
+        if not isinstance(value, list):
+            raise ObjectPayloadFormatError(f"Comparison report field '{key}' must be list")
+        for item in value:
+            if not isinstance(item, str):
+                raise ObjectPayloadFormatError(f"Comparison report field '{key}' must contain only strings")
+        return value
+
     def parse_engine_count_summary(self, payload: dict, section_name: str) -> EngineCountSummary:
         section = self.require_object(payload, section_name)
         return EngineCountSummary(
@@ -57,6 +68,18 @@ class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
         return EngineRatioSummary(
             hive=self.require_number(section, "hive"),
             iceberg=self.require_number(section, "iceberg"),
+        )
+
+    def parse_excluded_columns(self, payload: dict) -> ComparisonReportExcludedColumns:
+        section = payload.get("excluded_columns")
+        if section is None:
+            return ComparisonReportExcludedColumns(hive=[], iceberg=[], temporal=[])
+        if not isinstance(section, dict):
+            raise ObjectPayloadFormatError("Comparison report field 'excluded_columns' must be object")
+        return ComparisonReportExcludedColumns(
+            hive=self.require_string_list(section, "hive"),
+            iceberg=self.require_string_list(section, "iceberg"),
+            temporal=self.require_string_list(section, "temporal"),
         )
 
     def parse_report(self, payload: dict, expected_run_id: str) -> ComparisonReport:
@@ -79,6 +102,7 @@ class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
         exclusive_row_count = self.parse_engine_count_summary(summary, "exclusive_row_count")
         row_count_delta = self.require_int(summary, "row_count_delta")
         exclusive_row_ratio = self.parse_engine_ratio_summary(summary, "exclusive_row_ratio")
+        excluded_columns = self.parse_excluded_columns(payload)
 
         return ComparisonReport(
             run_id=run_id,
@@ -94,6 +118,7 @@ class S3ComparisonReportRepository(ComparisonReportRepositoryPort):
                 hive_result_uri=self.require_string(artifacts, "hive_result_uri"),
                 iceberg_result_uri=self.require_string(artifacts, "iceberg_result_uri"),
             ),
+            excluded_columns=excluded_columns,
         )
 
     def load_report(self, report_key: str, expected_run_id: str) -> ComparisonReport:

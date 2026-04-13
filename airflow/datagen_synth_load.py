@@ -230,8 +230,8 @@ with DAG(
         python_callable=validate_contract,
     )
 
-    # Один Spark job на все таблицы — скрипт итерирует таблицы сам
-    # Rollback через tmp таблицу: создать _tmp → загрузить → rename
+    # Один Spark job на все таблицы — скрипт итерирует таблицы сам.
+    # Loader пишет напрямую в существующие target tables согласно write_mode из runtime-контракта.
     load_iceberg_tables_task = PlatformTemplatedSparkOperator(
         task_id="load_iceberg_tables",
         name="datagen_load_iceberg_tables",
@@ -267,7 +267,7 @@ with DAG(
         config_callable=get_compare_spark_config,
         retries=0,
         application=RESULT_COMPARATOR_SCRIPT,
-        py_files=f"{BASE_LOADER_SCRIPT},{JOB_COMMON_SCRIPT}",
+        py_files=JOB_COMMON_SCRIPT,
         application_args=[
             "--app_name", "datagen_compare_{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",

@@ -83,7 +83,11 @@ class ComparisonReportService:
             f"  iceberg: {report.summary.exclusive_row_count.iceberg}\n"
             f"exclusive_row_ratio:\n"
             f"  hive: {report.summary.exclusive_row_ratio.hive}\n"
-            f"  iceberg: {report.summary.exclusive_row_ratio.iceberg}"
+            f"  iceberg: {report.summary.exclusive_row_ratio.iceberg}\n"
+            f"excluded_columns:\n"
+            f"  hive: {report.excluded_columns.hive}\n"
+            f"  iceberg: {report.excluded_columns.iceberg}\n"
+            f"  temporal: {report.excluded_columns.temporal}"
         )
 
     def load_report(self, report_key: str, run_id: str) -> ComparisonReport:
