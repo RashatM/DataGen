@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from app.infrastructure.converters.schema_converter import convert_to_generation_run
+from app.infrastructure.converters.contract.table_compiler import convert_to_generation_run
 from app.infrastructure.errors import SchemaValidationError
 from app.infrastructure.input.excel_loader_support import (
     ALLOWED_OUTPUT_TYPES_BY_SOURCE,

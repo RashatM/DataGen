@@ -5,7 +5,7 @@ from app.core.domain.enums import DataType
 from app.core.domain.typevars import TConstraints
 
 
-class SourceTypeValueConverter(ABC, Generic[TConstraints]):
+class SourceValueConverter(ABC, Generic[TConstraints]):
     """Контракт внутреннего конвертера, который отвечает за один конкретный source data type."""
 
     @property

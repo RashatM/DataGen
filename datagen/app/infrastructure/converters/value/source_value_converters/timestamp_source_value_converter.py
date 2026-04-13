@@ -4,10 +4,10 @@ from app.core.domain.constraints import TimestampConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
 from app.core.domain.enums import DataType
 from app.core.domain.validation_errors import InvalidConstraintsError
-from app.infrastructure.converters.source_type_value_converter import SourceTypeValueConverter
+from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
 
 
-class TimestampSourceValueConverter(SourceTypeValueConverter[TimestampConstraints]):
+class TimestampSourceValueConverter(SourceValueConverter[TimestampConstraints]):
     """Конвертирует TIMESTAMP source values в STRING, INT или DATE с учётом заданного формата."""
     @property
     def source_type(self) -> DataType:

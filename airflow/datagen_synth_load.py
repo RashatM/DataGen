@@ -17,7 +17,6 @@ ALLOWED_WRITE_MODES = {
     "OVERWRITE_TABLE",
     "OVERWRITE_PARTITIONS",
     "APPEND",
-    "APPEND_DISTINCT_PARTITIONS",
 }
 
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/base_loader.py"

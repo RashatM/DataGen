@@ -1,27 +1,27 @@
 from typing import Any
 
-from app.core.domain.constraints import FloatConstraints
+from app.core.domain.constraints import BooleanConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
 from app.core.domain.enums import DataType
 from app.core.domain.validation_errors import InvalidConstraintsError
-from app.infrastructure.converters.source_type_value_converter import SourceTypeValueConverter
+from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
 
 
-class FloatSourceValueConverter(SourceTypeValueConverter[FloatConstraints]):
-    """Конвертирует FLOAT source values в STRING или INT, когда это разрешено доменными правилами."""
+class BooleanSourceValueConverter(SourceValueConverter[BooleanConstraints]):
+    """Конвертирует BOOL source values в поддерживаемые output types без потери семантики."""
     @property
     def source_type(self) -> DataType:
-        return DataType.FLOAT
+        return DataType.BOOLEAN
 
     def convert(
         self,
         values: list[Any],
-        constraints: FloatConstraints,
+        constraints: BooleanConstraints,
         target_type: DataType,
         column_name: str,
     ) -> list[Any]:
-        if not isinstance(constraints, FloatConstraints):
-            raise InvalidConstraintsError(f"Invalid float constraints for column {column_name}")
+        if not isinstance(constraints, BooleanConstraints):
+            raise InvalidConstraintsError(f"Invalid boolean constraints for column {column_name}")
 
         if target_type == DataType.STRING:
             return [str(value) for value in values]

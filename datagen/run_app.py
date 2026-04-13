@@ -5,7 +5,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.core.application.use_cases.execute_pipeline import ExecutePipelineUseCase
-from app.infrastructure.converters.schema_converter import convert_to_pipeline_execution_spec
+from app.infrastructure.converters.contract.pipeline_spec_converter import convert_to_pipeline_execution_spec
 from app.infrastructure.input.excel_raw_table_loader import load_workbook_specs
 from app.providers import (
     provide_artifact_publication_service,

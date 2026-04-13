@@ -4,10 +4,10 @@ from app.core.domain.constraints import StringConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
 from app.core.domain.enums import DataType
 from app.core.domain.validation_errors import InvalidConstraintsError, ValueConversionError
-from app.infrastructure.converters.source_type_value_converter import SourceTypeValueConverter
+from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
 
 
-class StringSourceValueConverter(SourceTypeValueConverter[StringConstraints]):
+class StringSourceValueConverter(SourceValueConverter[StringConstraints]):
     """Конвертирует STRING source values в STRING или INT с fail-fast ошибкой на плохих значениях."""
     @property
     def source_type(self) -> DataType:

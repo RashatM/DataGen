@@ -54,7 +54,6 @@ WRITE_MODES = {
     "OVERWRITE_TABLE",
     "OVERWRITE_PARTITIONS",
     "APPEND",
-    "APPEND_DISTINCT_PARTITIONS",
 }
 ENGINE_SCOPES = {"both", "hive_only", "iceberg_only"}
 DERIVE_RULES = {"YYYYMMDD", "YYYY", "MM"}

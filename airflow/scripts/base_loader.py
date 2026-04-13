@@ -141,7 +141,7 @@ class BaseSynthLoader(ABC):
 
     Базовый класс не владеет DDL таблиц и не создаёт временные таблицы. Его зона ответственности:
     - прочитать parquet только с нужной projection
-    - получить реальную схему целевой таблицы и при необходимости её partition metadata
+    - получить реальную схему целевой таблицы
     - выровнять DataFrame под target schema с fail-fast cast semantics
     - выбрать нужную write strategy по write_mode
     - материализовать comparison result для своего движка
@@ -172,6 +172,19 @@ class BaseSynthLoader(ABC):
     def overwrite_partitions(self, df: DataFrame, table_name: str) -> None:
         pass
 
+    def is_partitioned_table(self, table_name: str) -> bool:
+        """Проверяет partitioning по DESCRIBE без чтения самих partition columns."""
+        partition_count = (
+            self.spark.sql(f"DESCRIBE {table_name}")
+            .filter(
+                (f.col("col_name") == "# Partitioning") |
+                (f.col("col_name") == "# Partition Information")
+            )
+            .limit(1)
+            .count()
+        )
+        return partition_count > 0
+
     @contextmanager
     def strict_cast_mode(self):
         """Временно включает ANSI-режим Spark, чтобы невалидные cast-ы падали ошибкой, а не превращались в NULL."""
@@ -194,16 +207,12 @@ class BaseSynthLoader(ABC):
             raise RuntimeError(f"Target table does not exist: {table_name}")
         return self.spark.table(table_name).schema
 
-    def load_target_partition_columns(self, table_name: str) -> tuple[str, ...]:
-        """Читает список partition columns целевой таблицы только для partition-scoped режимов."""
-        if not self.table_exists(table_name):
-            raise RuntimeError(f"Target table does not exist: {table_name}")
-
-        return tuple(
-            column.name
-            for column in self.spark.catalog.listColumns(table_name)
-            if getattr(column, "isPartition", False)
-        )
+    def ensure_partitioned_table(self, table: LoaderTableContract) -> None:
+        """Проверяет только факт partitioning, не протаскивая partition columns в общий load flow."""
+        if not self.is_partitioned_table(table.target_table_name):
+            raise RuntimeError(
+                f"write_mode={table.write_mode} requires a partitioned target table: {table.target_table_name}"
+            )
 
     @staticmethod
     def project_load_dataframe(df: DataFrame, table: LoaderTableContract) -> DataFrame:
@@ -252,49 +261,10 @@ class BaseSynthLoader(ABC):
 
         return df.select(*expressions)
 
-    @staticmethod
-    def require_partitioned_mode(
-        table: LoaderTableContract,
-        target_partition_columns: tuple[str, ...],
-    ) -> tuple[str, ...]:
-        """Гарантирует, что partition-scoped режимы применяются только к реально partitioned таблицам."""
-        if not target_partition_columns:
-            raise RuntimeError(
-                f"write_mode={table.write_mode} requires a partitioned target table: {table.target_table_name}"
-            )
-        return target_partition_columns
-
-    @staticmethod
-    def build_affected_partition_keys(
-        df: DataFrame,
-        partition_columns: tuple[str, ...],
-    ) -> DataFrame:
-        """Извлекает уникальные ключи партиций, которые реально присутствуют во входном батче."""
-        return df.select(*(f.col(column_name) for column_name in partition_columns)).dropDuplicates()
-
-    def build_distinct_partition_merge_dataframe(
-        self,
-        df: DataFrame,
-        table: LoaderTableContract,
-        partition_columns: tuple[str, ...],
-    ) -> DataFrame:
-        """Читает только затронутые партиции target table, объединяет их с новым батчем и убирает дубликаты строк."""
-        affected_partition_keys = self.build_affected_partition_keys(
-            df=df,
-            partition_columns=partition_columns,
-        )
-        existing_partition_rows = self.spark.table(table.target_table_name).join(
-            affected_partition_keys,
-            on=list(partition_columns),
-            how="left_semi",
-        )
-        return existing_partition_rows.unionByName(df).distinct()
-
     def write_table(
         self,
         df: DataFrame,
         table: LoaderTableContract,
-        target_partition_columns: tuple[str, ...] = (),
     ) -> None:
         """Маршрутизирует уже выровненный DataFrame в engine-specific стратегию записи по write_mode."""
         if table.write_mode == "APPEND":
@@ -306,18 +276,8 @@ class BaseSynthLoader(ABC):
             return
 
         if table.write_mode == "OVERWRITE_PARTITIONS":
-            self.require_partitioned_mode(table, target_partition_columns)
+            self.ensure_partitioned_table(table)
             self.overwrite_partitions(df, table.target_table_name)
-            return
-
-        if table.write_mode == "APPEND_DISTINCT_PARTITIONS":
-            partition_columns = self.require_partitioned_mode(table, target_partition_columns)
-            merged_df = self.build_distinct_partition_merge_dataframe(
-                df=df,
-                table=table,
-                partition_columns=partition_columns,
-            )
-            self.overwrite_partitions(merged_df, table.target_table_name)
             return
 
         raise RuntimeError(f"Unsupported write_mode={table.write_mode} for table={table.target_table_name}")
@@ -330,10 +290,6 @@ class BaseSynthLoader(ABC):
         source_df = self.spark.read.parquet(table.data_uri)
         projected_df = self.project_load_dataframe(df=source_df, table=table)
         target_schema = self.load_target_schema(table_name=table.target_table_name)
-        target_partition_columns: tuple[str, ...] = ()
-
-        if table.write_mode in {"OVERWRITE_PARTITIONS", "APPEND_DISTINCT_PARTITIONS"}:
-            target_partition_columns = self.load_target_partition_columns(table_name=table.target_table_name)
 
         with self.strict_cast_mode():
             aligned_df = self.align_to_target_schema(
@@ -344,7 +300,6 @@ class BaseSynthLoader(ABC):
             self.write_table(
                 df=aligned_df,
                 table=table,
-                target_partition_columns=target_partition_columns,
             )
         logger.info(f"Table load completed. table={table.target_table_name}, run_id={self.run_id}")
 

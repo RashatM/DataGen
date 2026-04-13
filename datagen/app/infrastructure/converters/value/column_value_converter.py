@@ -3,13 +3,13 @@ from typing import Any
 from app.core.application.ports.value_converter_port import ValueConverterPort
 from app.core.domain.entities import TableColumnSpec
 from app.core.domain.enums import DataType
-from app.infrastructure.converters.source_type_value_converter import SourceTypeValueConverter
-from app.infrastructure.errors import SourceTypeValueConverterNotRegisteredError
+from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
+from app.infrastructure.errors import SourceValueConverterNotRegisteredError
 
 
 class ColumnValueConverter(ValueConverterPort):
     """Выбирает source-type converter и выполняет приведение исходных значений к output type колонки."""
-    def __init__(self, converter_by_source_type: dict[DataType, SourceTypeValueConverter[Any]]):
+    def __init__(self, converter_by_source_type: dict[DataType, SourceValueConverter[Any]]):
         self.converter_by_source_type = converter_by_source_type
 
     def convert(self, values: list[Any], table_column: TableColumnSpec) -> list[Any]:
@@ -21,7 +21,7 @@ class ColumnValueConverter(ValueConverterPort):
 
         converter = self.converter_by_source_type.get(source_type)
         if not converter:
-            raise SourceTypeValueConverterNotRegisteredError(
+            raise SourceValueConverterNotRegisteredError(
                 f"No converter for source data type: {source_type.value}"
             )
 

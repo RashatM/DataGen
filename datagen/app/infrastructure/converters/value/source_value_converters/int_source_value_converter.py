@@ -4,10 +4,10 @@ from app.core.domain.constraints import IntConstraints
 from app.core.domain.conversion_rules import ConversionNotAllowedError
 from app.core.domain.enums import DataType
 from app.core.domain.validation_errors import InvalidConstraintsError
-from app.infrastructure.converters.source_type_value_converter import SourceTypeValueConverter
+from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
 
 
-class IntSourceValueConverter(SourceTypeValueConverter[IntConstraints]):
+class IntSourceValueConverter(SourceValueConverter[IntConstraints]):
     """Конвертирует INT source values в FLOAT, STRING или BOOLEAN по поддерживаемым правилам."""
     @property
     def source_type(self) -> DataType:
