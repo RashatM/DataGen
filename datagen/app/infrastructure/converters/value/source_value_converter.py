@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Generic
 
-from app.core.domain.enums import DataType
-from app.core.domain.typevars import TConstraints
+from app.domain.enums import DataType
+from app.domain.typevars import TConstraints
 
 
 class SourceValueConverter(ABC, Generic[TConstraints]):

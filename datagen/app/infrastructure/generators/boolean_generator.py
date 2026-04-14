@@ -1,8 +1,8 @@
 import random
 
-from app.core.application.ports.generator_port import DataGeneratorPort
-from app.core.domain.constraints import BooleanConstraints, OutputConstraints
-from app.core.domain.validation_errors import UnsatisfiableConstraintsError
+from app.application.ports.generator_port import DataGeneratorPort
+from app.domain.constraints import BooleanConstraints, OutputConstraints
+from app.domain.validation_errors import UnsatisfiableConstraintsError
 from app.shared.utils import random_choices_from_constants
 
 

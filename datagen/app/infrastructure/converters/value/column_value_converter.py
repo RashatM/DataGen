@@ -1,8 +1,8 @@
 from typing import Any
 
-from app.core.application.ports.value_converter_port import ValueConverterPort
-from app.core.domain.entities import TableColumnSpec
-from app.core.domain.enums import DataType
+from app.application.ports.value_converter_port import ValueConverterPort
+from app.domain.entities import TableColumnSpec
+from app.domain.enums import DataType
 from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
 from app.infrastructure.errors import SourceValueConverterNotRegisteredError
 

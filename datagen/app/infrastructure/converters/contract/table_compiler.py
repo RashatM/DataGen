@@ -1,15 +1,15 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from app.core.domain.derivation import DerivationPolicy
-from app.core.domain.entities import (
+from app.domain.derivation import DerivationPolicy
+from app.domain.entities import (
     GenerationRun,
     TableColumnSpec,
     TableDerivationSpec,
     TableSpec,
 )
-from app.core.domain.enums import DataType, DerivationRule
-from app.core.domain.validation_errors import InvalidDerivationError
+from app.domain.enums import DataType, DerivationRule
+from app.domain.validation_errors import InvalidDerivationError
 from app.infrastructure.converters.contract.column_builder import (
     build_foreign_key_spec,
     build_generated_column_spec,

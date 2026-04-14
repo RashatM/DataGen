@@ -3,10 +3,10 @@ import re
 import string
 from rstr import Rstr
 
-from app.core.application.ports.generator_port import DataGeneratorPort
-from app.core.domain.constraints import OutputConstraints, StringConstraints
-from app.core.domain.enums import CaseMode, CharacterSet
-from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
+from app.application.ports.generator_port import DataGeneratorPort
+from app.domain.constraints import OutputConstraints, StringConstraints
+from app.domain.enums import CaseMode, CharacterSet
+from app.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.logger import generation_logger
 
 logger = generation_logger

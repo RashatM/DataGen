@@ -1,12 +1,12 @@
 import time
 
-from app.core.application.constants import ExecutionStatus
-from app.core.application.dto.pipeline import ComparisonQuerySpec
-from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
-from app.core.application.dto.execution_result import ExecutionResult
-from app.core.application.dto.publication import EnginePair, TablePublication
+from app.application.constants import ExecutionStatus
+from app.application.dto.pipeline import ComparisonQuerySpec
+from app.application.layouts.storage_layout import RunArtifactKeyLayout
+from app.application.dto.execution_result import ExecutionResult
+from app.application.dto.publication import EnginePair, TablePublication
 from app.infrastructure.airflow.airflow_dag_payload_builder import AirflowDagPayloadBuilder
-from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
+from app.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.infrastructure.airflow.airflow_client import AirflowClient
 from app.infrastructure.dto import DagRunState
 from app.shared.logger import airflow_logger

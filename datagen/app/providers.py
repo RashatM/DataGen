@@ -2,13 +2,13 @@ import boto3
 import random
 from mypy_boto3_s3 import S3Client
 
-from app.core.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
-from app.core.application.ports.execution_runner_port import ExecutionRunnerPort
-from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
-from app.core.application.services.comparison_service import ComparisonReportService
-from app.core.application.services.publication_service import ArtifactPublicationService
-from app.core.application.services.generation_service import DataGenerationService
-from app.core.domain.enums import DataType
+from app.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
+from app.application.ports.execution_runner_port import ExecutionRunnerPort
+from app.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
+from app.application.services.comparison_service import ComparisonReportService
+from app.application.services.publication_service import ArtifactPublicationService
+from app.application.services.generation_service import DataGenerationService
+from app.domain.enums import DataType
 from app.infrastructure.airflow.airflow_client import AirflowClient
 from app.infrastructure.airflow.airflow_dag_payload_builder import AirflowDagPayloadBuilder
 from app.infrastructure.airflow.airflow_dag_runner import AirflowDagRunner
@@ -33,7 +33,7 @@ from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_comparison_repository import S3ComparisonReportRepository
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
-from app.core.application.ports.value_converter_port import ValueConverterPort
+from app.application.ports.value_converter_port import ValueConverterPort
 from app.shared.config import S3Config, AirflowConfig
 
 

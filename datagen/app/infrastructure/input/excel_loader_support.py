@@ -4,8 +4,8 @@ from typing import Any
 
 import pandas as pd
 
-from app.core.domain.conversion_rules import ALLOWED_OUTPUT_TYPES
-from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
+from app.domain.conversion_rules import ALLOWED_OUTPUT_TYPES
+from app.domain.enums import CaseMode, CharacterSet, DataType, RelationType
 
 SHEET_TABLES = "tables"
 SHEET_QUERIES = "queries"

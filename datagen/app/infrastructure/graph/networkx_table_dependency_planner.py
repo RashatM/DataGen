@@ -1,9 +1,9 @@
 import networkx as nx
 
-from app.core.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
-from app.core.domain.entities import TableColumnSpec, TableSpec
-from app.core.domain.enums import RelationType
-from app.core.domain.validation_errors import InvalidForeignKeyError
+from app.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
+from app.domain.entities import TableColumnSpec, TableSpec
+from app.domain.enums import RelationType
+from app.domain.validation_errors import InvalidForeignKeyError
 
 
 class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):

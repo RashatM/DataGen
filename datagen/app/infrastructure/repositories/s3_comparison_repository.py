@@ -1,5 +1,5 @@
-from app.core.application.constants import ComparisonStatus
-from app.core.application.dto.comparison import (
+from app.application.constants import ComparisonStatus
+from app.application.dto.comparison import (
     ComparisonReport,
     ComparisonReportArtifacts,
     ComparisonReportExcludedColumns,
@@ -7,7 +7,7 @@ from app.core.application.dto.comparison import (
     EngineCountSummary,
     EngineRatioSummary,
 )
-from app.core.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
+from app.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
 from app.infrastructure.errors import ObjectPayloadFormatError
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 

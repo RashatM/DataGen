@@ -5,21 +5,21 @@ from zoneinfo import ZoneInfo
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from app.core.application.constants import EngineName
-from app.core.application.dto.pipeline import TableLoadSpec
-from app.core.application.layouts.storage_layout import (
+from app.application.constants import EngineName
+from app.application.dto.pipeline import TableLoadSpec
+from app.application.layouts.storage_layout import (
     RUNS_ROOT_PREFIX,
     TABLES_ROOT_PREFIX,
     RunArtifactKeyLayout,
     TableStateKeyLayout,
 )
-from app.core.application.dto.publication import (
+from app.application.dto.publication import (
     EnginePair,
     TablePublication,
 )
-from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
-from app.core.domain.entities import GeneratedTableData
-from app.core.domain.value_types import GeneratedColumnsByName
+from app.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
+from app.domain.entities import GeneratedTableData
+from app.domain.value_types import GeneratedColumnsByName
 from app.infrastructure.errors import ObjectNotFoundError, RunStateCorruptedError
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter

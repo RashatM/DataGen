@@ -1,8 +1,8 @@
 from collections.abc import Mapping
 from typing import Any, cast
 
-from app.core.application.constants import WriteMode
-from app.core.application.dto.pipeline import (
+from app.application.constants import WriteMode
+from app.application.dto.pipeline import (
     ComparisonQuerySpec,
     PipelineExecutionSpec,
     TableExecutionSpec,

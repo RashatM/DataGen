@@ -1,6 +1,6 @@
 import pyarrow as pa
-from app.core.domain.entities import TableSpec
-from app.core.domain.enums import DataType
+from app.domain.entities import TableSpec
+from app.domain.enums import DataType
 
 
 class ArrowSchemaBuilder:

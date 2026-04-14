@@ -1,9 +1,9 @@
 from typing import Any
 
-from app.core.domain.constraints import BooleanConstraints
-from app.core.domain.conversion_rules import ConversionNotAllowedError
-from app.core.domain.enums import DataType
-from app.core.domain.validation_errors import InvalidConstraintsError
+from app.domain.constraints import BooleanConstraints
+from app.domain.conversion_rules import ConversionNotAllowedError
+from app.domain.enums import DataType
+from app.domain.validation_errors import InvalidConstraintsError
 from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
 
 

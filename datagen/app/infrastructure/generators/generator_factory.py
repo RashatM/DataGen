@@ -1,9 +1,9 @@
 from typing import Any
 
-from app.core.application.ports.generator_factory_port import DataGeneratorFactoryPort
-from app.core.application.ports.generator_port import DataGeneratorPort
-from app.core.domain.constraints import Constraints
-from app.core.domain.enums import DataType
+from app.application.ports.generator_factory_port import DataGeneratorFactoryPort
+from app.application.ports.generator_port import DataGeneratorPort
+from app.domain.constraints import Constraints
+from app.domain.enums import DataType
 from app.infrastructure.errors import DataGeneratorNotRegisteredError
 
 

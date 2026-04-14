@@ -1,7 +1,7 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from app.core.application.constants import EngineScope
+from app.application.constants import EngineScope
 from app.infrastructure.converters.contract.fields import require_non_empty_string
 from app.infrastructure.errors import SchemaValidationError
 

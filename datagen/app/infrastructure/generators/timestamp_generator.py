@@ -1,9 +1,9 @@
 import random
 from datetime import datetime, timedelta
 
-from app.core.application.ports.generator_port import DataGeneratorPort
-from app.core.domain.constraints import OutputConstraints, TimestampConstraints
-from app.core.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
+from app.application.ports.generator_port import DataGeneratorPort
+from app.domain.constraints import OutputConstraints, TimestampConstraints
+from app.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
 from app.shared.utils import random_choices_from_constants
 
 

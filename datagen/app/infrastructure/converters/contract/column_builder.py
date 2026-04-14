@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Any, cast
 
-from app.core.domain.constraints import (
+from app.domain.constraints import (
     BooleanConstraints,
     DateConstraints,
     FloatConstraints,
@@ -11,10 +11,10 @@ from app.core.domain.constraints import (
     StringConstraints,
     TimestampConstraints,
 )
-from app.core.domain.conversion_rules import ensure_conversion_supported, ensure_final_uniqueness_supported
-from app.core.domain.entities import ColumnGenerationSpec, TableColumnSpec, TableForeignKeySpec
-from app.core.domain.enums import CaseMode, CharacterSet, DataType, RelationType
-from app.core.domain.validation_errors import InvalidConstraintsError
+from app.domain.conversion_rules import ensure_conversion_supported, ensure_final_uniqueness_supported
+from app.domain.entities import ColumnGenerationSpec, TableColumnSpec, TableForeignKeySpec
+from app.domain.enums import CaseMode, CharacterSet, DataType, RelationType
+from app.domain.validation_errors import InvalidConstraintsError
 from app.infrastructure.converters.contract.fields import (
     get_constraints_data,
     optional_string,

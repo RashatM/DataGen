@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.core.domain.enums import DataType
+from app.domain.enums import DataType
 from app.infrastructure.converters.value.column_value_converter import ColumnValueConverter
 from app.infrastructure.converters.value.source_value_converter import SourceValueConverter
 from app.infrastructure.errors import ConverterRegistrationError
