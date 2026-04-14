@@ -27,3 +27,10 @@ class TablePublication:
     run_id: str
     data_uri: str
     load_spec: TableLoadSpec
+
+
+@dataclass(slots=True)
+class RunRetentionCleanupResult:
+    """Результат cleanup-а старых run artifacts по retention policy."""
+    removed_run_ids: list[str]
+    removed_object_count: int

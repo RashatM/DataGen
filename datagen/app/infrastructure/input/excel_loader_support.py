@@ -55,7 +55,7 @@ WRITE_MODES = {
     "OVERWRITE_PARTITIONS",
     "APPEND",
 }
-ENGINE_SCOPES = {"both", "hive_only", "iceberg_only"}
+ENGINE_SCOPES = {"ALL", "HIVE_ONLY", "ICEBERG_ONLY"}
 DERIVE_RULES = {"YYYYMMDD", "YYYY", "MM"}
 GENERATOR_TYPE_ALIASES = {
     "STRING": DataType.STRING.value,
@@ -269,9 +269,9 @@ def normalize_write_mode(value: Any) -> str:
 
 
 def normalize_engine_scope(value: Any) -> str:
-    text = normalize_text(value).lower()
+    text = normalize_text(value).upper()
     if not text:
-        return "both"
+        return "ALL"
     if text not in ENGINE_SCOPES:
         supported = ", ".join(sorted(ENGINE_SCOPES))
         raise ValueError(f"unsupported engine_scope: {value!r}. Supported: {supported}")

@@ -7,7 +7,12 @@ import pyarrow.parquet as pq
 
 from app.core.application.constants import EngineName
 from app.core.application.dto.pipeline import TableLoadSpec
-from app.core.application.layouts.storage_layout import RunArtifactKeyLayout, TableStateKeyLayout
+from app.core.application.layouts.storage_layout import (
+    RUNS_ROOT_PREFIX,
+    TABLES_ROOT_PREFIX,
+    RunArtifactKeyLayout,
+    TableStateKeyLayout,
+)
 from app.core.application.dto.publication import (
     EnginePair,
     TablePublication,
@@ -159,4 +164,51 @@ class S3PublicationRepository(ArtifactPublicationRepositoryPort):
 
     def cleanup_run_artifacts(self, artifact_layout: RunArtifactKeyLayout) -> None:
         """Удаляет все опубликованные артефакты конкретного run по его S3 prefix."""
-        self.object_storage.delete_prefix(artifact_layout.run_prefix)
+        self.object_storage.delete_prefix(f"{artifact_layout.run_prefix}/")
+
+    def delete_run_artifacts(self, run_id: str) -> int:
+        """Удаляет все опубликованные артефакты конкретного run_id и возвращает число удалённых объектов."""
+        artifact_layout = RunArtifactKeyLayout(run_id=run_id)
+        return self.object_storage.delete_prefix(f"{artifact_layout.run_prefix}/")
+
+    def list_run_ids(self) -> list[str]:
+        """Возвращает run_id, найденные по непосредственным child-prefixes под runs/."""
+        run_prefixes = self.object_storage.list_child_prefixes(RUNS_ROOT_PREFIX)
+        run_ids: list[str] = []
+        root_prefix = f"{RUNS_ROOT_PREFIX}/"
+        for run_prefix in run_prefixes:
+            if not run_prefix.startswith(root_prefix):
+                continue
+            run_id = run_prefix[len(root_prefix):].strip("/")
+            if run_id:
+                run_ids.append(run_id)
+        return sorted(run_ids)
+
+    def list_pointer_run_ids(self) -> list[str]:
+        """Возвращает run_id из per-table pointers, которые нельзя удалять retention cleanup-ом."""
+        table_prefixes = self.object_storage.list_child_prefixes(TABLES_ROOT_PREFIX)
+        pointer_run_ids: set[str] = set()
+        root_prefix = f"{TABLES_ROOT_PREFIX}/"
+
+        for table_prefix in table_prefixes:
+            if not table_prefix.startswith(root_prefix):
+                continue
+
+            table_name = table_prefix[len(root_prefix):].strip("/")
+            if not table_name:
+                continue
+
+            state_layout = TableStateKeyLayout(table_name=table_name)
+            try:
+                payload = self.object_storage.get_json(key=state_layout.pointer_key)
+            except ObjectNotFoundError:
+                continue
+
+            run_id = payload.get("run_id")
+            if not isinstance(run_id, str) or not run_id:
+                raise RunStateCorruptedError(
+                    f"latest_generated pointer is corrupted for key={state_layout.pointer_key}: invalid run_id"
+                )
+            pointer_run_ids.add(run_id)
+
+        return sorted(pointer_run_ids)

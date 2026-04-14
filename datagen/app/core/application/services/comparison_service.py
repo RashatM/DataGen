@@ -71,31 +71,37 @@ class ComparisonReportService:
 
     @staticmethod
     def format_report_summary(report: ComparisonReport) -> str:
-        status_line = "Comparison passed." if report.is_match() else "Comparison mismatch detected."
+        excluded_columns_lines = []
+        if report.excluded_columns.hive:
+            excluded_columns_lines.append(f"    hive: {report.excluded_columns.hive}")
+        if report.excluded_columns.iceberg:
+            excluded_columns_lines.append(f"    iceberg: {report.excluded_columns.iceberg}")
+        if report.excluded_columns.temporal:
+            excluded_columns_lines.append(f"    temporal: {report.excluded_columns.temporal}")
+        excluded_columns_text = ""
+        if excluded_columns_lines:
+            excluded_columns_text = "\n  excluded_columns:\n" + "\n".join(excluded_columns_lines)
+
         return (
-            f"{status_line}\n"
-            f"row_count:\n"
-            f"  hive: {report.summary.row_count.hive}\n"
-            f"  iceberg: {report.summary.row_count.iceberg}\n"
-            f"row_count_delta: {report.summary.row_count_delta}\n"
-            f"exclusive_row_count:\n"
-            f"  hive: {report.summary.exclusive_row_count.hive}\n"
-            f"  iceberg: {report.summary.exclusive_row_count.iceberg}\n"
-            f"exclusive_row_ratio:\n"
-            f"  hive: {report.summary.exclusive_row_ratio.hive}\n"
-            f"  iceberg: {report.summary.exclusive_row_ratio.iceberg}\n"
-            f"excluded_columns:\n"
-            f"  hive: {report.excluded_columns.hive}\n"
-            f"  iceberg: {report.excluded_columns.iceberg}\n"
-            f"  temporal: {report.excluded_columns.temporal}"
+            f"comparison:\n"
+            f"  status: {report.status.value}\n"
+            f"  row_count:\n"
+            f"    hive: {report.summary.row_count.hive}\n"
+            f"    iceberg: {report.summary.row_count.iceberg}\n"
+            f"  row_count_delta: {report.summary.row_count_delta}\n"
+            f"  exclusive_row_count:\n"
+            f"    hive: {report.summary.exclusive_row_count.hive}\n"
+            f"    iceberg: {report.summary.exclusive_row_count.iceberg}\n"
+            f"  exclusive_row_ratio:\n"
+            f"    hive: {report.summary.exclusive_row_ratio.hive}\n"
+            f"    iceberg: {report.summary.exclusive_row_ratio.iceberg}"
+            f"{excluded_columns_text}"
         )
 
     def load_report(self, report_key: str, run_id: str) -> ComparisonReport:
-        logger.info(f"Comparison report load started: run_id={run_id}, report_key={report_key}")
         report = self.repository.load_report(report_key=report_key, expected_run_id=run_id)
         self.validate_report(report)
         logger.info(
-            f"Comparison report load completed: run_id={run_id}, "
-            f"report_key={report_key}, comparison_status={report.status.value}"
+            f"Comparison report loaded: run_id={run_id}, comparison_status={report.status.value}"
         )
         return report

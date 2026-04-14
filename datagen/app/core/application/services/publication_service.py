@@ -2,7 +2,8 @@ from typing import Any
 
 from app.core.application.dto.pipeline import ComparisonQuerySpec, TableExecutionSpec
 from app.core.application.layouts.storage_layout import RunArtifactKeyLayout
-from app.core.application.dto.publication import EnginePair, TablePublication
+from app.core.application.dto.publication import EnginePair, RunRetentionCleanupResult, TablePublication
+from app.core.application.internal.run_artifact_retention_policy import select_run_ids_to_remove
 from app.core.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
 from app.core.domain.entities import GeneratedTableData
 from app.shared.logger import publication_logger
@@ -22,6 +23,35 @@ class ArtifactPublicationService:
         logger.info(f"Artifact cleanup started: run_id={artifact_layout.run_id}")
         self.repository.cleanup_run_artifacts(artifact_layout=artifact_layout)
         logger.info(f"Artifact cleanup completed: run_id={artifact_layout.run_id}")
+
+    def cleanup_old_run_artifacts(self, min_retained_runs: int) -> RunRetentionCleanupResult:
+        if (
+            not isinstance(min_retained_runs, int)
+            or isinstance(min_retained_runs, bool)
+            or min_retained_runs < 1
+        ):
+            raise ValueError("min_retained_runs must be a positive integer")
+
+        logger.info(f"Old run artifact cleanup started: min_retained_runs={min_retained_runs}")
+        run_ids = self.repository.list_run_ids()
+        removed_run_ids = select_run_ids_to_remove(
+            run_ids=run_ids,
+            protected_run_ids=self.repository.list_pointer_run_ids(),
+            min_retained_runs=min_retained_runs,
+        )
+        removed_object_count = 0
+        for run_id in removed_run_ids:
+            removed_object_count += self.repository.delete_run_artifacts(run_id)
+
+        cleanup_result = RunRetentionCleanupResult(
+            removed_run_ids=removed_run_ids,
+            removed_object_count=removed_object_count,
+        )
+        logger.info(
+            f"Old run artifact cleanup completed: removed_runs={len(cleanup_result.removed_run_ids)}, "
+            f"removed_objects={cleanup_result.removed_object_count}, min_retained_runs={min_retained_runs}"
+        )
+        return cleanup_result
 
     def read_latest_table_data(
             self,
@@ -52,7 +82,7 @@ class ArtifactPublicationService:
         )
         table = table_data.table
         logger.info(
-            f"Artifacts uploaded: table={table.table_name}, rows={table.total_rows}, columns={len(table.columns)}"
+            f"Artifacts uploaded: table={table.table_name}"
         )
         return table_publication
 

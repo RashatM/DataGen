@@ -160,8 +160,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
         logger.info(
-            f"DAG trigger accepted. Waiting for DAG to start and complete: "
-            f"dag_run_id={dag_run_id}, timeout={timeout_seconds}s"
+            f"DAG trigger accepted: dag_run_id={dag_run_id}, timeout={timeout_seconds}s"
         )
 
         return self.poll_until_terminal(

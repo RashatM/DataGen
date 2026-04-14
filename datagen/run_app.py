@@ -59,6 +59,7 @@ def run_app(
             comparison_report_service=provide_comparison_report_service(object_storage),
             execution_runner=provide_execution_runner(config.airflow, object_storage),
             execution_timeout_seconds=config.airflow.dag_timeout_seconds,
+            min_retained_runs=config.artifact_retention.min_retained_runs,
         )
         pipeline_result = use_case.execute(run_id=run_id, pipeline_spec=pipeline_spec)
         execution_result = pipeline_result.execution_result

@@ -119,5 +119,20 @@ class S3StorageAdapter:
 
         return deleted_total
 
+    def list_child_prefixes(self, prefix: str) -> list[str]:
+        """Возвращает непосредственные child-prefixes под prefix, используя S3 delimiter semantics."""
+        normalized_prefix = prefix.strip("/")
+        if normalized_prefix:
+            normalized_prefix = f"{normalized_prefix}/"
+
+        paginator = self.s3_client.get_paginator("list_objects_v2")
+        prefixes: list[str] = []
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=normalized_prefix, Delimiter="/"):
+            for item in page.get("CommonPrefixes", []):
+                child_prefix = item.get("Prefix")
+                if isinstance(child_prefix, str) and child_prefix:
+                    prefixes.append(child_prefix)
+        return prefixes
+
     def close(self) -> None:
         self.s3_client.close()

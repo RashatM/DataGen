@@ -33,10 +33,17 @@ class AirflowConfig:
 
 
 @dataclass(slots=True)
+class ArtifactRetentionConfig:
+    """Конфигурация retention policy для run artifacts в object storage."""
+    min_retained_runs: int
+
+
+@dataclass(slots=True)
 class AppConfig:
-    """Собранная конфигурация приложения: object storage и Airflow."""
+    """Собранная конфигурация приложения: object storage, Airflow и retention policy."""
     s3: S3Config
     airflow: AirflowConfig
+    artifact_retention: ArtifactRetentionConfig
 
 
 class ConfigurationError(ValueError):
@@ -118,6 +125,25 @@ def parse_airflow_env_config(config_data: dict[str, Any], env_name: str) -> Airf
         password=require_env("AIRFLOW_PASSWORD"),
     )
 
+
+def parse_artifact_retention_config(config_data: dict[str, Any]) -> ArtifactRetentionConfig:
+    retention = config_data.get("artifact_retention", {})
+    if retention is None:
+        retention = {}
+    if not isinstance(retention, dict):
+        raise ConfigurationError("'artifact_retention' section in config.yaml must be an object")
+
+    min_retained_runs = retention.get("min_retained_runs", 3)
+    if (
+        not isinstance(min_retained_runs, int)
+        or isinstance(min_retained_runs, bool)
+        or min_retained_runs < 1
+    ):
+        raise ConfigurationError("artifact_retention.min_retained_runs must be a positive integer")
+
+    return ArtifactRetentionConfig(min_retained_runs=min_retained_runs)
+
+
 def load_app_settings(environment_name: str) -> AppConfig:
     path = Path(__file__).resolve().parents[2] / "configuration" / "config.yaml"
     config_data = load_yaml_file(path)
@@ -125,4 +151,5 @@ def load_app_settings(environment_name: str) -> AppConfig:
     return AppConfig(
         s3=parse_s3_config(config_data),
         airflow=parse_airflow_env_config(config_data, environment_name),
+        artifact_retention=parse_artifact_retention_config(config_data),
     )

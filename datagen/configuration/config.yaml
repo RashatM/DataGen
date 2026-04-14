@@ -5,15 +5,12 @@ s3:
   use_ssl: true
   ssl_cert: ""
 
-target_storage:
-  hive:
-    database_name: "synth_"
-  iceberg:
-    database_name: "datagen_iceberg"
+artifact_retention:
+  min_retained_runs: 3
 
 airflow:
   defaults:
-    dag_id: "datagen_pipeline"
+    dag_id: "datagen_synth_load"
     dag_run_id_prefix: "datagen"
     poll_interval_seconds: 10
     dag_timeout_seconds: 3600

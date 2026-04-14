@@ -226,7 +226,7 @@ class DataGenerationService:
 
         total_elapsed_ms = int((time.monotonic() - table_started_at) * 1000)
         logger.info(
-            f"Table generated: table={table.table_name}, rows={table.total_rows}, "
+            f"Table data generated: table={table.table_name}, rows={table.total_rows}, "
             f"columns={len(table.columns)}, elapsed_ms={total_elapsed_ms}"
         )
 

@@ -12,13 +12,12 @@ def parse_engine_scope(
     column_data: Mapping[str, Any],
 ) -> EngineScope:
     try:
-        raw_engine_scope = column_data.get("engine_scope") or EngineScope.BOTH.value
-        return EngineScope(
-            require_non_empty_string(
-                raw_engine_scope,
-                f"Column {table_name}.{column_name} engine_scope",
-            )
-        )
+        raw_engine_scope = column_data.get("engine_scope") or EngineScope.ALL.value
+        engine_scope_value = require_non_empty_string(
+            raw_engine_scope,
+            f"Column {table_name}.{column_name} engine_scope",
+        ).upper()
+        return EngineScope(engine_scope_value)
     except ValueError as exc:
         raise SchemaValidationError(
             f"Unsupported engine_scope for column {table_name}.{column_name}: {column_data.get('engine_scope')}"
@@ -54,7 +53,7 @@ def build_hive_load_columns(table_name: str, raw_columns: Sequence[Mapping[str, 
         table_name=table_name,
         raw_columns=raw_columns,
         engine_name="hive",
-        included_scopes={EngineScope.BOTH, EngineScope.HIVE_ONLY},
+        included_scopes={EngineScope.ALL, EngineScope.HIVE_ONLY},
     )
 
 
@@ -63,7 +62,7 @@ def build_iceberg_load_columns(table_name: str, raw_columns: Sequence[Mapping[st
         table_name=table_name,
         raw_columns=raw_columns,
         engine_name="iceberg",
-        included_scopes={EngineScope.BOTH, EngineScope.ICEBERG_ONLY},
+        included_scopes={EngineScope.ALL, EngineScope.ICEBERG_ONLY},
     )
 
 

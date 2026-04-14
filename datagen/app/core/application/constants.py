@@ -24,9 +24,9 @@ class EngineName(str, Enum):
 
 class EngineScope(str, Enum):
     """Input-level правило, в какой engine-specific список загрузки должна попасть колонка."""
-    BOTH = "both"
-    HIVE_ONLY = "hive_only"
-    ICEBERG_ONLY = "iceberg_only"
+    ALL = "ALL"
+    HIVE_ONLY = "HIVE_ONLY"
+    ICEBERG_ONLY = "ICEBERG_ONLY"
 
 
 class WriteMode(str, Enum):

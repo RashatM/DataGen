@@ -30,12 +30,14 @@ class ExecutePipelineUseCase:
         comparison_report_service: ComparisonReportService,
         execution_runner: ExecutionRunnerPort,
         execution_timeout_seconds: int,
+        min_retained_runs: int,
     ) -> None:
         self.generation_service = generation_service
         self.artifact_publication_service = artifact_publication_service
         self.comparison_report_service = comparison_report_service
         self.execution_runner = execution_runner
         self.execution_timeout_seconds = execution_timeout_seconds
+        self.min_retained_runs = min_retained_runs
 
     def execute(self, run_id: str, pipeline_spec: PipelineExecutionSpec) -> PipelineExecutionResult:
         """Выполняет pipeline end-to-end от доменной генерации до чтения финального comparison-report."""
@@ -107,7 +109,7 @@ class ExecutePipelineUseCase:
             logger.info(
                 f"Pipeline completed successfully.\n"
                 f"run_id: {run_id}\n"
-                f"execution_status: {execution_result.status.value}\n"
+                f"execution_status: {execution_result.status.name}\n"
                 f"total_seconds: {total}\n"
                 f"{comparison_summary}"
             )
@@ -115,9 +117,19 @@ class ExecutePipelineUseCase:
             logger.warning(
                 f"Pipeline completed with mismatch.\n"
                 f"run_id: {run_id}\n"
-                f"execution_status: {execution_result.status.value}\n"
+                f"execution_status: {execution_result.status.name}\n"
                 f"total_seconds: {total}\n"
                 f"{comparison_summary}"
+            )
+
+        try:
+            self.artifact_publication_service.cleanup_old_run_artifacts(
+                min_retained_runs=self.min_retained_runs
+            )
+        except Exception:
+            logger.exception(
+                f"Run artifact retention cleanup failed: "
+                f"run_id={run_id}, min_retained_runs={self.min_retained_runs}"
             )
 
         return PipelineExecutionResult(

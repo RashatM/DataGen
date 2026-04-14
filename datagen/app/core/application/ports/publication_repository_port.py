@@ -52,3 +52,15 @@ class ArtifactPublicationRepositoryPort(ABC):
     @abstractmethod
     def cleanup_run_artifacts(self, artifact_layout: RunArtifactKeyLayout) -> None:
         pass
+
+    @abstractmethod
+    def list_run_ids(self) -> list[str]:
+        pass
+
+    @abstractmethod
+    def list_pointer_run_ids(self) -> list[str]:
+        pass
+
+    @abstractmethod
+    def delete_run_artifacts(self, run_id: str) -> int:
+        pass

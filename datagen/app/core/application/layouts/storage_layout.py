@@ -2,6 +2,9 @@ from dataclasses import dataclass, field
 
 from app.core.application.constants import EngineName
 
+RUNS_ROOT_PREFIX = "runs"
+TABLES_ROOT_PREFIX = "tables"
+
 
 @dataclass(slots=True)
 class RunArtifactKeyLayout:
@@ -11,7 +14,7 @@ class RunArtifactKeyLayout:
     comparison_report_key: str = field(init=False)
 
     def __post_init__(self) -> None:
-        run_prefix = f"runs/{self.run_id.strip('/')}"
+        run_prefix = f"{RUNS_ROOT_PREFIX}/{self.run_id.strip('/')}"
         self.run_prefix = run_prefix
         self.comparison_report_key = f"{run_prefix}/result/comparison_result.json"
 
@@ -32,5 +35,5 @@ class TableStateKeyLayout:
     pointer_key: str = field(init=False)
 
     def __post_init__(self) -> None:
-        pointer_key = f"tables/{self.table_name.strip('/')}/pointer.json"
+        pointer_key = f"{TABLES_ROOT_PREFIX}/{self.table_name.strip('/')}/pointer.json"
         self.pointer_key = pointer_key
