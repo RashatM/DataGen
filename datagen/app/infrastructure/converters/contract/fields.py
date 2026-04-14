@@ -49,18 +49,6 @@ def require_list_of_mappings(value: Any, context: str) -> list[dict[str, Any]]:
     return value
 
 
-def require_string_list(value: Any, context: str) -> list[str]:
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise SchemaValidationError(f"{context} must be a list")
-
-    string_values: list[str] = []
-    for item in value:
-        string_values.append(require_non_empty_string(item, context))
-    return string_values
-
-
 def optional_string(value: Any, context: str) -> str | None:
     if value is None:
         return None

@@ -18,6 +18,7 @@ ALLOWED_WRITE_MODES = {
     "OVERWRITE_PARTITIONS",
     "APPEND",
 }
+ENGINE_NAMES = ("hive", "iceberg")
 
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/base_loader.py"
 JOB_COMMON_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/job_common.py"
@@ -33,9 +34,16 @@ SPARK_CONF_DIRS = {
 }
 
 
-def require_non_empty_string(value: Any, field_name: str) -> None:
+def require_non_empty_string(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Contract is missing non-empty '{field_name}'")
+    return value
+
+
+def require_object(value: Any, field_name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"Contract is missing object '{field_name}'")
+    return value
 
 
 def validate_table_contracts(conf: dict[str, Any]) -> None:
@@ -43,53 +51,63 @@ def validate_table_contracts(conf: dict[str, Any]) -> None:
     if not isinstance(tables, list) or not tables:
         raise ValueError("Contract is missing non-empty 'tables'")
 
-    for index, table in enumerate(tables):
-        if not isinstance(table, dict):
-            raise ValueError(f"Contract table at index={index} must be an object")
-
-        require_non_empty_string(table.get("table_name"), f"tables[{index}].table_name")
-
+    for index, table_payload in enumerate(tables):
+        table = require_object(table_payload, f"tables[{index}]")
+        require_non_empty_string(
+            table.get("table_name"),
+            f"tables[{index}].table_name",
+        )
         require_non_empty_string(table.get("data_uri"), f"tables[{index}].data_uri")
+        load = require_object(table.get("load"), f"tables[{index}].load")
 
-        load = table.get("load")
-        if not isinstance(load, dict):
-            raise ValueError(f"Contract is missing 'tables[{index}].load'")
-
-        for engine in ("hive", "iceberg"):
-            engine_load = load.get(engine)
-            if not isinstance(engine_load, dict):
-                raise ValueError(
-                    f"Contract is missing 'tables[{index}].load.{engine}'"
-                )
-
+        for engine in ENGINE_NAMES:
+            field_prefix = f"tables[{index}].load.{engine}"
+            engine_load = require_object(load.get(engine), field_prefix)
             require_non_empty_string(
                 engine_load.get("target_table_name"),
-                f"tables[{index}].load.{engine}.target_table_name",
+                f"{field_prefix}.target_table_name",
             )
-            require_non_empty_string(
+            write_mode = require_non_empty_string(
                 engine_load.get("write_mode"),
-                f"tables[{index}].load.{engine}.write_mode",
+                f"{field_prefix}.write_mode",
             )
-            if engine_load["write_mode"] not in ALLOWED_WRITE_MODES:
+            if write_mode not in ALLOWED_WRITE_MODES:
                 allowed = ", ".join(sorted(ALLOWED_WRITE_MODES))
                 raise ValueError(
-                    f"Unsupported write_mode in tables[{index}].load.{engine}: "
-                    f"{engine_load['write_mode']}. Allowed: {allowed}"
+                    f"Unsupported write_mode in {field_prefix}: {write_mode}. "
+                    f"Allowed: {allowed}"
                 )
             columns = engine_load.get("columns")
             if not isinstance(columns, list) or not columns:
                 raise ValueError(
-                    f"Contract is missing non-empty list 'tables[{index}].load.{engine}.columns'"
+                    f"Contract is missing non-empty list '{field_prefix}.columns'"
                 )
-            for column_index, column_name in enumerate(columns):
-                require_non_empty_string(
-                    column_name,
-                    f"tables[{index}].load.{engine}.columns[{column_index}]",
-                )
-            if len(set(columns)) != len(columns):
-                raise ValueError(
-                    f"Contract has duplicate columns in tables[{index}].load.{engine}.columns"
-                )
+
+
+def validate_comparison_contract(conf: dict[str, Any]) -> None:
+    comparison = require_object(conf.get("comparison"), "comparison")
+
+    for uri_field in ("query_uris", "result_uris"):
+        engine_uris = require_object(
+            comparison.get(uri_field),
+            f"comparison.{uri_field}",
+        )
+        for engine in ENGINE_NAMES:
+            require_non_empty_string(
+                engine_uris.get(engine),
+                f"comparison.{uri_field}.{engine}",
+            )
+
+    require_non_empty_string(comparison.get("report_uri"), "comparison.report_uri")
+
+    exclude_columns = comparison.get("exclude_columns")
+    if exclude_columns is None:
+        return
+
+    exclude_columns = require_object(exclude_columns, "comparison.exclude_columns")
+    for engine in ENGINE_NAMES:
+        if not isinstance(exclude_columns.get(engine, []), list):
+            raise ValueError(f"comparison.exclude_columns.{engine} must be a list")
 
 
 def validate_contract(**context) -> None:
@@ -97,44 +115,7 @@ def validate_contract(**context) -> None:
 
     require_non_empty_string(conf.get("run_id"), "run_id")
     validate_table_contracts(conf)
-
-    comparison = conf.get("comparison")
-    if not isinstance(comparison, dict):
-        raise ValueError("Contract is missing 'comparison'")
-
-    query_uris = comparison.get("query_uris")
-    if not isinstance(query_uris, dict):
-        raise ValueError("Contract is missing 'comparison.query_uris'")
-    for engine in ("hive", "iceberg"):
-        require_non_empty_string(
-            query_uris.get(engine),
-            f"comparison.query_uris.{engine}",
-        )
-
-    require_non_empty_string(comparison.get("report_uri"), "comparison.report_uri")
-
-    result_uris = comparison.get("result_uris")
-    if not isinstance(result_uris, dict):
-        raise ValueError("Contract is missing 'comparison.result_uris'")
-    for engine in ("hive", "iceberg"):
-        require_non_empty_string(
-            result_uris.get(engine),
-            f"comparison.result_uris.{engine}",
-        )
-
-    exclude_columns = comparison.get("exclude_columns")
-    if exclude_columns is not None:
-        if not isinstance(exclude_columns, dict):
-            raise ValueError("Contract field 'comparison.exclude_columns' must be an object")
-        for engine in ("hive", "iceberg"):
-            engine_columns = exclude_columns.get(engine, [])
-            if not isinstance(engine_columns, list):
-                raise ValueError(f"comparison.exclude_columns.{engine} must be a list")
-            for column_index, column_name in enumerate(engine_columns):
-                require_non_empty_string(
-                    column_name,
-                    f"comparison.exclude_columns.{engine}[{column_index}]",
-                )
+    validate_comparison_contract(conf)
 
 
 def get_iceberg_spark_config(**context) -> dict[str, str]:
@@ -186,8 +167,8 @@ def get_hive_spark_config(**context) -> dict[str, str]:
         "spark.dynamicAllocation.initialExecutors": "2",
         "spark.dynamicAllocation.minExecutors": "1",
         "spark.dynamicAllocation.maxExecutors": "5",
-        "spark.driver.memory": "16G",
-        "spark.executor.memory": "20G",
+        "spark.driver.memory": "8G",
+        "spark.executor.memory": "6G",
         "spark.executor.cores": "5",
         "spark.executor.maxNumFailures": "5",
         "spark.kerberos.principal": cluster_config["kerberos_principal"],

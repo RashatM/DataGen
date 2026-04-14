@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from app.core.application.constants import WriteMode
 from app.core.application.dto.pipeline import (
@@ -12,7 +12,6 @@ from app.infrastructure.converters.contract.fields import (
     require_list_of_mappings,
     require_mapping,
     require_non_empty_string,
-    require_string_list,
 )
 from app.infrastructure.converters.contract.load_projection_builder import (
     build_hive_load_columns,
@@ -27,14 +26,8 @@ def convert_to_pipeline_execution_spec(raw_contract: Mapping[str, Any]) -> Pipel
     comparison = ComparisonQuerySpec(
         hive_sql=require_non_empty_string(raw_queries.get("hive_sql"), "Contract queries hive_sql"),
         iceberg_sql=require_non_empty_string(raw_queries.get("iceberg_sql"), "Contract queries iceberg_sql"),
-        hive_exclude_columns=tuple(require_string_list(
-            raw_queries.get("hive_exclude_columns"),
-            "Contract queries hive_exclude_columns",
-        )),
-        iceberg_exclude_columns=tuple(require_string_list(
-            raw_queries.get("iceberg_exclude_columns"),
-            "Contract queries iceberg_exclude_columns",
-        )),
+        hive_exclude_columns=tuple(raw_queries.get("hive_exclude_columns") or ()),
+        iceberg_exclude_columns=tuple(raw_queries.get("iceberg_exclude_columns") or ()),
     )
 
     raw_tables = require_list_of_mappings(raw_contract.get("tables"), "Contract tables")
@@ -42,7 +35,7 @@ def convert_to_pipeline_execution_spec(raw_contract: Mapping[str, Any]) -> Pipel
 
     execution_tables: list[TableExecutionSpec] = []
     for table_data in raw_tables:
-        table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
+        table_name = cast(str, table_data["table_name"])
         table_columns_data = compiler.get_raw_columns(table_name)
         table_spec = compiler.build_table_spec(table_name)
         try:

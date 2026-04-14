@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
 
 from app.core.domain.constraints import (
     BooleanConstraints,
@@ -113,10 +113,10 @@ def build_output_constraints(
 
 
 def resolve_data_types(
+    column_name: str,
     column_data: Mapping[str, Any],
     constraints_data: Mapping[str, Any],
 ) -> tuple[DataType, DataType]:
-    column_name = require_non_empty_string(column_data.get("name"), "Column name")
     generator_raw = column_data.get("generator_data_type", column_data.get("gen_data_type"))
     output_raw = column_data.get("output_data_type")
 
@@ -336,17 +336,16 @@ def build_generator_constraints(
     raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
 
 
-def build_foreign_key_spec(column_name: str, foreign_key_data: dict[str, Any]) -> TableForeignKeySpec:
+def build_foreign_key_spec(
+    column_name: str,
+    parent_table_name: str,
+    parent_column_name: str,
+    foreign_key_data: dict[str, Any],
+) -> TableForeignKeySpec:
     try:
         return TableForeignKeySpec(
-            table_name=require_non_empty_string(
-                foreign_key_data.get("table_name"),
-                f"Foreign key column {column_name} table_name",
-            ),
-            column_name=require_non_empty_string(
-                foreign_key_data.get("column_name"),
-                f"Foreign key column {column_name} column_name",
-            ),
+            table_name=parent_table_name,
+            column_name=parent_column_name,
             relation_type=RelationType(
                 require_non_empty_string(
                     foreign_key_data.get("relation_type"),
@@ -363,9 +362,13 @@ def build_foreign_key_spec(column_name: str, foreign_key_data: dict[str, Any]) -
 def build_generated_column_spec(
     column_data: Mapping[str, Any],
 ) -> TableColumnSpec[Any]:
-    column_name = require_non_empty_string(column_data.get("name"), "Column name")
+    column_name = cast(str, column_data["name"])
     constraints_data = get_constraints_data(column_name, column_data)
-    generator_data_type, output_data_type = resolve_data_types(column_data, constraints_data)
+    generator_data_type, output_data_type = resolve_data_types(
+        column_name=column_name,
+        column_data=column_data,
+        constraints_data=constraints_data,
+    )
     is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
     normalized_allowed_values = normalize_allowed_values(column_name, constraints_data.get("allowed_values"))
     output_constraints = build_output_constraints(

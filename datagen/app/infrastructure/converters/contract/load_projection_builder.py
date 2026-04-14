@@ -1,5 +1,5 @@
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 from app.core.application.constants import EngineScope
 from app.infrastructure.converters.contract.fields import require_non_empty_string
@@ -33,7 +33,7 @@ def build_engine_load_columns(
 ) -> tuple[str, ...]:
     load_columns: list[str] = []
     for column_data in raw_columns:
-        column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
+        column_name = cast(str, column_data["name"])
         engine_scope = parse_engine_scope(
             table_name=table_name,
             column_name=column_name,

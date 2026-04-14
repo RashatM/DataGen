@@ -1,5 +1,5 @@
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 from app.core.domain.derivation import DerivationPolicy
 from app.core.domain.entities import (
@@ -169,7 +169,12 @@ class ContractTableCompiler:
                 is_primary_key=is_primary_key,
             ),
             is_primary_key=is_primary_key,
-            foreign_key=build_foreign_key_spec(column_name, raw_foreign_key),
+            foreign_key=build_foreign_key_spec(
+                column_name=column_name,
+                parent_table_name=parent_table_name,
+                parent_column_name=parent_column_name,
+                foreign_key_data=raw_foreign_key,
+            ),
         )
 
     def build_derived_column(
@@ -186,9 +191,10 @@ class ContractTableCompiler:
         if is_primary_key:
             raise SchemaValidationError(f"Derived column {column_name} cannot be primary key")
 
-        output_raw = column_data.get("output_data_type")
-        if not output_raw:
-            raise SchemaValidationError(f"Derived column {column_name} must declare output_data_type")
+        output_raw = require_non_empty_string(
+            column_data.get("output_data_type"),
+            f"Derived column {table_name}.{column_name} output_data_type",
+        )
 
         source_column_name = require_non_empty_string(
             raw_derive.get("source_column"),
@@ -205,10 +211,7 @@ class ContractTableCompiler:
             ),
         )
         output_data_type = DataType(
-            require_non_empty_string(
-                output_raw,
-                f"Derived column {table_name}.{column_name} output_data_type",
-            ).upper()
+            output_raw.upper()
         )
         try:
             DERIVATION_POLICY.validate_derived_column_spec(
@@ -239,7 +242,7 @@ class ContractTableCompiler:
                 columns=[
                     self.resolve_column(
                         table_name=table_name,
-                        column_name=require_non_empty_string(column_data.get("name"), f"Table {table_name} column name"),
+                        column_name=cast(str, column_data["name"]),
                     )
                     for column_data in raw_columns
                 ],
@@ -253,16 +256,14 @@ class ContractTableCompiler:
 
 def convert_to_table_spec(table_data: Mapping[str, Any]) -> TableSpec:
     compiler = ContractTableCompiler([table_data])
-    table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
+    table_name = cast(str, table_data["table_name"])
     return compiler.build_table_spec(table_name)
 
 
 def convert_to_generation_run(run_id: str, raw_tables: Sequence[Mapping[str, Any]]) -> GenerationRun:
     compiler = ContractTableCompiler(raw_tables)
     tables = [
-        compiler.build_table_spec(
-            require_non_empty_string(table_data.get("table_name"), "Table table_name")
-        )
+        compiler.build_table_spec(cast(str, table_data["table_name"]))
         for table_data in raw_tables
     ]
     return GenerationRun(run_id=run_id, tables=tables)
