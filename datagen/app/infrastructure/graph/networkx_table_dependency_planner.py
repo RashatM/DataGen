@@ -2,15 +2,14 @@ import networkx as nx
 
 from app.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
 from app.domain.entities import TableColumnSpec, TableSpec
-from app.domain.enums import RelationType
-from app.domain.validation_errors import InvalidForeignKeyError
+from app.domain.validation_errors import InvalidReferenceError
 
 
 class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
-    """Строит порядок генерации таблиц по графу зависимостей внешних ключей."""
+    """Строит порядок генерации таблиц по графу reference-зависимостей."""
     @staticmethod
     def can_skip_planning(tables: list[TableSpec]) -> bool:
-        return len(tables) == 1 and all(column.foreign_key is None for column in tables[0].columns)
+        return len(tables) == 1 and all(column.reference is None for column in tables[0].columns)
 
     @staticmethod
     def collect_invalid_references(
@@ -20,19 +19,19 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
         table_column_specs: dict[str, dict[str, TableColumnSpec]],
         graph: nx.DiGraph,
     ) -> list[str]:
-        """Проверяет FK-ссылки до сортировки и одновременно наполняет граф только валидными рёбрами зависимостей."""
+        """Проверяет reference-ссылки до сортировки и одновременно наполняет граф только валидными рёбрами."""
         invalid_references: list[str] = []
 
         for table in tables:
             graph.add_node(table)
             for column in table.columns:
-                fk_info = column.foreign_key
-                if not fk_info:
+                reference_info = column.reference
+                if not reference_info:
                     continue
 
-                ref_table_name = fk_info.table_name
+                ref_table_name = reference_info.table_name
                 source_column_name = f"{table.table_name}.{column.name}"
-                referenced_column_name = f"{ref_table_name}.{fk_info.column_name}"
+                referenced_column_name = f"{ref_table_name}.{reference_info.column_name}"
                 ref_table = table_by_name.get(ref_table_name)
 
                 if not ref_table:
@@ -42,30 +41,14 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
                     )
                     continue
 
-                if fk_info.column_name not in table_columns_map[ref_table_name]:
+                if reference_info.column_name not in table_columns_map[ref_table_name]:
                     invalid_references.append(
                         f"{source_column_name} -> {referenced_column_name} "
-                        f"(missing column '{fk_info.column_name}' in table '{ref_table_name}')"
+                        f"(missing column '{reference_info.column_name}' in table '{ref_table_name}')"
                     )
                     continue
 
-                ref_column = table_column_specs[ref_table_name][fk_info.column_name]
-                if not getattr(ref_column, "is_primary_key", False) and not getattr(
-                    ref_column.output_constraints, "is_unique", False
-                ):
-                    invalid_references.append(
-                        f"{source_column_name} -> {referenced_column_name} "
-                        f"(referenced column must be unique or primary key)"
-                    )
-                    continue
-
-                if ref_column.output_constraints.null_ratio != 0:
-                    invalid_references.append(
-                        f"{source_column_name} -> {referenced_column_name} "
-                        f"(referenced column must be non-nullable)"
-                    )
-                    continue
-
+                ref_column = table_column_specs[ref_table_name][reference_info.column_name]
                 if column.output_data_type != ref_column.output_data_type:
                     invalid_references.append(
                         f"{source_column_name} -> {referenced_column_name} "
@@ -74,24 +57,12 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
                     )
                     continue
 
-                if fk_info.relation_type == RelationType.ONE_TO_ONE:
-                    non_null_child_rows = table.total_rows - int(
-                        table.total_rows * column.output_constraints.null_ratio
-                    )
-                    if non_null_child_rows > ref_table.total_rows:
-                        invalid_references.append(
-                            f"{source_column_name} -> {referenced_column_name} "
-                            f"(one-to-one requires child non-null rows <= parent rows: "
-                            f"{non_null_child_rows} > {ref_table.total_rows})"
-                        )
-                        continue
-
                 graph.add_edge(ref_table, table)
 
         return invalid_references
 
     def plan(self, tables: list[TableSpec]) -> list[TableSpec]:
-        """Возвращает topological order таблиц либо падает на некорректных FK-ссылках и циклах."""
+        """Возвращает topological order таблиц либо падает на некорректных reference-ссылках и циклах."""
         if self.can_skip_planning(tables):
             return tables
 
@@ -113,7 +84,7 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
 
         if invalid_references:
             reference_list = "\n".join(f"- {error}" for error in invalid_references)
-            raise InvalidForeignKeyError(f"Invalid foreign key references:\n{reference_list}")
+            raise InvalidReferenceError(f"Invalid references:\n{reference_list}")
 
         try:
             return list(nx.topological_sort(graph))

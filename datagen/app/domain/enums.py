@@ -1,8 +1,8 @@
 from enum import Enum
 
 
-class RelationType(Enum):
-    """Кардинальность внешнего ключа относительно родительской таблицы."""
+class ReferenceCardinality(Enum):
+    """Кардинальность использования значений reference-колонки относительно parent column."""
     ONE_TO_ONE = "ONE_TO_ONE"
     ONE_TO_MANY = "ONE_TO_MANY"
 

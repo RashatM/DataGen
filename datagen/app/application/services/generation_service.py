@@ -3,13 +3,13 @@ import random
 import time
 
 from app.application.errors import GenerationInvariantError
-from app.application.internal.foreign_key_reference_tracker import ForeignKeyReferenceTracker
+from app.application.internal.reference_value_tracker import ReferenceValueTracker
 from app.application.ports.generator_factory_port import DataGeneratorFactoryPort
 from app.application.ports.table_dependency_planner_port import TableDependencyPlannerPort
 from app.application.ports.value_converter_port import ValueConverterPort
 from app.domain.derivation import DerivationPolicy
 from app.domain.entities import GeneratedTableData, GenerationRun, TableColumnSpec, TableSpec
-from app.domain.enums import RelationType
+from app.domain.enums import ReferenceCardinality
 from app.domain.output_validation import validate_column_output_values
 from app.domain.value_types import (
     ColumnValues,
@@ -26,8 +26,8 @@ class DataGenerationService:
     """Оркестрирует генерацию таблиц в корректном порядке зависимостей.
 
     Сервис не просто вызывает генераторы по колонкам. Он:
-    - сначала получает порядок таблиц с учётом внешних ключей
-    - поддерживает runtime-кэш родительских значений для FK-колонок
+    - сначала получает порядок таблиц с учётом reference-зависимостей
+    - поддерживает runtime-кэш родительских значений для reference-колонок
     - отдельно строит исходные значения, выходные значения и производные колонки
     - валидирует итог по output constraints уже после вставки NULL
     - возвращает таблицы в том порядке, в котором их можно безопасно публиковать
@@ -80,36 +80,36 @@ class DataGenerationService:
             output_constraints=table_column.output_constraints,
         )
 
-    def build_foreign_key_non_null_values(
+    def build_reference_non_null_values(
         self,
         total_non_null_rows: int,
         table_column: TableColumnSpec,
         referenced_values: NonNullColumnValues,
     ) -> NonNullColumnValues:
-        """Строит значения FK-колонки, выбирая их из уже сгенерированного пула родительских ключей.
+        """Строит non-null значения reference-колонки из non-null пула parent values.
 
-        Для ONE_TO_MANY допускаются повторы через choices.
-        Для ONE_TO_ONE повторы запрещены, поэтому используется sample и заранее проверяется,
-        что у родителя достаточно уникальных значений для всех non-null строк ребёнка.
+        ONE_TO_MANY выбирает из всех parent rows и сохраняет вес дубликатов.
+        ONE_TO_ONE выбирает без повторов из distinct parent values.
         """
-        foreign_key = table_column.foreign_key
-        if foreign_key is None:
-            raise GenerationInvariantError(f"Column {table_column.name} is not a foreign key")
+        reference = table_column.reference
+        if reference is None:
+            raise GenerationInvariantError(f"Column {table_column.name} is not a reference")
 
         if not referenced_values and total_non_null_rows > 0:
             raise UnsatisfiableConstraintsError(
-                f"Foreign key column {table_column.name} has no non-null referenced values to sample from"
+                f"Reference column {table_column.name} has no non-null parent values to sample from"
             )
 
-        if foreign_key.relation_type == RelationType.ONE_TO_MANY:
+        if reference.cardinality == ReferenceCardinality.ONE_TO_MANY:
             return self.rng.choices(referenced_values, k=total_non_null_rows)
 
-        if total_non_null_rows > len(referenced_values):
+        distinct_referenced_values = list(dict.fromkeys(referenced_values))
+        if total_non_null_rows > len(distinct_referenced_values):
             raise UnsatisfiableConstraintsError(
-                f"Foreign key column {table_column.name} requires {total_non_null_rows} unique referenced values, "
-                f"but only {len(referenced_values)} are available"
+                f"Reference column {table_column.name} requires {total_non_null_rows} distinct parent values, "
+                f"but only {len(distinct_referenced_values)} are available"
             )
-        return self.rng.sample(referenced_values, total_non_null_rows)
+        return self.rng.sample(distinct_referenced_values, total_non_null_rows)
 
     def finalize_output_values(
         self,
@@ -149,13 +149,13 @@ class DataGenerationService:
     def generate_table_data(
         self,
         table: TableSpec,
-        fk_reference_tracker: ForeignKeyReferenceTracker,
+        reference_value_tracker: ReferenceValueTracker,
     ) -> GeneratedTableData:
-        """Генерирует все колонки одной таблицы, соблюдая зависимость generated -> derived и опираясь на FK-кэш.
+        """Генерирует все колонки одной таблицы, соблюдая зависимость generated -> derived и reference-кэш.
 
         Порядок внутри таблицы намеренно такой:
         1. пропускаются производные колонки, потому что они не являются самостоятельным источником значений
-        2. для каждой базовой или FK-колонки заранее выбираются позиции NULL
+        2. для каждой базовой или reference-колонки заранее выбираются позиции NULL
         3. обычные колонки проходят путь source generation -> output conversion -> finalize
         4. производные колонки вычисляются из тех же non-null source values, что и исходная колонка
         5. в конце проверяется, что не осталось ни одной неразрешённой колонки
@@ -172,15 +172,15 @@ class DataGenerationService:
             total_non_null_rows = table.total_rows - total_nulls
             null_positions = set(self.rng.sample(range(table.total_rows), total_nulls)) if total_nulls else set()
 
-            if table_column.is_foreign_key:
-                foreign_key_output_non_null_values = self.build_foreign_key_non_null_values(
+            if table_column.is_reference:
+                reference_output_non_null_values = self.build_reference_non_null_values(
                     total_non_null_rows=total_non_null_rows,
                     table_column=table_column,
-                    referenced_values=fk_reference_tracker.get_cached_parent_values(table_column),
+                    referenced_values=reference_value_tracker.get_parent_values(table_column),
                 )
                 generated_columns[table_column.name] = self.finalize_output_values(
                     table_column=table_column,
-                    output_non_null_values=foreign_key_output_non_null_values,
+                    output_non_null_values=reference_output_non_null_values,
                     total_rows=table.total_rows,
                     null_positions=null_positions,
                 )
@@ -236,18 +236,18 @@ class DataGenerationService:
         )
 
     def generate_tables(self, generation_run: GenerationRun) -> Iterator[GeneratedTableData]:
-        """Генерирует таблицы лениво в dependency-safe порядке и обслуживает жизненный цикл FK-кэша между ними."""
+        """Генерирует таблицы лениво в dependency-safe порядке и обслуживает lifecycle reference-кэша."""
         ordered_tables = self.table_dependency_planner.plan(generation_run.tables)
-        fk_reference_tracker = ForeignKeyReferenceTracker.from_ordered_tables(ordered_tables)
+        reference_value_tracker = ReferenceValueTracker.from_ordered_tables(ordered_tables)
 
         for table in ordered_tables:
             table_data = self.generate_table_data(
                 table=table,
-                fk_reference_tracker=fk_reference_tracker,
+                reference_value_tracker=reference_value_tracker,
             )
-            fk_reference_tracker.cache_parent_values(table, table_data.generated_data)
+            reference_value_tracker.cache_parent_values(table, table_data.generated_data)
             yield table_data
-            fk_reference_tracker.release_parent_cache_for_child(table)
+            reference_value_tracker.release_parent_cache_for_child(table)
 
     def generate(self, generation_run: GenerationRun) -> list[GeneratedTableData]:
         """Материализует ленивую генерацию целиком в список, если вызывающему нужен eager-результат."""

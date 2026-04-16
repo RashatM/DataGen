@@ -2,31 +2,29 @@ from dataclasses import dataclass
 from typing import Generic
 
 from app.domain.constraints import OutputConstraints
-from app.domain.enums import DataType, DerivationRule, RelationType
+from app.domain.enums import DataType, DerivationRule, ReferenceCardinality
 from app.domain.typevars import TConstraints
 from app.domain.validation_errors import (
     DuplicateColumnSpecInTableError,
     DuplicateTableSpecInRunError,
-    InvalidConstraintsError,
     InvalidDerivationError,
     InvalidEntityError,
-    InvalidForeignKeyError,
 )
 from app.domain.value_types import GeneratedColumnsByName
 
 
 @dataclass
-class TableForeignKeySpec:
-    """Описывает ссылку колонки на родительскую таблицу и тип кардинальности связи."""
+class TableReferenceSpec:
+    """Описывает источник значений reference-колонки и кардинальность их использования."""
     table_name: str
     column_name: str
-    relation_type: RelationType
+    cardinality: ReferenceCardinality
 
     def __post_init__(self) -> None:
         if not self.table_name.strip():
-            raise InvalidEntityError("Foreign key table_name must not be empty")
+            raise InvalidEntityError("Reference table_name must not be empty")
         if not self.column_name.strip():
-            raise InvalidEntityError("Foreign key column_name must not be empty")
+            raise InvalidEntityError("Reference column_name must not be empty")
 
 
 @dataclass(frozen=True)
@@ -49,13 +47,12 @@ class TableDerivationSpec:
 
 @dataclass
 class TableColumnSpec(Generic[TConstraints]):
-    """Единая спецификация колонки таблицы независимо от того, генерируется она, выводится или берётся из FK."""
+    """Единая спецификация колонки таблицы независимо от того, генерируется она, выводится или берётся из reference."""
     name: str
     output_data_type: DataType
     output_constraints: OutputConstraints
-    is_primary_key: bool = False
     generation: ColumnGenerationSpec[TConstraints] | None = None
-    foreign_key: TableForeignKeySpec | None = None
+    reference: TableReferenceSpec | None = None
     derivation: TableDerivationSpec | None = None
 
     def __post_init__(self) -> None:
@@ -63,30 +60,22 @@ class TableColumnSpec(Generic[TConstraints]):
             raise InvalidEntityError("Column name must not be empty")
         active_modes = sum(
             candidate is not None
-            for candidate in (self.generation, self.foreign_key, self.derivation)
+            for candidate in (self.generation, self.reference, self.derivation)
         )
         if active_modes != 1:
             raise InvalidEntityError(
-                f"Column {self.name} must declare exactly one mode: generation, foreign_key or derivation"
+                f"Column {self.name} must declare exactly one mode: generation, reference or derivation"
             )
-        if self.is_foreign_key and self.is_primary_key:
-            raise InvalidForeignKeyError(f"Foreign key column {self.name} cannot be primary key")
-        if self.is_derived and self.is_primary_key:
-            raise InvalidDerivationError(f"Derived column {self.name} cannot be primary key")
         if self.is_derived and self.output_constraints.is_unique:
             raise InvalidDerivationError(f"Derived column {self.name} cannot be unique")
-        if self.is_primary_key and self.output_constraints.null_ratio != 0:
-            raise InvalidConstraintsError(f"Primary key column {self.name} must have null_ratio=0")
-        if self.is_primary_key and not self.output_constraints.is_unique:
-            raise InvalidConstraintsError(f"Primary key column {self.name} must be unique")
 
     @property
     def is_generated(self) -> bool:
         return self.generation is not None
 
     @property
-    def is_foreign_key(self) -> bool:
-        return self.foreign_key is not None
+    def is_reference(self) -> bool:
+        return self.reference is not None
 
     @property
     def is_derived(self) -> bool:

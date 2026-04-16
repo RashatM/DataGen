@@ -24,22 +24,20 @@ from app.infrastructure.input.excel_loader_support import (
     normalize_constraints,
     normalize_derive_spec,
     normalize_engine_scope,
-    normalize_foreign_key,
-    normalize_foreign_key_reference,
     normalize_generator_type,
     normalize_output_type,
+    normalize_reference,
     normalize_sheet,
     normalize_text,
     normalize_write_mode,
     parse_csv_list,
     parse_key_value_text,
-    parse_optional_bool,
     prefix_issue,
     row_has_data,
     row_has_data_by_fields,
 )
 
-FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
+REFERENCE_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
 
 
 @dataclass(frozen=True)
@@ -220,25 +218,30 @@ class ExcelToRawTablesConverter:
         if not column_name:
             raise ValueError("column_name must not be empty")
 
+        raw_constraints = parse_key_value_text(row.get("constraints"), "constraints")
+        reference = normalize_reference(parse_key_value_text(row.get("reference"), "reference"))
+
+        if reference:
+            if not is_blank(row.get("generator_data_type")):
+                raise ValueError("reference column must not define gen_data_type")
+            if not is_blank(row.get("output_data_type")):
+                raise ValueError("reference column must not define output_data_type")
+            unsupported_constraint_fields = sorted(set(raw_constraints.keys()) - REFERENCE_ALLOWED_CONSTRAINT_FIELDS)
+            if unsupported_constraint_fields:
+                unsupported_fields = ", ".join(unsupported_constraint_fields)
+                raise ValueError(f"reference column supports only null_ratio constraint, got: {unsupported_fields}")
+            return {
+                "name": column_name,
+                "reference": reference,
+                "constraints": raw_constraints,
+            }
+
         generator_type = normalize_generator_type(row.get("generator_data_type"))
         output_type = normalize_output_type(row.get("output_data_type"))
         if output_type and output_type not in ALLOWED_OUTPUT_TYPES_BY_SOURCE[generator_type]:
             raise ValueError(f"unsupported conversion for {column_name}: {generator_type} -> {output_type}")
 
-        is_primary_key = parse_optional_bool(row.get("is_primary_key"), "is_primary_key") or False
-        constraints = normalize_constraints(
-            parse_key_value_text(row.get("constraints"), "constraints"),
-            generator_type,
-        )
-        foreign_key = normalize_foreign_key(parse_key_value_text(row.get("foreign_key"), "foreign_key"))
-
-        if foreign_key:
-            return {
-                "name": column_name,
-                "foreign_key": foreign_key,
-                "constraints": constraints,
-            }
-
+        constraints = normalize_constraints(raw_constraints, generator_type)
         payload: dict[str, Any] = {
             "name": column_name,
             "generator_data_type": generator_type,
@@ -246,8 +249,6 @@ class ExcelToRawTablesConverter:
         }
         if output_type and output_type != generator_type:
             payload["output_data_type"] = output_type
-        if is_primary_key:
-            payload["is_primary_key"] = True
         return payload
 
     @staticmethod
@@ -456,7 +457,7 @@ class ExcelWorkbookSpecConverter:
 
     @staticmethod
     def build_column_payload(row: pd.Series) -> dict[str, Any]:
-        """Нормализует одну строку описания колонки, включая FK, derive и engine_scope."""
+        """Нормализует одну строку описания колонки, включая reference, derive и engine_scope."""
         column_name = normalize_text(row.get("column_name"))
         if not column_name:
             raise ValueError("column_name must not be empty")
@@ -464,35 +465,32 @@ class ExcelWorkbookSpecConverter:
         generator_type_raw = row.get("generator_data_type", row.get("gen_data_type"))
         output_type_raw = row.get("output_data_type")
         raw_constraints = parse_key_value_text(row.get("constraints"), "constraints")
-        raw_foreign_key = parse_key_value_text(row.get("foreign_key"), "foreign_key")
+        raw_reference = parse_key_value_text(row.get("reference"), "reference")
         raw_derive = parse_key_value_text(row.get("derive"), "derive")
         engine_scope = normalize_engine_scope(row.get("engine_scope"))
-        is_primary_key = parse_optional_bool(row.get("is_primary_key"), "is_primary_key") or False
 
-        foreign_key = normalize_foreign_key_reference(raw_foreign_key)
+        reference = normalize_reference(raw_reference)
         derive = normalize_derive_spec(raw_derive)
 
-        if foreign_key and derive:
-            raise ValueError("foreign_key and derive cannot be set at the same time")
+        if reference and derive:
+            raise ValueError("reference and derive cannot be set at the same time")
 
-        if foreign_key:
+        if reference:
             if not is_blank(generator_type_raw):
-                raise ValueError("foreign key column must not define gen_data_type")
+                raise ValueError("reference column must not define gen_data_type")
             if not is_blank(output_type_raw):
-                raise ValueError("foreign key column must not define output_data_type")
-            if is_primary_key:
-                raise ValueError("foreign key column must not be primary key")
+                raise ValueError("reference column must not define output_data_type")
 
-            unsupported_constraint_fields = sorted(set(raw_constraints.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS)
+            unsupported_constraint_fields = sorted(set(raw_constraints.keys()) - REFERENCE_ALLOWED_CONSTRAINT_FIELDS)
             if unsupported_constraint_fields:
                 unsupported_fields = ", ".join(unsupported_constraint_fields)
                 raise ValueError(
-                    f"foreign key column supports only null_ratio constraint, got: {unsupported_fields}"
+                    f"reference column supports only null_ratio constraint, got: {unsupported_fields}"
                 )
 
             return {
                 "name": column_name,
-                "foreign_key": foreign_key,
+                "reference": reference,
                 "engine_scope": engine_scope,
                 "constraints": raw_constraints,
             }
@@ -504,8 +502,6 @@ class ExcelWorkbookSpecConverter:
                 raise ValueError("derived column must define output_data_type")
             if raw_constraints:
                 raise ValueError("derived column must not define constraints")
-            if is_primary_key:
-                raise ValueError("derived column must not be primary key")
 
             output_type = normalize_output_type(output_type_raw)
             if output_type is None:
@@ -533,8 +529,6 @@ class ExcelWorkbookSpecConverter:
         }
         if output_type and output_type != generator_type:
             payload["output_data_type"] = output_type
-        if is_primary_key:
-            payload["is_primary_key"] = True
         return payload
 
     @staticmethod

@@ -2,8 +2,8 @@ class InvalidEntityError(ValueError):
     """Raised when a domain entity has invalid structural state (empty names, missing fields, bad counts, wrong mode)."""
 
 
-class InvalidForeignKeyError(ValueError):
-    """Raised when a foreign key points to a missing table or column."""
+class InvalidReferenceError(ValueError):
+    """Raised when a reference points to a missing table or column."""
 
 
 class InvalidConstraintsError(ValueError):

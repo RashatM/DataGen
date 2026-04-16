@@ -9,9 +9,9 @@
         {
           "name": "INN",
           "generator_data_type": "INT",
-          "is_primary_key": true,
           "constraints": {
-            "digits_count": 10
+            "digits_count": 10,
+            "is_unique": true
           }
         },
         {
@@ -60,12 +60,10 @@
         },
         {
           "name": "SINN",
-          "generator_data_type": "INT",
-          "foreign_key": {
-            "schema_name": "analytics_db",
+          "reference": {
             "table_name": "company_groups",
             "column_name": "INN",
-            "relation_type": "ONE_TO_MANY"
+            "cardinality": "ONE_TO_MANY"
           },
           "constraints": {}
         },

@@ -42,9 +42,9 @@ class DerivationPolicy:
             raise InvalidDerivationError(
                 f"Derived column {column_name} cannot reference another derived column {source_column.name}"
             )
-        if source_column.is_foreign_key:
+        if source_column.is_reference:
             raise InvalidDerivationError(
-                f"Derived column {column_name} cannot reference foreign key column {source_column.name}"
+                f"Derived column {column_name} cannot reference reference column {source_column.name}"
             )
 
         source_data_type = source_column.generator_data_type

@@ -1,6 +1,6 @@
 from app.domain.entities import TableColumnSpec
 from app.domain.value_types import ColumnValues, NonNullColumnValue
-from app.domain.validation_errors import InvalidConstraintsError, UnsatisfiableConstraintsError
+from app.domain.validation_errors import UnsatisfiableConstraintsError
 
 
 def validate_column_output_values(
@@ -11,8 +11,6 @@ def validate_column_output_values(
 
     for value in values:
         if value is None:
-            if table_column.is_primary_key:
-                raise InvalidConstraintsError(f"Primary key column {table_column.name} cannot contain null values")
             continue
 
         if not table_column.output_constraints.is_unique:

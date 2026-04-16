@@ -11,11 +11,10 @@ from app.domain.entities import (
 from app.domain.enums import DataType, DerivationRule
 from app.domain.validation_errors import InvalidDerivationError
 from app.infrastructure.converters.contract.column_builder import (
-    build_foreign_key_spec,
     build_generated_column_spec,
     build_output_constraints,
-    normalize_is_primary_key,
-    validate_foreign_key_constraints,
+    build_reference_spec,
+    validate_reference_constraints,
 )
 from app.infrastructure.converters.contract.fields import (
     get_constraints_data,
@@ -30,7 +29,7 @@ DERIVATION_POLICY = DerivationPolicy()
 
 
 class ContractTableCompiler:
-    """Компилирует raw contract tables в доменные TableSpec по единому пути с поддержкой FK и derive."""
+    """Компилирует raw contract tables в доменные TableSpec по единому пути с поддержкой reference и derive."""
 
     def __init__(self, raw_tables: Sequence[Mapping[str, Any]]) -> None:
         self.raw_tables = list(raw_tables)
@@ -64,7 +63,7 @@ class ContractTableCompiler:
         return raw_columns
 
     def resolve_column(self, table_name: str, column_name: str) -> TableColumnSpec[Any]:
-        """Собирает колонку один раз, рекурсивно подтягивая parent/source колонки для FK и derive."""
+        """Собирает колонку один раз, рекурсивно подтягивая parent/source колонки для reference и derive."""
         cache_key = (table_name, column_name)
         cached_column = self.resolved_columns.get(cache_key)
         if cached_column is not None:
@@ -106,27 +105,25 @@ class ContractTableCompiler:
         column_data: Mapping[str, Any],
     ) -> TableColumnSpec[Any]:
         constraints_data = get_constraints_data(column_name, column_data)
-        is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
-        raw_foreign_key = optional_mapping(
-            column_data.get("foreign_key"),
-            f"Column {table_name}.{column_name} foreign_key",
+        raw_reference = optional_mapping(
+            column_data.get("reference"),
+            f"Column {table_name}.{column_name} reference",
         )
         raw_derive = optional_mapping(
             column_data.get("derive"),
             f"Column {table_name}.{column_name} derive",
         )
 
-        if raw_foreign_key and raw_derive:
+        if raw_reference and raw_derive:
             raise SchemaValidationError(
-                f"Column {table_name}.{column_name} cannot define both foreign_key and derive"
+                f"Column {table_name}.{column_name} cannot define both reference and derive"
             )
-        if raw_foreign_key:
-            return self.build_foreign_key_column(
+        if raw_reference:
+            return self.build_reference_column(
                 table_name=table_name,
                 column_name=column_name,
                 constraints_data=constraints_data,
-                is_primary_key=is_primary_key,
-                raw_foreign_key=raw_foreign_key,
+                raw_reference=raw_reference,
             )
         if raw_derive:
             return self.build_derived_column(
@@ -134,30 +131,28 @@ class ContractTableCompiler:
                 column_name=column_name,
                 column_data=column_data,
                 constraints_data=constraints_data,
-                is_primary_key=is_primary_key,
                 raw_derive=raw_derive,
             )
         return build_generated_column_spec(column_data=column_data)
 
-    def build_foreign_key_column(
+    def build_reference_column(
         self,
         table_name: str,
         column_name: str,
         constraints_data: dict[str, Any],
-        is_primary_key: bool,
-        raw_foreign_key: dict[str, Any],
+        raw_reference: dict[str, Any],
     ) -> TableColumnSpec[Any]:
-        validate_foreign_key_constraints(
+        validate_reference_constraints(
             column_name=column_name,
             constraints_data=constraints_data,
         )
         parent_table_name = require_non_empty_string(
-            raw_foreign_key.get("table_name"),
-            f"Column {table_name}.{column_name} foreign_key table_name",
+            raw_reference.get("table_name"),
+            f"Column {table_name}.{column_name} reference table_name",
         )
         parent_column_name = require_non_empty_string(
-            raw_foreign_key.get("column_name"),
-            f"Column {table_name}.{column_name} foreign_key column_name",
+            raw_reference.get("column_name"),
+            f"Column {table_name}.{column_name} reference column_name",
         )
         parent_column = self.resolve_column(parent_table_name, parent_column_name)
         return TableColumnSpec(
@@ -166,14 +161,12 @@ class ContractTableCompiler:
             output_constraints=build_output_constraints(
                 column_name=column_name,
                 constraints_data=constraints_data,
-                is_primary_key=is_primary_key,
             ),
-            is_primary_key=is_primary_key,
-            foreign_key=build_foreign_key_spec(
+            reference=build_reference_spec(
                 column_name=column_name,
                 parent_table_name=parent_table_name,
                 parent_column_name=parent_column_name,
-                foreign_key_data=raw_foreign_key,
+                reference_data=raw_reference,
             ),
         )
 
@@ -183,13 +176,10 @@ class ContractTableCompiler:
         column_name: str,
         column_data: Mapping[str, Any],
         constraints_data: dict[str, Any],
-        is_primary_key: bool,
         raw_derive: dict[str, Any],
     ) -> TableColumnSpec[Any]:
         if constraints_data:
             raise SchemaValidationError(f"Derived column {column_name} cannot define constraints")
-        if is_primary_key:
-            raise SchemaValidationError(f"Derived column {column_name} cannot be primary key")
 
         output_raw = require_non_empty_string(
             column_data.get("output_data_type"),

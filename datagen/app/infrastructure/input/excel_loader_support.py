@@ -5,7 +5,7 @@ from typing import Any
 import pandas as pd
 
 from app.domain.conversion_rules import ALLOWED_OUTPUT_TYPES
-from app.domain.enums import CaseMode, CharacterSet, DataType, RelationType
+from app.domain.enums import CaseMode, CharacterSet, DataType, ReferenceCardinality
 
 SHEET_TABLES = "tables"
 SHEET_QUERIES = "queries"
@@ -24,23 +24,21 @@ WORKBOOK_QUERIES_HEADER_FIELDS = {
     "hive_exclude_columns",
     "iceberg_exclude_columns",
 }
-DATA_SHEET_REQUIRED_FIELDS = {"column_name", "generator_data_type"}
+DATA_SHEET_REQUIRED_FIELDS = {"column_name"}
 WORKBOOK_DATA_SHEET_REQUIRED_FIELDS = {"column_name"}
 ROW_DATA_FIELDS = (
     "column_name",
     "generator_data_type",
     "output_data_type",
-    "is_primary_key",
     "constraints",
-    "foreign_key",
+    "reference",
 )
 WORKBOOK_ROW_DATA_FIELDS = (
     "column_name",
     "generator_data_type",
     "output_data_type",
-    "is_primary_key",
     "constraints",
-    "foreign_key",
+    "reference",
     "engine_scope",
     "derive",
 )
@@ -78,9 +76,8 @@ HEADER_ALIASES = {
     "generator_data_type": "generator_data_type",
     "data_type": "generator_data_type",
     "output_data_type": "output_data_type",
-    "is_primary_key": "is_primary_key",
     "constraints": "constraints",
-    "foreign_key": "foreign_key",
+    "reference": "reference",
     "engine_scope": "engine_scope",
     "derive": "derive",
     "hive_target_table": "hive_target_table",
@@ -221,19 +218,6 @@ def find_required_header(
             return row_index, current_headers
     required_text = ", ".join(sorted(required_headers))
     raise ValueError(f"could not find required header: {required_text}")
-
-
-def parse_optional_bool(value: Any, field_name: str) -> bool | None:
-    text = normalize_text(value)
-    if not text:
-        return None
-
-    lowered = text.lower()
-    if lowered in {"true", "1", "yes", "y"}:
-        return True
-    if lowered in {"false", "0", "no", "n"}:
-        return False
-    raise ValueError(f"invalid boolean for {field_name}: {value!r}")
 
 
 def normalize_generator_type(value: Any) -> str:
@@ -464,47 +448,25 @@ def apply_legacy_string_flags(constraints: dict[str, Any], legacy_flags: dict[st
         raise ValueError("digits_only=true and chars_only=true cannot be used together")
 
 
-def normalize_foreign_key(raw_foreign_key: dict[str, Any]) -> dict[str, Any] | None:
-    if not raw_foreign_key:
+def normalize_reference(raw_reference: dict[str, Any]) -> dict[str, str] | None:
+    if not raw_reference:
         return None
 
-    table_name = normalize_text(raw_foreign_key.get("table_name"))
-    column_name = normalize_text(raw_foreign_key.get("column_name"))
-    relation_type = normalize_text(raw_foreign_key.get("relation_type")).upper()
+    table_name = normalize_text(raw_reference.get("table_name"))
+    column_name = normalize_text(raw_reference.get("column_name"))
+    cardinality = normalize_text(raw_reference.get("cardinality")).upper()
 
-    if not table_name or not column_name or not relation_type:
-        raise ValueError("foreign_key must contain table_name, column_name and relation_type")
+    if not table_name or not column_name or not cardinality:
+        raise ValueError("reference must contain table_name, column_name and cardinality")
 
-    allowed_relation_types = {item.value for item in RelationType}
-    if relation_type not in allowed_relation_types:
-        raise ValueError(f"unsupported relation_type: {relation_type!r}")
+    allowed_cardinalities = {item.value for item in ReferenceCardinality}
+    if cardinality not in allowed_cardinalities:
+        raise ValueError(f"unsupported cardinality: {cardinality!r}")
 
     return {
         "table_name": table_name,
         "column_name": column_name,
-        "relation_type": relation_type,
-    }
-
-
-def normalize_foreign_key_reference(raw_foreign_key: dict[str, Any]) -> dict[str, str] | None:
-    if not raw_foreign_key:
-        return None
-
-    table_name = normalize_text(raw_foreign_key.get("table_name"))
-    column_name = normalize_text(raw_foreign_key.get("column_name"))
-    relation_type = normalize_text(raw_foreign_key.get("relation_type")).upper()
-
-    if not table_name or not column_name or not relation_type:
-        raise ValueError("foreign_key must contain table_name, column_name and relation_type")
-
-    allowed_relation_types = {item.value for item in RelationType}
-    if relation_type not in allowed_relation_types:
-        raise ValueError(f"unsupported relation_type: {relation_type!r}")
-
-    return {
-        "table_name": table_name,
-        "column_name": column_name,
-        "relation_type": relation_type,
+        "cardinality": cardinality,
     }
 
 

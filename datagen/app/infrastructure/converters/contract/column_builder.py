@@ -12,8 +12,8 @@ from app.domain.constraints import (
     TimestampConstraints,
 )
 from app.domain.conversion_rules import ensure_conversion_supported, ensure_final_uniqueness_supported
-from app.domain.entities import ColumnGenerationSpec, TableColumnSpec, TableForeignKeySpec
-from app.domain.enums import CaseMode, CharacterSet, DataType, RelationType
+from app.domain.entities import ColumnGenerationSpec, TableColumnSpec, TableReferenceSpec
+from app.domain.enums import CaseMode, CharacterSet, DataType, ReferenceCardinality
 from app.domain.validation_errors import InvalidConstraintsError
 from app.infrastructure.converters.contract.fields import (
     get_constraints_data,
@@ -31,15 +31,7 @@ LEGACY_MAPPING = {
     "TIMESTAMP_STRING": DataType.TIMESTAMP,
 }
 
-FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
-
-
-def normalize_is_primary_key(column_name: str, raw_is_primary_key: Any) -> bool:
-    if raw_is_primary_key is None:
-        return False
-    if isinstance(raw_is_primary_key, bool):
-        return raw_is_primary_key
-    raise SchemaValidationError(f"Column {column_name} has invalid is_primary_key: {raw_is_primary_key!r}")
+REFERENCE_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
 
 
 def normalize_allowed_values(column_name: str, raw_allowed_values: Any) -> tuple[Any, ...] | None:
@@ -70,38 +62,24 @@ def normalize_is_unique(column_name: str, raw_is_unique: Any) -> bool:
     raise SchemaValidationError(f"Column {column_name} has invalid is_unique: {raw_is_unique!r}")
 
 
-def validate_foreign_key_constraints(column_name: str, constraints_data: Mapping[str, Any]) -> None:
-    unsupported_constraint_fields = sorted(set(constraints_data.keys()) - FOREIGN_KEY_ALLOWED_CONSTRAINT_FIELDS)
+def validate_reference_constraints(column_name: str, constraints_data: Mapping[str, Any]) -> None:
+    unsupported_constraint_fields = sorted(set(constraints_data.keys()) - REFERENCE_ALLOWED_CONSTRAINT_FIELDS)
     if unsupported_constraint_fields:
         unsupported_fields = ", ".join(unsupported_constraint_fields)
         raise SchemaValidationError(
-            f"Foreign key column {column_name} supports only null_ratio constraint, got: {unsupported_fields}"
+            f"Reference column {column_name} supports only null_ratio constraint, got: {unsupported_fields}"
         )
 
 
 def build_output_constraints(
     column_name: str,
     constraints_data: dict[str, Any],
-    is_primary_key: bool,
 ) -> OutputConstraints:
     raw_null_ratio = constraints_data.get("null_ratio")
     raw_is_unique = constraints_data.get("is_unique", constraints_data.get("unique"))
 
     null_ratio = 0.0 if raw_null_ratio is None else normalize_null_ratio(column_name, raw_null_ratio)
     is_unique = False if raw_is_unique is None else normalize_is_unique(column_name, raw_is_unique)
-
-    if is_primary_key:
-        if raw_is_unique is False:
-            raise SchemaValidationError(
-                f"Primary key column {column_name} cannot declare is_unique=false"
-            )
-        if null_ratio != 0:
-            raise SchemaValidationError(f"Primary key column {column_name} must have null_ratio=0")
-
-        return OutputConstraints(
-            null_ratio=0.0,
-            is_unique=True,
-        )
 
     try:
         return OutputConstraints(
@@ -336,26 +314,26 @@ def build_generator_constraints(
     raise SchemaValidationError(f"Unsupported generator data type: {generator_data_type.value}")
 
 
-def build_foreign_key_spec(
+def build_reference_spec(
     column_name: str,
     parent_table_name: str,
     parent_column_name: str,
-    foreign_key_data: dict[str, Any],
-) -> TableForeignKeySpec:
+    reference_data: dict[str, Any],
+) -> TableReferenceSpec:
     try:
-        return TableForeignKeySpec(
+        return TableReferenceSpec(
             table_name=parent_table_name,
             column_name=parent_column_name,
-            relation_type=RelationType(
+            cardinality=ReferenceCardinality(
                 require_non_empty_string(
-                    foreign_key_data.get("relation_type"),
-                    f"Foreign key column {column_name} relation_type",
+                    reference_data.get("cardinality"),
+                    f"Reference column {column_name} cardinality",
                 ).upper()
             ),
         )
     except ValueError as exc:
         raise SchemaValidationError(
-            f"Unsupported relation_type for column {column_name}: {foreign_key_data.get('relation_type')}"
+            f"Unsupported cardinality for reference column {column_name}: {reference_data.get('cardinality')}"
         ) from exc
 
 
@@ -369,18 +347,16 @@ def build_generated_column_spec(
         column_data=column_data,
         constraints_data=constraints_data,
     )
-    is_primary_key = normalize_is_primary_key(column_name, column_data.get("is_primary_key"))
     normalized_allowed_values = normalize_allowed_values(column_name, constraints_data.get("allowed_values"))
     output_constraints = build_output_constraints(
         column_name=column_name,
         constraints_data=constraints_data,
-        is_primary_key=is_primary_key,
     )
     try:
         ensure_final_uniqueness_supported(
             source_type=generator_data_type,
             target_type=output_data_type,
-            requires_unique_output=is_primary_key or output_constraints.is_unique,
+            requires_unique_output=output_constraints.is_unique,
         )
         generator_constraints = build_generator_constraints(
             column_name=column_name,
@@ -392,7 +368,6 @@ def build_generated_column_spec(
             name=column_name,
             output_data_type=output_data_type,
             output_constraints=output_constraints,
-            is_primary_key=is_primary_key,
             generation=ColumnGenerationSpec(
                 source_data_type=generator_data_type,
                 constraints=generator_constraints,
