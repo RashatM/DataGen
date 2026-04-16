@@ -1,0 +1,21 @@
+from typing import Any
+
+from app.application.ports.generator_factory_port import DataGeneratorFactoryPort
+from app.application.ports.generator_port import DataGeneratorPort
+from app.domain.constraints import Constraints
+from app.domain.enums import DataType
+from app.infrastructure.errors import DataGeneratorNotRegisteredError
+
+
+class DataGeneratorFactory(DataGeneratorFactoryPort):
+    """Регистрирует и выдаёт генераторы по логическому source data type."""
+    def __init__(self):
+        self.data_generators: dict[DataType, DataGeneratorPort[Any]] = {}
+
+    def register(self, data_type: DataType, data_generator: DataGeneratorPort[Any]) -> None:
+        self.data_generators[data_type] = data_generator
+
+    def get(self, data_type: DataType) -> DataGeneratorPort[Constraints]:
+        if data_type in self.data_generators:
+            return self.data_generators[data_type]
+        raise DataGeneratorNotRegisteredError(f"Unknown generator data type: {data_type.value}")

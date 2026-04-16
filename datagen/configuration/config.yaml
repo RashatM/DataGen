@@ -1,0 +1,26 @@
+s3:
+  bucket: "synth-staging"
+  endpoint_url: "https://s3.example.com"
+  region_name: "us-east-1"
+  use_ssl: true
+  ssl_cert: ""
+
+artifact_retention:
+  min_retained_runs: 3
+
+airflow:
+  defaults:
+    dag_id: "datagen_synth_load"
+    dag_run_id_prefix: "datagen"
+    poll_interval_seconds: 30
+    dag_timeout_seconds: 3600
+    max_retries: 3
+    retry_backoff_base: 2
+  environments:
+    dev:
+      url: "https://airflow.dev.example.com"
+    test:
+      url: "https://airflow.test.example.com"
+    prod:
+      url: "https://airflow.prod.example.com"
+
