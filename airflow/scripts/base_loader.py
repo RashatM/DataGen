@@ -2,7 +2,23 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pyspark.sql import DataFrame, SparkSession
 import pyspark.sql.functions as f
-from pyspark.sql.types import StructType
+from pyspark.sql.types import (
+    BooleanType,
+    ByteType,
+    DataType,
+    DateType,
+    DecimalType,
+    DoubleType,
+    FloatType,
+    IntegerType,
+    LongType,
+    ShortType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampNTZType,
+    TimestampType,
+)
 
 from job_common import ComparisonContract, LoaderTableContract, logger, read_text_from_uri
 
@@ -67,6 +83,21 @@ class BaseSynthLoader(ABC):
     - материализовать raw comparison query result для своего движка
     """
 
+    TECHNICAL_FILLER_VALUES_BY_TYPE = {
+        ByteType: 1,
+        ShortType: 1,
+        IntegerType: 1,
+        LongType: 1,
+        FloatType: 0.1,
+        DoubleType: 0.1,
+        DecimalType: "0.1",
+        StringType: "N/A",
+        BooleanType: False,
+        DateType: "2040-01-01",
+        TimestampType: "2040-01-01 23:59:59",
+        TimestampNTZType: "2040-01-01 23:59:59",
+    }
+
     def __init__(self, spark: SparkSession, run_id: str) -> None:
         self.run_id = run_id
         self.spark = spark
@@ -128,11 +159,7 @@ class BaseSynthLoader(ABC):
         """Проверяет, что parquet содержит колонки контракта загрузки, и выбирает их в заданном порядке."""
         load_columns = table.columns
         available_columns = set(source_df.columns)
-        missing_columns = [
-            column_name
-            for column_name in load_columns
-            if column_name not in available_columns
-        ]
+        missing_columns = [column_name for column_name in load_columns if column_name not in available_columns]
         if missing_columns:
             missing_columns_text = ", ".join(missing_columns)
             raise RuntimeError(
@@ -142,13 +169,35 @@ class BaseSynthLoader(ABC):
 
         return source_df.select(*table.columns)
 
+    def technical_filler_expression(self, field: StructField, table_name: str):
+        """Строит техническое значение для отсутствующей non-nullable target-колонки."""
+        data_type = field.dataType
+        data_type_class = type(data_type)
+
+        if data_type_class in self.TECHNICAL_FILLER_VALUES_BY_TYPE:
+            filler_value = self.TECHNICAL_FILLER_VALUES_BY_TYPE[data_type_class]
+            return f.lit(filler_value).cast(data_type).alias(field.name)
+
+        raise RuntimeError(
+            f"Parquet is missing non-nullable target column for table={table_name}: "
+            f"{field.name}. Technical filler is not supported for type={self.format_type(data_type)}"
+        )
+
     @staticmethod
+    def format_type(data_type: DataType) -> str:
+        return data_type.simpleString()
+
     def align_to_target_schema(
+        self,
         load_df: DataFrame,
         table: LoaderTableContract,
         target_schema: StructType,
     ) -> DataFrame:
-        """Приводит колонки контракта загрузки к порядку и типам целевой схемы, заполняя nullable-пропуски через NULL."""
+        """Приводит DataFrame к target schema.
+
+        Отсутствующие nullable-колонки заполняются NULL.
+        Отсутствующие non-nullable-колонки заполняются техническими filler-значениями по target-типу.
+        """
         target_columns = {field.name for field in target_schema.fields}
         source_columns = set(load_df.columns)
 
@@ -161,6 +210,7 @@ class BaseSynthLoader(ABC):
             )
 
         expressions = []
+        technical_filler_columns = []
         for field in target_schema.fields:
             if field.name in source_columns:
                 expressions.append(f.col(field.name).cast(field.dataType).alias(field.name))
@@ -170,8 +220,21 @@ class BaseSynthLoader(ABC):
                 expressions.append(f.lit(None).cast(field.dataType).alias(field.name))
                 continue
 
-            raise RuntimeError(
-                f"Parquet is missing non-nullable target column for table={table.target_table_name}: {field.name}"
+            expressions.append(
+                self.technical_filler_expression(
+                    field=field,
+                    table_name=table.target_table_name,
+                )
+            )
+            technical_filler_columns.append(
+                f"{field.name}:{self.format_type(field.dataType)}"
+            )
+
+        if technical_filler_columns:
+            technical_filler_columns_text = ", ".join(technical_filler_columns)
+            logger.info(
+                f"Filled missing non-nullable target columns with technical values: "
+                f"table={table.target_table_name}, columns={technical_filler_columns_text}"
             )
 
         return load_df.select(*expressions)
