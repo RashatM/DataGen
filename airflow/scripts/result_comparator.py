@@ -182,13 +182,13 @@ class ComparisonColumnPlanner:
         if duplicates:
             raise ValueError(f"{engine} result contains duplicate column names: {duplicates}")
 
-    @staticmethod
     def build_common_columns(
+        self,
         hive_columns: list[str],
         iceberg_columns: list[str],
     ) -> list[str]:
-        ComparisonColumnPlanner.validate_unique_columns("Hive", hive_columns)
-        ComparisonColumnPlanner.validate_unique_columns("Iceberg", iceberg_columns)
+        self.validate_unique_columns("Hive", hive_columns)
+        self.validate_unique_columns("Iceberg", iceberg_columns)
         if set(hive_columns) != set(iceberg_columns):
             raise ValueError(
                 "Hive and Iceberg results must have identical comparable column names: "
