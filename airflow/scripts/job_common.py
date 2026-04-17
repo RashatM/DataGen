@@ -29,27 +29,27 @@ logger = create_logger()
 @dataclass
 class LoaderTableContract:
     """Контракт одной таблицы, уже подготовленный для конкретного loader-а и одного движка."""
-    target_table_name: str
-    data_uri: str
-    columns: tuple[str, ...]
-    write_mode: str
+    target_table_name: str  # Физическая target table, в которую пишет loader.
+    data_uri: str  # URI parquet-артефакта с синтетическими данными.
+    columns: tuple[str, ...]  # Колонки parquet, которые нужно загрузить в target table.
+    write_mode: str  # Режим записи: append, overwrite table или overwrite partitions.
 
 
 @dataclass
 class EngineLoadContract:
     """Engine-specific часть общего table payload до выбора конкретного loader-а."""
-    target_table_name: str
-    write_mode: str
-    columns: tuple[str, ...]
+    target_table_name: str  # Target table для конкретного движка: Hive или Iceberg.
+    write_mode: str  # Режим записи для этого движка.
+    columns: tuple[str, ...]  # Колонки, которые этот движок должен загрузить.
 
 
 @dataclass
 class PublishedTableContract:
     """Общий table entry из DAG payload с одним parquet-артефактом и двумя engine-specific load blocks."""
-    table_name: str
-    data_uri: str
-    hive: EngineLoadContract
-    iceberg: EngineLoadContract
+    table_name: str  # Логическое имя таблицы из DataGen contract.
+    data_uri: str  # Общий parquet-артефакт, опубликованный DataGen.
+    hive: EngineLoadContract  # Настройки загрузки этой таблицы в Hive.
+    iceberg: EngineLoadContract  # Настройки загрузки этой таблицы в Iceberg.
 
     def build_loader_contract(self, engine: str) -> LoaderTableContract:
         """Разворачивает общий table entry в load contract для выбранного loader-а."""
@@ -71,18 +71,18 @@ class PublishedTableContract:
 @dataclass
 class EngineComparisonContract:
     """Ссылки и настройки comparison для одного конкретного движка."""
-    query_uri: str
-    result_uri: str
-    excluded_columns: tuple[str, ...]
+    query_uri: str  # URI SQL-запроса, который надо выполнить в этом движке.
+    result_uri: str  # URI parquet-результата comparison query.
+    excluded_columns: tuple[str, ...]  # Колонки результата, исключаемые из сравнения.
 
 
 @dataclass
 class ComparisonContract:
     """Comparison-блок runtime-контракта DAG после парсинга из JSON."""
-    query_uris: dict[str, str]
-    result_uris: dict[str, str]
-    exclude_columns: dict[str, tuple[str, ...]]
-    report_uri: str
+    query_uris: dict[str, str]  # URI SQL-запросов по движкам.
+    result_uris: dict[str, str]  # URI parquet-результатов по движкам.
+    exclude_columns: dict[str, tuple[str, ...]]  # Пользовательские исключения колонок по движкам.
+    report_uri: str  # URI итогового JSON-отчета comparison.
 
     def get_engine_contract(self, engine: str) -> EngineComparisonContract:
         """Достаёт и валидирует comparison contract для запрошенного движка."""
@@ -104,9 +104,9 @@ class ComparisonContract:
 @dataclass
 class JobContract:
     """Полный runtime-контракт Spark job-а: run_id, таблицы и comparison-настройки."""
-    run_id: str
-    tables: list[PublishedTableContract]
-    comparison: ComparisonContract
+    run_id: str  # Идентификатор запуска DataGen.
+    tables: list[PublishedTableContract]  # Таблицы, которые нужно загрузить.
+    comparison: ComparisonContract  # Настройки SQL-сверки после загрузки.
 
     def build_load_contracts(self, engine: str) -> list[LoaderTableContract]:
         """Разворачивает таблицы в список load contracts для одного конкретного loader-а."""

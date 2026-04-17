@@ -28,33 +28,90 @@ from app.infrastructure.errors import SchemaValidationError
 DERIVATION_POLICY = DerivationPolicy()
 
 
+def normalize_column_name(value: Any, context: str) -> str:
+    return require_non_empty_string(value, context).strip().lower()
+
+
+def normalize_column_reference_fields(
+    *,
+    table_name: str,
+    column_name: str,
+    column_data: dict[str, Any],
+) -> dict[str, Any]:
+    normalized_column = dict(column_data)
+
+    raw_reference = optional_mapping(
+        normalized_column.get("reference"),
+        f"Column {table_name}.{column_name} reference",
+    )
+    if raw_reference:
+        normalized_reference = dict(raw_reference)
+        normalized_reference["column_name"] = normalize_column_name(
+            normalized_reference.get("column_name"),
+            f"Column {table_name}.{column_name} reference column_name",
+        )
+        normalized_column["reference"] = normalized_reference
+
+    raw_derive = optional_mapping(
+        normalized_column.get("derive"),
+        f"Column {table_name}.{column_name} derive",
+    )
+    if raw_derive:
+        normalized_derive = dict(raw_derive)
+        normalized_derive["source_column"] = normalize_column_name(
+            normalized_derive.get("source_column"),
+            f"Derived column {table_name}.{column_name} source_column",
+        )
+        normalized_column["derive"] = normalized_derive
+
+    return normalized_column
+
+
 class ContractTableCompiler:
     """Компилирует raw contract tables в доменные TableSpec по единому пути с поддержкой reference и derive."""
 
     def __init__(self, raw_tables: Sequence[Mapping[str, Any]]) -> None:
-        self.raw_tables = list(raw_tables)
+        self.raw_tables: list[dict[str, Any]] = []
         self.raw_tables_by_name: dict[str, dict[str, Any]] = {}
         self.raw_columns_by_table: dict[str, dict[str, dict[str, Any]]] = {}
         self.raw_columns_sequence_by_table: dict[str, list[dict[str, Any]]] = {}
         self.resolved_columns: dict[tuple[str, str], TableColumnSpec[Any]] = {}
         self.resolving_stack: set[tuple[str, str]] = set()
 
-        for table_data in self.raw_tables:
+        for table_data in raw_tables:
             table_name = require_non_empty_string(table_data.get("table_name"), "Table table_name")
             if table_name in self.raw_tables_by_name:
                 raise SchemaValidationError(f"Duplicate table_name in contract: {table_name}")
 
             raw_columns = require_list_of_mappings(table_data.get("columns"), f"Table {table_name} columns")
             raw_columns_by_name: dict[str, dict[str, Any]] = {}
+            raw_column_names_by_name: dict[str, str] = {}
+            normalized_raw_columns: list[dict[str, Any]] = []
             for column_data in raw_columns:
-                column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
+                raw_column_name = require_non_empty_string(column_data.get("name"), f"Table {table_name} column name")
+                column_name = normalize_column_name(raw_column_name, f"Table {table_name} column name")
                 if column_name in raw_columns_by_name:
-                    raise SchemaValidationError(f"Duplicate column in contract: {table_name}.{column_name}")
-                raw_columns_by_name[column_name] = column_data
+                    previous_column_name = raw_column_names_by_name[column_name]
+                    raise SchemaValidationError(
+                        f"Duplicate column in contract after case normalization: "
+                        f"{table_name}.{column_name} ({previous_column_name}, {raw_column_name})"
+                    )
+                normalized_column_data = normalize_column_reference_fields(
+                    table_name=table_name,
+                    column_name=column_name,
+                    column_data=dict(column_data),
+                )
+                normalized_column_data["name"] = column_name
+                raw_columns_by_name[column_name] = normalized_column_data
+                raw_column_names_by_name[column_name] = raw_column_name
+                normalized_raw_columns.append(normalized_column_data)
 
-            self.raw_tables_by_name[table_name] = dict(table_data)
+            normalized_table_data = dict(table_data)
+            normalized_table_data["columns"] = normalized_raw_columns
+            self.raw_tables.append(normalized_table_data)
+            self.raw_tables_by_name[table_name] = normalized_table_data
             self.raw_columns_by_table[table_name] = raw_columns_by_name
-            self.raw_columns_sequence_by_table[table_name] = list(raw_columns)
+            self.raw_columns_sequence_by_table[table_name] = normalized_raw_columns
 
     def get_raw_columns(self, table_name: str) -> list[dict[str, Any]]:
         raw_columns = self.raw_columns_sequence_by_table.get(table_name)
@@ -64,6 +121,7 @@ class ContractTableCompiler:
 
     def resolve_column(self, table_name: str, column_name: str) -> TableColumnSpec[Any]:
         """Собирает колонку один раз, рекурсивно подтягивая parent/source колонки для reference и derive."""
+        column_name = normalize_column_name(column_name, f"Column {table_name} column name")
         cache_key = (table_name, column_name)
         cached_column = self.resolved_columns.get(cache_key)
         if cached_column is not None:
@@ -254,6 +312,6 @@ def convert_to_generation_run(run_id: str, raw_tables: Sequence[Mapping[str, Any
     compiler = ContractTableCompiler(raw_tables)
     tables = [
         compiler.build_table_spec(cast(str, table_data["table_name"]))
-        for table_data in raw_tables
+        for table_data in compiler.raw_tables
     ]
     return GenerationRun(run_id=run_id, tables=tables)

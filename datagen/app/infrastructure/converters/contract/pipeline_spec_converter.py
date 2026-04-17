@@ -34,7 +34,7 @@ def convert_to_pipeline_execution_spec(raw_contract: Mapping[str, Any]) -> Pipel
     compiler = ContractTableCompiler(raw_tables)
 
     execution_tables: list[TableExecutionSpec] = []
-    for table_data in raw_tables:
+    for table_data in compiler.raw_tables:
         table_name = cast(str, table_data["table_name"])
         table_columns_data = compiler.get_raw_columns(table_name)
         table_spec = compiler.build_table_spec(table_name)
