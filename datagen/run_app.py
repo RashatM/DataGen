@@ -48,10 +48,6 @@ def run_app(
         workbook_specs = load_workbook_specs(
             input_path=Path(__file__).resolve().parent / "params",
         )
-        if len(workbook_specs) != 1:
-            raise SchemaValidationError(
-                f"Exactly one workbook spec is supported, got {len(workbook_specs)}"
-            )
 
         run_id = generate_run_id()
         pipeline_spec = convert_to_pipeline_execution_spec(workbook_specs[0])
@@ -67,28 +63,28 @@ def run_app(
         )
         pipeline_result = use_case.execute(run_id=run_id, pipeline_spec=pipeline_spec)
         execution_result = pipeline_result.execution_result
-        execution_details = f", execution_id={execution_result.execution_id}"
-        if execution_result.execution_url:
-            execution_details += f", execution_url={execution_result.execution_url}"
 
         if execution_result.is_success():
             logger.info(
                 f"Application finished: environment={env_name}, "
-                f"run_id={pipeline_result.run_id}, status={execution_result.status.value}"
+                f"status={execution_result.status.value}"
             )
             return
 
         if execution_result.is_wait_timeout():
+            execution_details = f"execution_id={execution_result.execution_id}"
+            if execution_result.execution_url:
+                execution_details += f", execution_url={execution_result.execution_url}"
             logger.warning(
                 f"Application finished without terminal DAG result: environment={env_name}, "
-                f"run_id={pipeline_result.run_id}, status={execution_result.status.value}, "
-                f"{execution_details.removeprefix(', ')}"
+                f"status={execution_result.status.value}, "
+                f"{execution_details}"
             )
             return
 
         logger.error(
             f"Application finished with error: environment={env_name}, "
-            f"run_id={pipeline_result.run_id}, status={execution_result.status.value}{execution_details}"
+            f"status={execution_result.status.value}"
         )
     except UserFacingError as exc:
         logger.error(f"Application failed: {exc}")

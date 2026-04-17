@@ -161,7 +161,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         execution_url = self.client.build_dag_run_url(dag_run_id)
         logger.info(
             f"DAG trigger requested: dag_id={self.client.dag_id()}, "
-            f"dag_run_id={dag_run_id}, tables_count={len(publications)}, airflow_url={execution_url}"
+            f"dag_run_id={dag_run_id}, tables_count={len(publications)}"
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
         logger.info(

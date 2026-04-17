@@ -655,12 +655,20 @@ def load_raw_tables(
 def load_workbook_specs(
     input_path: str | Path,
 ) -> list[dict[str, Any]]:
-    """Собирает новый workbook-spec формат из директории Excel-файлов с проверкой конфликтов по table_name."""
+    """Собирает новый workbook-spec формат из единственного Excel-файла."""
     issues: list[str] = []
     workbook_specs: list[dict[str, Any]] = []
     seen_tables: dict[str, str] = {}
 
-    for excel_path in find_excel_files(Path(input_path)):
+    excel_files = find_excel_files(Path(input_path))
+    if len(excel_files) != 1:
+        file_names = ", ".join(path.name for path in excel_files)
+        raise WorkbookSpecValidationError([
+            f"exactly one Excel file is supported in input path: {input_path}. "
+            f"Found {len(excel_files)} files: {file_names}"
+        ])
+
+    for excel_path in excel_files:
         try:
             workbook_spec = ExcelWorkbookSpecConverter(excel_path).convert()
         except WorkbookSpecValidationError as exc:

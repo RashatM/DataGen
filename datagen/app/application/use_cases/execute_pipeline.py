@@ -108,6 +108,12 @@ class ExecutePipelineUseCase:
                     diagnostics_prefix=artifact_layout.diagnostics_prefix,
                     expected_run_id=artifact_layout.run_id,
                 )
+                if diagnostics:
+                    diagnostic_tasks = ", ".join(diagnostic.task_id for diagnostic in diagnostics)
+                    logger.info(
+                        f"Execution diagnostics found: "
+                        f"diagnostics_count={len(diagnostics)}, tasks={diagnostic_tasks}"
+                    )
             except Exception:
                 logger.exception(f"Failed to load execution diagnostics: run_id={run_id}")
 
