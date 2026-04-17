@@ -83,6 +83,15 @@ class EngineColumnSelection:
     excluded_columns: list[str]
 
 
+def build_column_name_mismatch_message(hive_columns: list[str], iceberg_columns: list[str]) -> str:
+    missing_in_hive = sorted(set(iceberg_columns) - set(hive_columns))
+    missing_in_iceberg = sorted(set(hive_columns) - set(iceberg_columns))
+    return (
+        "Hive and Iceberg results must have identical comparable column names: "
+        f"missing_in_hive={missing_in_hive}, missing_in_iceberg={missing_in_iceberg}"
+    )
+
+
 class ComparisonReportBuilder:
     """Строит финальный JSON-отчёт comparison_result.json из уже посчитанных метрик."""
     @staticmethod
@@ -190,10 +199,7 @@ class ComparisonColumnPlanner:
         self.validate_unique_columns("Hive", hive_columns)
         self.validate_unique_columns("Iceberg", iceberg_columns)
         if set(hive_columns) != set(iceberg_columns):
-            raise ValueError(
-                "Hive and Iceberg results must have identical comparable column names: "
-                f"hive={sorted(hive_columns)}, iceberg={sorted(iceberg_columns)}"
-            )
+            raise ValueError(build_column_name_mismatch_message(hive_columns, iceberg_columns))
         return sorted(hive_columns)
 
     def find_temporal_columns(
@@ -299,10 +305,7 @@ class ComparisonDataFrameNormalizer:
     def validate_schemas(hive_df: DataFrame, iceberg_df: DataFrame) -> None:
         """Проверяет, что после всех исключений и нормализации обе стороны сравниваются по одинаковой схеме."""
         if set(hive_df.columns) != set(iceberg_df.columns):
-            raise ValueError(
-                "Hive and Iceberg results must have identical comparable column names: "
-                f"hive={sorted(hive_df.columns)}, iceberg={sorted(iceberg_df.columns)}"
-            )
+            raise ValueError(build_column_name_mismatch_message(hive_df.columns, iceberg_df.columns))
         hive_types = {field.name: field.dataType.simpleString() for field in hive_df.schema.fields}
         iceberg_types = {field.name: field.dataType.simpleString() for field in iceberg_df.schema.fields}
         mismatched = {

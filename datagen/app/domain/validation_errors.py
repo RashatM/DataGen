@@ -1,30 +1,37 @@
-class InvalidEntityError(ValueError):
+from app.shared.errors import UserFacingError
+
+
+class DomainError(UserFacingError):
+    """Base class for expected domain-level validation and generation errors."""
+
+
+class InvalidEntityError(DomainError):
     """Raised when a domain entity has invalid structural state (empty names, missing fields, bad counts, wrong mode)."""
 
 
-class InvalidReferenceError(ValueError):
+class InvalidReferenceError(DomainError):
     """Raised when a reference points to a missing table or column."""
 
 
-class InvalidConstraintsError(ValueError):
+class InvalidConstraintsError(DomainError):
     """Raised when column constraints are malformed or incompatible."""
 
 
-class InvalidDerivationError(ValueError):
+class InvalidDerivationError(DomainError):
     """Raised when derived column rules or source contracts are invalid."""
 
 
-class UnsatisfiableConstraintsError(ValueError):
+class UnsatisfiableConstraintsError(DomainError):
     """Raised when constraints are valid but impossible to satisfy for requested rows."""
 
 
-class ValueConversionError(ValueError):
+class ValueConversionError(DomainError):
     """Raised when a concrete value cannot be converted to the requested output type."""
 
 
-class DuplicateColumnSpecInTableError(ValueError):
+class DuplicateColumnSpecInTableError(DomainError):
     """Поднимается, когда спецификация таблицы содержит повторяющиеся имена колонок."""
 
 
-class DuplicateTableSpecInRunError(ValueError):
+class DuplicateTableSpecInRunError(DomainError):
     """Поднимается, когда один run пытается содержать две таблицы с одинаковым table_name."""

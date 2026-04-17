@@ -41,6 +41,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
         self,
         run_id: str,
         dag_run_state: DagRunState,
+        execution_url: str,
         total_seconds: int | None = None,
     ) -> ExecutionResult:
         """Преобразует сырое состояние DAG-run в application-level ExecutionResult с логированием."""
@@ -69,13 +70,14 @@ class AirflowDagRunner(ExecutionRunnerPort):
             run_id=run_id,
             execution_id=dag_run_state.dag_run_id,
             status=status,
-            execution_url=self.client.build_dag_run_url(dag_run_state.dag_run_id),
+            execution_url=execution_url,
         )
 
     def poll_until_terminal(
         self,
         run_id: str,
         dag_run_id: str,
+        execution_url: str,
         timeout_seconds: int,
     ) -> ExecutionResult:
         """Опрашивает Airflow до terminal state или таймаута и пишет heartbeat-логи на длинных запусках."""
@@ -93,6 +95,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
                 return self.to_execution_result(
                     run_id=run_id,
                     dag_run_state=dag_run_state,
+                    execution_url=execution_url,
                     total_seconds=int(now - start),
                 )
 
@@ -125,7 +128,6 @@ class AirflowDagRunner(ExecutionRunnerPort):
                 last_heartbeat_at = now
             time.sleep(poll_interval)
 
-        execution_url = self.client.build_dag_run_url(dag_run_id)
         logger.warning(
             f"DAG wait timeout reached. The DAG may still be running in Airflow: "
             f"dag_run_id={dag_run_id}, timeout={timeout_seconds}s, airflow_url={execution_url}"
@@ -154,17 +156,19 @@ class AirflowDagRunner(ExecutionRunnerPort):
             comparison_query_uris=comparison_query_uris,
         )
 
+        execution_url = self.client.build_dag_run_url(dag_run_id)
         logger.info(
             f"DAG trigger requested: dag_id={self.client.dag_id()}, "
-            f"dag_run_id={dag_run_id}, tables_count={len(publications)}"
+            f"dag_run_id={dag_run_id}, tables_count={len(publications)}, airflow_url={execution_url}"
         )
         self.client.trigger_dag(dag_run_id=dag_run_id, payload=payload)
         logger.info(
-            f"DAG trigger accepted: dag_run_id={dag_run_id}, timeout={timeout_seconds}s"
+            f"DAG trigger accepted: dag_run_id={dag_run_id}, timeout={timeout_seconds}s, airflow_url={execution_url}"
         )
 
         return self.poll_until_terminal(
             run_id=artifact_layout.run_id,
             dag_run_id=dag_run_id,
+            execution_url=execution_url,
             timeout_seconds=timeout_seconds,
         )

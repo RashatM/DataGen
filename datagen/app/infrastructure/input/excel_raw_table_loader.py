@@ -37,6 +37,7 @@ from app.infrastructure.input.excel_loader_support import (
     row_has_data_by_fields,
 )
 from app.shared.logger import input_logger
+from app.shared.errors import UserFacingError
 
 REFERENCE_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
 logger = input_logger
@@ -79,7 +80,7 @@ class TableMeta:
         return f"{self.schema_name}.{self.table_name}"
 
 
-class WorkbookValidationError(ValueError):
+class WorkbookValidationError(UserFacingError):
     """Ошибки валидации legacy workbook-формата с агрегацией нескольких проблем сразу."""
 
     def __init__(self, issues: list[str]):
@@ -101,7 +102,7 @@ class WorkbookTableMeta:
         return self.table_name
 
 
-class WorkbookSpecValidationError(ValueError):
+class WorkbookSpecValidationError(UserFacingError):
     """Ошибки валидации нового workbook-spec формата с накоплением всех найденных проблем."""
 
     def __init__(self, issues: list[str]):

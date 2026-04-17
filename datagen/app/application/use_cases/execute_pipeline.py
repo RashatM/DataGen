@@ -8,6 +8,7 @@ from app.application.services.comparison_service import ComparisonReportService
 from app.application.services.generation_service import DataGenerationService
 from app.application.services.publication_service import ArtifactPublicationService
 from app.domain.entities import GenerationRun
+from app.domain.validation_errors import DomainError
 from app.shared.logger import pipeline_logger
 
 logger = pipeline_logger
@@ -69,6 +70,10 @@ class ExecutePipelineUseCase:
                 artifact_layout=artifact_layout,
                 comparison_spec=pipeline_spec.comparison,
             )
+        except DomainError as exc:
+            logger.error(f"Pipeline artifact staging failed: run_id={run_id}, error={exc}")
+            self.artifact_publication_service.cleanup_run_artifacts(artifact_layout=artifact_layout)
+            raise
         except Exception:
             logger.exception(f"Pipeline artifact staging failed: run_id={run_id}")
             self.artifact_publication_service.cleanup_run_artifacts(artifact_layout=artifact_layout)

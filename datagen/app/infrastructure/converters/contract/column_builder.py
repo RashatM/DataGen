@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, cast
 
 from app.domain.constraints import (
@@ -14,7 +14,7 @@ from app.domain.constraints import (
 from app.domain.conversion_rules import ensure_conversion_supported, ensure_final_uniqueness_supported
 from app.domain.entities import ColumnGenerationSpec, TableColumnSpec, TableReferenceSpec
 from app.domain.enums import CaseMode, CharacterSet, DataType, ReferenceCardinality
-from app.domain.validation_errors import InvalidConstraintsError
+from app.domain.validation_errors import DomainError, InvalidConstraintsError
 from app.infrastructure.converters.contract.fields import (
     get_constraints_data,
     optional_string,
@@ -32,6 +32,67 @@ LEGACY_MAPPING = {
 }
 
 REFERENCE_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
+DEFAULT_INT_MIN_VALUE = 0
+DEFAULT_INT_MAX_VALUE = 1000
+DEFAULT_FLOAT_MIN_VALUE = 0.0
+DEFAULT_FLOAT_MAX_VALUE = 1000.0
+DEFAULT_FLOAT_PRECISION = 2
+
+
+def resolve_unique_int_default_max(
+    *,
+    min_value: int,
+    total_rows: int,
+    is_unique: bool,
+) -> int:
+    if not is_unique or total_rows <= 0:
+        return DEFAULT_INT_MAX_VALUE
+
+    required_max_value = min_value + total_rows - 1
+    return max(DEFAULT_INT_MAX_VALUE, required_max_value)
+
+
+def resolve_unique_float_default_max(
+    *,
+    min_value: float,
+    precision: int,
+    total_rows: int,
+    is_unique: bool,
+) -> float:
+    if not is_unique or precision < 0 or total_rows <= 0:
+        return DEFAULT_FLOAT_MAX_VALUE
+
+    scale = 10 ** precision
+    required_max_value = min_value + ((total_rows - 1) / scale)
+    return max(DEFAULT_FLOAT_MAX_VALUE, required_max_value)
+
+
+def resolve_unique_date_default_max(
+    *,
+    min_date: date,
+    default_max_date: date,
+    total_rows: int,
+    is_unique: bool,
+) -> date:
+    if not is_unique or total_rows <= 0:
+        return default_max_date
+
+    required_max_date = min_date + timedelta(days=total_rows - 1)
+    return max(default_max_date, required_max_date)
+
+
+def resolve_unique_timestamp_default_max(
+    *,
+    min_timestamp: datetime,
+    default_max_timestamp: datetime,
+    total_rows: int,
+    is_unique: bool,
+) -> datetime:
+    if not is_unique or total_rows <= 0:
+        return default_max_timestamp
+
+    required_max_timestamp = min_timestamp + timedelta(seconds=total_rows - 1)
+    return max(default_max_timestamp, required_max_timestamp)
 
 
 def normalize_allowed_values(column_name: str, raw_allowed_values: Any) -> tuple[Any, ...] | None:
@@ -141,6 +202,8 @@ def build_int_constraints(
     column_name: str,
     constraints_data: dict[str, Any],
     allowed_values: tuple[Any, ...] | None,
+    output_constraints: OutputConstraints,
+    total_rows: int,
 ) -> IntConstraints:
     digits_count = constraints_data.get("digits_count")
     min_value = constraints_data.get("min_value")
@@ -172,8 +235,21 @@ def build_int_constraints(
         else:
             min_value, max_value = 10 ** (digits_count - 1), 10 ** digits_count - 1
     else:
-        min_value = 0 if min_value is None else require_integer(min_value, f"Column {column_name} min_value")
-        max_value = 1000 if max_value is None else require_integer(max_value, f"Column {column_name} max_value")
+        min_value = (
+            DEFAULT_INT_MIN_VALUE
+            if min_value is None else require_integer(min_value, f"Column {column_name} min_value")
+        )
+        if max_value is None:
+            if allowed_values:
+                max_value = DEFAULT_INT_MAX_VALUE
+            else:
+                max_value = resolve_unique_int_default_max(
+                    min_value=min_value,
+                    total_rows=total_rows,
+                    is_unique=output_constraints.is_unique,
+                )
+        else:
+            max_value = require_integer(max_value, f"Column {column_name} max_value")
 
     try:
         constraints = IntConstraints(
@@ -237,6 +313,8 @@ def build_generator_constraints(
     generator_data_type: DataType,
     constraints_data: dict[str, Any],
     allowed_values: tuple[Any, ...] | None,
+    output_constraints: OutputConstraints,
+    total_rows: int,
 ) -> Any:
     if generator_data_type == DataType.STRING:
         return build_string_constraints(
@@ -250,15 +328,38 @@ def build_generator_constraints(
             column_name=column_name,
             constraints_data=constraints_data,
             allowed_values=allowed_values,
+            output_constraints=output_constraints,
+            total_rows=total_rows,
         )
 
     if generator_data_type == DataType.FLOAT:
+        min_value = require_number(
+            constraints_data.get("min_value", DEFAULT_FLOAT_MIN_VALUE),
+            f"Column {column_name} min_value",
+        )
+        precision = require_integer(
+            constraints_data.get("precision", DEFAULT_FLOAT_PRECISION),
+            f"Column {column_name} precision",
+        )
+        raw_max_value = constraints_data.get("max_value")
+        if raw_max_value is None:
+            if allowed_values:
+                max_value = DEFAULT_FLOAT_MAX_VALUE
+            else:
+                max_value = resolve_unique_float_default_max(
+                    min_value=min_value,
+                    precision=precision,
+                    total_rows=total_rows,
+                    is_unique=output_constraints.is_unique,
+                )
+        else:
+            max_value = require_number(raw_max_value, f"Column {column_name} max_value")
         try:
             return FloatConstraints(
                 allowed_values=allowed_values,
-                min_value=require_number(constraints_data.get("min_value", 0), f"Column {column_name} min_value"),
-                max_value=require_number(constraints_data.get("max_value", 1000), f"Column {column_name} max_value"),
-                precision=require_integer(constraints_data.get("precision", 2), f"Column {column_name} precision"),
+                min_value=min_value,
+                max_value=max_value,
+                precision=precision,
             )
         except InvalidConstraintsError as exc:
             raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
@@ -270,13 +371,28 @@ def build_generator_constraints(
             tuple(parse_date_literal(column_name, "allowed_values", value) for value in allowed_values)
             if allowed_values else None
         )
+        current_year = date.today().year
+        resolved_min_date = (
+            parse_date_literal(column_name, "min_value", min_date) if min_date is not None
+            else date(current_year, 1, 1)
+        )
+        default_max_date = date(current_year, 12, 31)
+        if max_date is not None:
+            resolved_max_date = parse_date_literal(column_name, "max_value", max_date)
+        elif allowed_values:
+            resolved_max_date = default_max_date
+        else:
+            resolved_max_date = resolve_unique_date_default_max(
+                min_date=resolved_min_date,
+                default_max_date=default_max_date,
+                total_rows=total_rows,
+                is_unique=output_constraints.is_unique,
+            )
         try:
             return DateConstraints(
                 allowed_values=normalized_date_values,
-                min_date=parse_date_literal(column_name, "min_value", min_date) if min_date is not None
-                else date(date.today().year, 1, 1),
-                max_date=parse_date_literal(column_name, "max_value", max_date) if max_date is not None
-                else date(date.today().year, 12, 31),
+                min_date=resolved_min_date,
+                max_date=resolved_max_date,
                 date_format=require_non_empty_string(
                     constraints_data.get("date_format", "%Y-%m-%d"),
                     f"Column {column_name} date_format",
@@ -293,13 +409,27 @@ def build_generator_constraints(
             if allowed_values else None
         )
         current_year = datetime.now().year
+        resolved_min_timestamp = (
+            parse_timestamp_literal(column_name, "min_timestamp", min_timestamp)
+            if min_timestamp is not None else datetime(current_year, 1, 1, 0, 0, 0)
+        )
+        default_max_timestamp = datetime(current_year, 12, 31, 23, 59, 59)
+        if max_timestamp is not None:
+            resolved_max_timestamp = parse_timestamp_literal(column_name, "max_timestamp", max_timestamp)
+        elif allowed_values:
+            resolved_max_timestamp = default_max_timestamp
+        else:
+            resolved_max_timestamp = resolve_unique_timestamp_default_max(
+                min_timestamp=resolved_min_timestamp,
+                default_max_timestamp=default_max_timestamp,
+                total_rows=total_rows,
+                is_unique=output_constraints.is_unique,
+            )
         try:
             return TimestampConstraints(
                 allowed_values=normalized_timestamp_values,
-                min_timestamp=parse_timestamp_literal(column_name, "min_timestamp", min_timestamp)
-                if min_timestamp is not None else datetime(current_year, 1, 1, 0, 0, 0),
-                max_timestamp=parse_timestamp_literal(column_name, "max_timestamp", max_timestamp)
-                if max_timestamp is not None else datetime(current_year, 12, 31, 23, 59, 59),
+                min_timestamp=resolved_min_timestamp,
+                max_timestamp=resolved_max_timestamp,
                 timestamp_format=require_non_empty_string(
                     constraints_data.get("timestamp_format", "%Y-%m-%d %H:%M:%S"),
                     f"Column {column_name} timestamp_format",
@@ -339,20 +469,21 @@ def build_reference_spec(
 
 def build_generated_column_spec(
     column_data: Mapping[str, Any],
+    total_rows: int,
 ) -> TableColumnSpec[Any]:
     column_name = cast(str, column_data["name"])
-    constraints_data = get_constraints_data(column_name, column_data)
-    generator_data_type, output_data_type = resolve_data_types(
-        column_name=column_name,
-        column_data=column_data,
-        constraints_data=constraints_data,
-    )
-    normalized_allowed_values = normalize_allowed_values(column_name, constraints_data.get("allowed_values"))
-    output_constraints = build_output_constraints(
-        column_name=column_name,
-        constraints_data=constraints_data,
-    )
     try:
+        constraints_data = get_constraints_data(column_name, column_data)
+        generator_data_type, output_data_type = resolve_data_types(
+            column_name=column_name,
+            column_data=column_data,
+            constraints_data=constraints_data,
+        )
+        normalized_allowed_values = normalize_allowed_values(column_name, constraints_data.get("allowed_values"))
+        output_constraints = build_output_constraints(
+            column_name=column_name,
+            constraints_data=constraints_data,
+        )
         ensure_final_uniqueness_supported(
             source_type=generator_data_type,
             target_type=output_data_type,
@@ -363,6 +494,8 @@ def build_generated_column_spec(
             generator_data_type=generator_data_type,
             constraints_data=constraints_data,
             allowed_values=normalized_allowed_values,
+            output_constraints=output_constraints,
+            total_rows=total_rows,
         )
         return TableColumnSpec(
             name=column_name,
@@ -375,5 +508,7 @@ def build_generated_column_spec(
         )
     except SchemaValidationError:
         raise
+    except DomainError as exc:
+        raise SchemaValidationError(f"Column {column_name}: {exc}") from exc
     except ValueError as exc:
         raise SchemaValidationError(f"Column {column_name}: {exc}") from exc

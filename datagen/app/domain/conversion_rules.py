@@ -1,12 +1,13 @@
 from app.domain.enums import DataType
+from app.domain.validation_errors import DomainError
 
 
-class ConversionNotAllowedError(ValueError):
+class ConversionNotAllowedError(DomainError):
     """Поднимается, когда система вообще не поддерживает requested source -> target conversion."""
     pass
 
 
-class LossyUniqueOutputConversionError(ValueError):
+class LossyUniqueOutputConversionError(DomainError):
     """Поднимается, когда conversion допустим, но ломает гарантию уникальности итогового столбца."""
     pass
 

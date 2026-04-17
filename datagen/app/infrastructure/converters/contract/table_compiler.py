@@ -9,7 +9,7 @@ from app.domain.entities import (
     TableSpec,
 )
 from app.domain.enums import DataType, DerivationRule
-from app.domain.validation_errors import InvalidDerivationError
+from app.domain.validation_errors import DomainError, InvalidDerivationError
 from app.infrastructure.converters.contract.column_builder import (
     build_generated_column_spec,
     build_output_constraints,
@@ -119,6 +119,12 @@ class ContractTableCompiler:
             raise SchemaValidationError(f"Unknown table referenced in contract: {table_name}")
         return raw_columns
 
+    def get_table_total_rows(self, table_name: str) -> int:
+        raw_table = self.raw_tables_by_name.get(table_name)
+        if raw_table is None:
+            raise SchemaValidationError(f"Unknown table referenced in contract: {table_name}")
+        return require_integer(raw_table.get("total_rows"), f"Table {table_name} total_rows")
+
     def resolve_column(self, table_name: str, column_name: str) -> TableColumnSpec[Any]:
         """Собирает колонку один раз, рекурсивно подтягивая parent/source колонки для reference и derive."""
         column_name = normalize_column_name(column_name, f"Column {table_name} column name")
@@ -146,11 +152,14 @@ class ContractTableCompiler:
                 table_name=table_name,
                 column_name=column_name,
                 column_data=column_data,
+                total_rows=self.get_table_total_rows(table_name),
             )
             self.resolved_columns[cache_key] = resolved_column
             return resolved_column
         except SchemaValidationError:
             raise
+        except DomainError as exc:
+            raise SchemaValidationError(str(exc)) from exc
         except ValueError as exc:
             raise SchemaValidationError(str(exc)) from exc
         finally:
@@ -161,6 +170,7 @@ class ContractTableCompiler:
         table_name: str,
         column_name: str,
         column_data: Mapping[str, Any],
+        total_rows: int,
     ) -> TableColumnSpec[Any]:
         constraints_data = get_constraints_data(column_name, column_data)
         raw_reference = optional_mapping(
@@ -191,7 +201,7 @@ class ContractTableCompiler:
                 constraints_data=constraints_data,
                 raw_derive=raw_derive,
             )
-        return build_generated_column_spec(column_data=column_data)
+        return build_generated_column_spec(column_data=column_data, total_rows=total_rows)
 
     def build_reference_column(
         self,
@@ -298,6 +308,8 @@ class ContractTableCompiler:
             )
         except SchemaValidationError:
             raise
+        except DomainError as exc:
+            raise SchemaValidationError(str(exc)) from exc
         except ValueError as exc:
             raise SchemaValidationError(str(exc)) from exc
 

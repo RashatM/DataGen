@@ -1,3 +1,6 @@
+from app.shared.errors import UserFacingError
+
+
 class InfrastructureConfigurationError(ValueError):
     """Raised when infrastructure components are wired incorrectly."""
 
@@ -18,7 +21,7 @@ class UnsupportedOutputDataTypeError(InfrastructureConfigurationError):
     """Raised when DDL mapping has no representation for an output data type."""
 
 
-class SchemaValidationError(ValueError):
+class SchemaValidationError(UserFacingError):
     """Raised when input schema definition is invalid."""
 
 
