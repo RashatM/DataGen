@@ -19,6 +19,11 @@ ALLOWED_WRITE_MODES = {
     "APPEND",
 }
 ENGINE_NAMES = ("hive", "iceberg")
+DIAGNOSTIC_TASK_IDS = (
+    "load_iceberg_tables",
+    "load_hive_tables",
+    "compare_query_results",
+)
 
 BASE_LOADER_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/base_loader.py"
 JOB_COMMON_SCRIPT = "/opt/airflow/dags/repo/scripts/platform_services/datagen/job_common.py"
@@ -110,12 +115,23 @@ def validate_comparison_contract(conf: dict[str, Any]) -> None:
             raise ValueError(f"comparison.exclude_columns.{engine} must be a list")
 
 
+def validate_diagnostics_contract(conf: dict[str, Any]) -> None:
+    diagnostics = require_object(conf.get("diagnostics"), "diagnostics")
+    uris = require_object(diagnostics.get("uris"), "diagnostics.uris")
+    for task_id in DIAGNOSTIC_TASK_IDS:
+        require_non_empty_string(
+            uris.get(task_id),
+            f"diagnostics.uris.{task_id}",
+        )
+
+
 def validate_contract(**context) -> None:
     conf = context["dag_run"].conf or {}
 
     require_non_empty_string(conf.get("run_id"), "run_id")
     validate_table_contracts(conf)
     validate_comparison_contract(conf)
+    validate_diagnostics_contract(conf)
 
 
 def get_iceberg_spark_config(**context) -> dict[str, str]:
@@ -224,6 +240,8 @@ with DAG(
         application_args=[
             "--app_name", "datagen_load_iceberg_{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
+            "--task_id", "{{ task.task_id }}",
+            "--diagnostic_uri", "{{ dag_run.conf['diagnostics']['uris'][task.task_id] }}",
         ],
     )
 
@@ -238,6 +256,8 @@ with DAG(
         application_args=[
             "--app_name", "datagen_load_hive_{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
+            "--task_id", "{{ task.task_id }}",
+            "--diagnostic_uri", "{{ dag_run.conf['diagnostics']['uris'][task.task_id] }}",
         ],
     )
 
@@ -252,6 +272,8 @@ with DAG(
         application_args=[
             "--app_name", "datagen_compare_{{ dag_run.conf['run_id'] }}",
             "--contract", "{{ dag_run.conf | tojson }}",
+            "--task_id", "{{ task.task_id }}",
+            "--diagnostic_uri", "{{ dag_run.conf['diagnostics']['uris'][task.task_id] }}",
         ],
     )
 
@@ -260,12 +282,6 @@ with DAG(
         trigger_rule="all_success",
     )
 
-    job_failed = EmptyOperator(
-        task_id="sys_job_failed",
-        trigger_rule="one_failed",
-    )
-
     # Загрузка таблиц по engine идёт параллельно, потом сравниваются подготовленные query results.
     start_task >> validate_contract_task >> [load_iceberg_tables_task, load_hive_tables_task]
     [load_iceberg_tables_task, load_hive_tables_task] >> compare_query_results_task >> job_succeeded
-    [load_iceberg_tables_task, load_hive_tables_task, compare_query_results_task] >> job_failed

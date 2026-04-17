@@ -78,10 +78,7 @@ class AirflowClient:
 
     def get_failed_task_ids(self, dag_run_id: str) -> list[str]:
         """Возвращает отсортированный список task_id, завершившихся со state=failed."""
-        url = (
-            f"{self.config.url}/api/v1/dags/"
-            f"{self.config.dag_id}/dagRuns/{dag_run_id}/taskInstances"
-        )
+        url = f"{self.config.url}/api/v1/dags/{self.config.dag_id}/dagRuns/{dag_run_id}/taskInstances"
         raw = self.request_with_retry("GET", url=url)
 
         if isinstance(raw, dict):

@@ -19,7 +19,14 @@ from pyspark.sql.types import (
     StructType,
 )
 
-from job_common import ComparisonContract, logger, parse_job_contract, write_json_to_uri
+from job_common import (
+    ComparisonContract,
+    JobUserFacingError,
+    logger,
+    parse_job_contract,
+    run_with_diagnostic,
+    write_json_to_uri,
+)
 
 
 @contextmanager
@@ -189,7 +196,10 @@ class ComparisonColumnPlanner:
 
         duplicates = sorted(duplicate_columns)
         if duplicates:
-            raise ValueError(f"{engine} result contains duplicate column names: {duplicates}")
+            raise JobUserFacingError(
+                code="COMPARISON_DUPLICATE_COLUMNS",
+                message=f"{engine} result contains duplicate column names: {duplicates}",
+            )
 
     def build_common_columns(
         self,
@@ -199,7 +209,10 @@ class ComparisonColumnPlanner:
         self.validate_unique_columns("Hive", hive_columns)
         self.validate_unique_columns("Iceberg", iceberg_columns)
         if set(hive_columns) != set(iceberg_columns):
-            raise ValueError(build_column_name_mismatch_message(hive_columns, iceberg_columns))
+            raise JobUserFacingError(
+                code="COMPARISON_COLUMN_NAMES_MISMATCH",
+                message=build_column_name_mismatch_message(hive_columns, iceberg_columns),
+            )
         return sorted(hive_columns)
 
     def find_temporal_columns(
@@ -273,9 +286,12 @@ class ComparisonDataFrameNormalizer:
         data_type = schema_field.dataType
 
         if isinstance(data_type, (ArrayType, MapType, StructType)):
-            raise ValueError(
-                f"Complex type is not supported for comparison: "
-                f"column={schema_field.name}, type={data_type.simpleString()}"
+            raise JobUserFacingError(
+                code="COMPARISON_UNSUPPORTED_TYPE",
+                message=(
+                    f"Complex type is not supported for comparison: "
+                    f"column={schema_field.name}, type={data_type.simpleString()}"
+                ),
             )
 
         if isinstance(data_type, (ByteType, ShortType, IntegerType, LongType)):
@@ -305,14 +321,20 @@ class ComparisonDataFrameNormalizer:
     def validate_schemas(hive_df: DataFrame, iceberg_df: DataFrame) -> None:
         """Проверяет, что после всех исключений и нормализации обе стороны сравниваются по одинаковой схеме."""
         if set(hive_df.columns) != set(iceberg_df.columns):
-            raise ValueError(build_column_name_mismatch_message(hive_df.columns, iceberg_df.columns))
+            raise JobUserFacingError(
+                code="COMPARISON_COLUMN_NAMES_MISMATCH",
+                message=build_column_name_mismatch_message(hive_df.columns, iceberg_df.columns),
+            )
         hive_types = {field.name: field.dataType.simpleString() for field in hive_df.schema.fields}
         iceberg_types = {field.name: field.dataType.simpleString() for field in iceberg_df.schema.fields}
         mismatched = {
             col: (hive_types[col], iceberg_types[col]) for col in hive_types if hive_types[col] != iceberg_types[col]
         }
         if mismatched:
-            raise ValueError(f"Schema mismatch after normalization and temporal exclusion: {mismatched}")
+            raise JobUserFacingError(
+                code="COMPARISON_SCHEMA_MISMATCH",
+                message=f"Schema mismatch after normalization and temporal exclusion: {mismatched}",
+            )
 
 
 class ComparisonMetricsCalculator:
@@ -432,6 +454,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="DataGen: compare Hive and Iceberg query results")
     parser.add_argument("--app_name", required=True)
     parser.add_argument("--contract", required=True)
+    parser.add_argument("--task_id", required=True)
+    parser.add_argument("--diagnostic_uri", required=True)
     return parser.parse_args()
 
 
@@ -439,10 +463,19 @@ if __name__ == "__main__":
     args = parse_args()
     contract = parse_job_contract(args.contract)
     with open_spark_session(args.app_name) as spark_session:
-        ResultComparator(
+        def run_job() -> None:
+            ResultComparator(
+                spark=spark_session,
+                report_builder=ComparisonReportBuilder(),
+            ).compare_results(
+                run_id=contract.run_id,
+                comparison_contract=contract.comparison,
+            )
+
+        run_with_diagnostic(
             spark=spark_session,
-            report_builder=ComparisonReportBuilder(),
-        ).compare_results(
+            diagnostic_uri=args.diagnostic_uri,
             run_id=contract.run_id,
-            comparison_contract=contract.comparison,
+            task_id=args.task_id,
+            action=run_job,
         )

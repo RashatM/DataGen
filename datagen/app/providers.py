@@ -3,6 +3,7 @@ import random
 from mypy_boto3_s3 import S3Client
 
 from app.application.ports.comparison_repository_port import ComparisonReportRepositoryPort
+from app.application.ports.diagnostic_repository_port import ExecutionDiagnosticRepositoryPort
 from app.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.application.ports.publication_repository_port import ArtifactPublicationRepositoryPort
 from app.application.services.comparison_service import ComparisonReportService
@@ -31,6 +32,7 @@ from app.infrastructure.generators.timestamp_generator import TimestampDataGener
 from app.infrastructure.graph.networkx_table_dependency_planner import NetworkXTableDependencyPlanner
 from app.infrastructure.parquet.arrow_schema_builder import ArrowSchemaBuilder
 from app.infrastructure.repositories.s3_comparison_repository import S3ComparisonReportRepository
+from app.infrastructure.repositories.s3_diagnostic_repository import S3ExecutionDiagnosticRepository
 from app.infrastructure.repositories.s3_publication_repository import S3PublicationRepository
 from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 from app.application.ports.value_converter_port import ValueConverterPort
@@ -99,6 +101,12 @@ def provide_comparison_report_repository(
     return S3ComparisonReportRepository(object_storage=object_storage)
 
 
+def provide_diagnostic_repository(
+        object_storage: S3StorageAdapter,
+) -> ExecutionDiagnosticRepositoryPort:
+    return S3ExecutionDiagnosticRepository(object_storage=object_storage)
+
+
 def provide_artifact_publication_service(
         object_storage: S3StorageAdapter,
 ) -> ArtifactPublicationService:
@@ -121,3 +129,4 @@ def provide_execution_runner(
 def provide_comparison_report_service(object_storage: S3StorageAdapter) -> ComparisonReportService:
     comparison_report_repository = provide_comparison_report_repository(object_storage)
     return ComparisonReportService(repository=comparison_report_repository)
+

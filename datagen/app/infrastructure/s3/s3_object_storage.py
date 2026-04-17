@@ -134,5 +134,20 @@ class S3StorageAdapter:
                     prefixes.append(child_prefix)
         return prefixes
 
+    def list_object_keys(self, prefix: str) -> list[str]:
+        """Возвращает object keys под prefix в сортированном порядке."""
+        normalized_prefix = prefix.strip("/")
+        if normalized_prefix:
+            normalized_prefix = f"{normalized_prefix}/"
+
+        paginator = self.s3_client.get_paginator("list_objects_v2")
+        keys: list[str] = []
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=normalized_prefix):
+            for item in page.get("Contents", []):
+                key = item.get("Key")
+                if isinstance(key, str) and key:
+                    keys.append(key)
+        return sorted(keys)
+
     def close(self) -> None:
         self.s3_client.close()

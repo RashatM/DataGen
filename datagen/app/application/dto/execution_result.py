@@ -1,7 +1,16 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.application.constants import ExecutionStatus
 from app.application.dto.comparison import ComparisonReport
+
+
+@dataclass(slots=True)
+class ExecutionDiagnostic:
+    """Короткая диагностика failed external execution task, прочитанная из run artifacts."""
+    run_id: str
+    task_id: str
+    message: str
+    code: str
 
 
 @dataclass(slots=True)
@@ -11,6 +20,7 @@ class ExecutionResult:
     execution_id: str
     status: ExecutionStatus
     execution_url: str | None = None
+    failed_task_ids: list[str] = field(default_factory=list)
 
     def is_success(self) -> bool:
         return self.status == ExecutionStatus.SUCCESS
@@ -25,3 +35,4 @@ class PipelineExecutionResult:
     run_id: str
     execution_result: ExecutionResult
     comparison_report: ComparisonReport | None = None
+    diagnostics: list[ExecutionDiagnostic] = field(default_factory=list)

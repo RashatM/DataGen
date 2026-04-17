@@ -11,6 +11,7 @@ from app.infrastructure.input.excel_raw_table_loader import load_workbook_specs
 from app.providers import (
     provide_artifact_publication_service,
     provide_comparison_report_service,
+    provide_diagnostic_repository,
     provide_execution_runner,
     provide_generation_service,
     provide_s3_client,
@@ -59,6 +60,7 @@ def run_app(
             generation_service=provide_generation_service(),
             artifact_publication_service=provide_artifact_publication_service(object_storage),
             comparison_report_service=provide_comparison_report_service(object_storage),
+            diagnostic_repository=provide_diagnostic_repository(object_storage),
             execution_runner=provide_execution_runner(config.airflow, object_storage),
             execution_timeout_seconds=config.airflow.dag_timeout_seconds,
             min_retained_runs=config.artifact_retention.min_retained_runs,

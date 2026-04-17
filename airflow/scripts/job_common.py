@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 from pyspark.sql import SparkSession
@@ -24,6 +25,15 @@ def create_logger() -> logging.Logger:
 
 
 logger = create_logger()
+TECHNICAL_FAILURE_CODE = "TECHNICAL_FAILURE"
+
+
+class JobUserFacingError(RuntimeError):
+    """Expected Spark-job failure that should be surfaced to the DataGen user."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass
@@ -185,6 +195,77 @@ def write_json_to_uri(spark: "SparkSession", uri: str, payload: dict[str, Any]) 
         writer.flush()
     finally:
         output_stream.close()
+
+
+def write_diagnostic_safely(
+    spark: "SparkSession",
+    diagnostic_uri: str,
+    run_id: str,
+    task_id: str,
+    code: str,
+    message: str,
+) -> None:
+    """Best-effort запись diagnostics: ошибка записи не должна маскировать исходное падение."""
+    try:
+        write_json_to_uri(
+            spark=spark,
+            uri=diagnostic_uri,
+            payload={
+                "run_id": run_id,
+                "task_id": task_id,
+                "message": message,
+                "code": code,
+            },
+        )
+        logger.info(
+            f"Execution diagnostic written: run_id={run_id}, task_id={task_id}, "
+            f"code={code}, uri={diagnostic_uri}"
+        )
+    except Exception:
+        logger.exception(
+            f"Failed to write execution diagnostic: run_id={run_id}, "
+            f"task_id={task_id}, code={code}, uri={diagnostic_uri}"
+        )
+
+
+def run_with_diagnostic(
+    spark: "SparkSession",
+    diagnostic_uri: str,
+    run_id: str,
+    task_id: str,
+    action: Callable[[], None],
+) -> None:
+    """Выполняет Spark task и пишет diagnostic artifact при падении."""
+    try:
+        action()
+    except JobUserFacingError as error:
+        logger.error(
+            f"Spark task failed with user-facing error: run_id={run_id}, "
+            f"task_id={task_id}, code={error.code}, error={error}"
+        )
+        write_diagnostic_safely(
+            spark=spark,
+            diagnostic_uri=diagnostic_uri,
+            run_id=run_id,
+            task_id=task_id,
+            code=error.code,
+            message=str(error),
+        )
+        raise
+    except Exception:
+        message = f"Technical failure in {task_id}. Stack trace is available in Airflow task logs."
+        logger.exception(
+            f"Spark task failed with technical error: run_id={run_id}, task_id={task_id}"
+        )
+        write_diagnostic_safely(
+            spark=spark,
+            diagnostic_uri=diagnostic_uri,
+            run_id=run_id,
+            task_id=task_id,
+            code=TECHNICAL_FAILURE_CODE,
+            message=message,
+        )
+        raise
 
 
 def read_text_from_uri(spark: "SparkSession", uri: str) -> str:

@@ -46,6 +46,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
     ) -> ExecutionResult:
         """Преобразует сырое состояние DAG-run в application-level ExecutionResult с логированием."""
         total_text = f", total={total_seconds}s" if total_seconds is not None else ""
+        failed_task_ids: list[str] = []
         if dag_run_state.is_success():
             status = ExecutionStatus.SUCCESS
             logger.info(
@@ -71,6 +72,7 @@ class AirflowDagRunner(ExecutionRunnerPort):
             execution_id=dag_run_state.dag_run_id,
             status=status,
             execution_url=execution_url,
+            failed_task_ids=failed_task_ids,
         )
 
     def poll_until_terminal(

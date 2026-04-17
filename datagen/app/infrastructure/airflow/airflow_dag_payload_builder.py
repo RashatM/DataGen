@@ -9,6 +9,11 @@ from app.infrastructure.s3.s3_object_storage import S3StorageAdapter
 
 class AirflowDagPayloadBuilder:
     """Собирает компактный runtime-contract для Airflow DAG из опубликованных артефактов и execution spec."""
+    DIAGNOSTIC_TASK_IDS = (
+        "load_iceberg_tables",
+        "load_hive_tables",
+        "compare_query_results",
+    )
 
     def __init__(self, object_storage: S3StorageAdapter) -> None:
         self.object_storage = object_storage
@@ -31,6 +36,14 @@ class AirflowDagPayloadBuilder:
                     "write_mode": load_spec.write_mode.value,
                     "columns": list(load_spec.iceberg_columns),
                 },
+            },
+        }
+
+    def build_diagnostics_entry(self, artifact_layout: RunArtifactKeyLayout) -> dict[str, Any]:
+        return {
+            "uris": {
+                task_id: self.object_storage.build_uri(artifact_layout.diagnostic_key(task_id))
+                for task_id in self.DIAGNOSTIC_TASK_IDS
             },
         }
 
@@ -70,6 +83,7 @@ class AirflowDagPayloadBuilder:
         return {
             "run_id": artifact_layout.run_id,
             "tables": [self.build_table_entry(publication) for publication in publications],
+            "diagnostics": self.build_diagnostics_entry(artifact_layout),
             "comparison": self.build_comparison_entry(
                 artifact_layout=artifact_layout,
                 comparison_spec=comparison_spec,
