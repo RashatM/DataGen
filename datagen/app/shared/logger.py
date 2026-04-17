@@ -8,6 +8,7 @@ GENERATION_LOGGER_NAME = "datagen.generation"
 PUBLICATION_LOGGER_NAME = "datagen.publication"
 AIRFLOW_LOGGER_NAME = "datagen.airflow"
 COMPARISON_LOGGER_NAME = "datagen.comparison"
+INPUT_LOGGER_NAME = "datagen.input"
 
 
 def create_logger(name: str) -> logging.Logger:
@@ -32,3 +33,4 @@ generation_logger = create_logger(GENERATION_LOGGER_NAME)
 publication_logger = create_logger(PUBLICATION_LOGGER_NAME)
 airflow_logger = create_logger(AIRFLOW_LOGGER_NAME)
 comparison_logger = create_logger(COMPARISON_LOGGER_NAME)
+input_logger = create_logger(INPUT_LOGGER_NAME)

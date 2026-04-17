@@ -23,7 +23,7 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
         invalid_references: list[str] = []
 
         for table in tables:
-            graph.add_node(table)
+            graph.add_node(table.table_name)
             for column in table.columns:
                 reference_info = column.reference
                 if not reference_info:
@@ -57,7 +57,7 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
                     )
                     continue
 
-                graph.add_edge(ref_table, table)
+                graph.add_edge(ref_table_name, table.table_name)
 
         return invalid_references
 
@@ -87,6 +87,6 @@ class NetworkXTableDependencyPlanner(TableDependencyPlannerPort):
             raise InvalidReferenceError(f"Invalid references:\n{reference_list}")
 
         try:
-            return list(nx.topological_sort(graph))
+            return [table_by_name[table_name] for table_name in nx.topological_sort(graph)]
         except nx.NetworkXUnfeasible as exc:
             raise nx.NetworkXUnfeasible("Graph contains a cycle or graph changed during iteration") from exc

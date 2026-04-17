@@ -36,8 +36,36 @@ from app.infrastructure.input.excel_loader_support import (
     row_has_data,
     row_has_data_by_fields,
 )
+from app.shared.logger import input_logger
+from app.shared.errors import UserFacingError
 
 REFERENCE_ALLOWED_CONSTRAINT_FIELDS = {"null_ratio"}
+logger = input_logger
+
+
+def format_workbook_row_context(workbook_name: str, sheet_name: str, row: int) -> str:
+    return prefix_issue(workbook_name, f"sheet={sheet_name} | row={row}")
+
+
+def warn_reference_type_fields_ignored(
+    *,
+    context: str,
+    generator_type_raw: Any,
+    output_type_raw: Any,
+) -> None:
+    ignored_fields = []
+    if not is_blank(generator_type_raw):
+        ignored_fields.append("gen_data_type")
+    if not is_blank(output_type_raw):
+        ignored_fields.append("output_data_type")
+    if not ignored_fields:
+        return
+
+    fields_text = ", ".join(ignored_fields)
+    logger.warning(
+        f"{context} | message=reference column ignores {fields_text}; "
+        "type is inherited from referenced column"
+    )
 
 
 @dataclass(frozen=True)
@@ -52,7 +80,7 @@ class TableMeta:
         return f"{self.schema_name}.{self.table_name}"
 
 
-class WorkbookValidationError(ValueError):
+class WorkbookValidationError(UserFacingError):
     """Ошибки валидации legacy workbook-формата с агрегацией нескольких проблем сразу."""
 
     def __init__(self, issues: list[str]):
@@ -74,7 +102,7 @@ class WorkbookTableMeta:
         return self.table_name
 
 
-class WorkbookSpecValidationError(ValueError):
+class WorkbookSpecValidationError(UserFacingError):
     """Ошибки валидации нового workbook-spec формата с накоплением всех найденных проблем."""
 
     def __init__(self, issues: list[str]):
@@ -195,7 +223,17 @@ class ExcelToRawTablesConverter:
             excel_row = int(row_index) + 2
 
             try:
-                columns.append(self.build_column_payload(table_meta, row))
+                columns.append(
+                    self.build_column_payload(
+                        table_meta,
+                        row,
+                        warning_context=format_workbook_row_context(
+                            self._excel_path.name,
+                            table_meta.sheet_name,
+                            excel_row,
+                        ),
+                    )
+                )
             except ValueError as exc:
                 issues.append(format_issue(table_meta.sheet_name, str(exc), row=excel_row))
 
@@ -212,20 +250,29 @@ class ExcelToRawTablesConverter:
         }
 
     @staticmethod
-    def build_column_payload(table_meta: TableMeta, row: pd.Series) -> dict[str, Any]:
+    def build_column_payload(
+        table_meta: TableMeta,
+        row: pd.Series,
+        *,
+        warning_context: str | None = None,
+    ) -> dict[str, Any]:
         """Преобразует одну строку листа таблицы в raw column payload legacy-контракта."""
         column_name = normalize_text(row.get("column_name"))
         if not column_name:
             raise ValueError("column_name must not be empty")
 
+        generator_type_raw = row.get("generator_data_type", row.get("gen_data_type"))
+        output_type_raw = row.get("output_data_type")
         raw_constraints = parse_key_value_text(row.get("constraints"), "constraints")
         reference = normalize_reference(parse_key_value_text(row.get("reference"), "reference"))
 
         if reference:
-            if not is_blank(row.get("generator_data_type")):
-                raise ValueError("reference column must not define gen_data_type")
-            if not is_blank(row.get("output_data_type")):
-                raise ValueError("reference column must not define output_data_type")
+            if warning_context is not None:
+                warn_reference_type_fields_ignored(
+                    context=warning_context,
+                    generator_type_raw=generator_type_raw,
+                    output_type_raw=output_type_raw,
+                )
             unsupported_constraint_fields = sorted(set(raw_constraints.keys()) - REFERENCE_ALLOWED_CONSTRAINT_FIELDS)
             if unsupported_constraint_fields:
                 unsupported_fields = ", ".join(unsupported_constraint_fields)
@@ -236,8 +283,8 @@ class ExcelToRawTablesConverter:
                 "constraints": raw_constraints,
             }
 
-        generator_type = normalize_generator_type(row.get("generator_data_type"))
-        output_type = normalize_output_type(row.get("output_data_type"))
+        generator_type = normalize_generator_type(generator_type_raw)
+        output_type = normalize_output_type(output_type_raw)
         if output_type and output_type not in ALLOWED_OUTPUT_TYPES_BY_SOURCE[generator_type]:
             raise ValueError(f"unsupported conversion for {column_name}: {generator_type} -> {output_type}")
 
@@ -436,7 +483,16 @@ class ExcelWorkbookSpecConverter:
             excel_row = int(row_index) + 2
 
             try:
-                columns.append(self.build_column_payload(row))
+                columns.append(
+                    self.build_column_payload(
+                        row,
+                        warning_context=format_workbook_row_context(
+                            self._excel_path.name,
+                            table_meta.sheet_name,
+                            excel_row,
+                        ),
+                    )
+                )
             except ValueError as exc:
                 issues.append(format_issue(table_meta.sheet_name, str(exc), row=excel_row))
 
@@ -456,7 +512,11 @@ class ExcelWorkbookSpecConverter:
         }
 
     @staticmethod
-    def build_column_payload(row: pd.Series) -> dict[str, Any]:
+    def build_column_payload(
+        row: pd.Series,
+        *,
+        warning_context: str | None = None,
+    ) -> dict[str, Any]:
         """Нормализует одну строку описания колонки, включая reference, derive и engine_scope."""
         column_name = normalize_text(row.get("column_name"))
         if not column_name:
@@ -476,10 +536,12 @@ class ExcelWorkbookSpecConverter:
             raise ValueError("reference and derive cannot be set at the same time")
 
         if reference:
-            if not is_blank(generator_type_raw):
-                raise ValueError("reference column must not define gen_data_type")
-            if not is_blank(output_type_raw):
-                raise ValueError("reference column must not define output_data_type")
+            if warning_context is not None:
+                warn_reference_type_fields_ignored(
+                    context=warning_context,
+                    generator_type_raw=generator_type_raw,
+                    output_type_raw=output_type_raw,
+                )
 
             unsupported_constraint_fields = sorted(set(raw_constraints.keys()) - REFERENCE_ALLOWED_CONSTRAINT_FIELDS)
             if unsupported_constraint_fields:

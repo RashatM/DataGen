@@ -6,16 +6,19 @@ from zoneinfo import ZoneInfo
 
 from app.application.use_cases.execute_pipeline import ExecutePipelineUseCase
 from app.infrastructure.converters.contract.pipeline_spec_converter import convert_to_pipeline_execution_spec
+from app.infrastructure.errors import SchemaValidationError
 from app.infrastructure.input.excel_raw_table_loader import load_workbook_specs
 from app.providers import (
     provide_artifact_publication_service,
     provide_comparison_report_service,
+    provide_diagnostic_repository,
     provide_execution_runner,
     provide_generation_service,
     provide_s3_client,
     provide_s3_object_storage,
 )
 from app.shared.config import load_app_settings
+from app.shared.errors import UserFacingError
 from app.shared.logger import pipeline_logger
 
 logger = pipeline_logger
@@ -40,13 +43,13 @@ def run_app(
     )
     try:
         if raw_tables is not None:
-            raise ValueError("run_app no longer supports legacy raw_tables input")
+            raise SchemaValidationError("run_app no longer supports legacy raw_tables input")
 
         workbook_specs = load_workbook_specs(
             input_path=Path(__file__).resolve().parent / "params",
         )
         if len(workbook_specs) != 1:
-            raise ValueError(
+            raise SchemaValidationError(
                 f"Exactly one workbook spec is supported, got {len(workbook_specs)}"
             )
 
@@ -57,6 +60,7 @@ def run_app(
             generation_service=provide_generation_service(),
             artifact_publication_service=provide_artifact_publication_service(object_storage),
             comparison_report_service=provide_comparison_report_service(object_storage),
+            diagnostic_repository=provide_diagnostic_repository(object_storage),
             execution_runner=provide_execution_runner(config.airflow, object_storage),
             execution_timeout_seconds=config.airflow.dag_timeout_seconds,
             min_retained_runs=config.artifact_retention.min_retained_runs,
@@ -86,5 +90,7 @@ def run_app(
             f"Application finished with error: environment={env_name}, "
             f"run_id={pipeline_result.run_id}, status={execution_result.status.value}{execution_details}"
         )
+    except UserFacingError as exc:
+        logger.error(f"Application failed: {exc}")
     finally:
         object_storage.close()

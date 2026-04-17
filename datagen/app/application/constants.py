@@ -6,8 +6,6 @@ class ExecutionStatus(Enum):
     SUCCESS = "success"
     FAILED = "failed"
     WAIT_TIMEOUT = "wait_timeout"
-    TIMEOUT = "timeout"
-    UNKNOWN = "unknown"
 
 
 class ComparisonStatus(Enum):

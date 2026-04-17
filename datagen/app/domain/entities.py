@@ -124,13 +124,6 @@ class TableSpec:
                 f"Duplicate columns are not allowed in table {self.table_name}: {duplicate_text}"
             )
 
-    def __hash__(self) -> int:
-        return hash(self.table_name)
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, TableSpec) and self.table_name == other.table_name
-
-
 @dataclass
 class GeneratedTableData:
     """Готовый результат генерации одной таблицы: доменная схема плюс значения по колонкам."""

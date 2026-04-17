@@ -20,7 +20,7 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from job_common import ComparisonContract, LoaderTableContract, logger, read_text_from_uri
+from job_common import ComparisonContract, JobUserFacingError, LoaderTableContract, logger, read_text_from_uri
 
 
 class ComparisonResultMaterializer:
@@ -48,13 +48,21 @@ class ComparisonResultMaterializer:
             f"query_uri={engine_contract.query_uri}, result_uri={engine_contract.result_uri}"
         )
 
-        comparison_query = self.read_query_from_uri(engine_contract.query_uri)
-        comparison_df = self.spark.sql(comparison_query)
-        self.write_result(
-            df=comparison_df,
-            result_uri=engine_contract.result_uri,
-            engine=engine,
-        )
+        try:
+            comparison_query = self.read_query_from_uri(engine_contract.query_uri)
+            comparison_df = self.spark.sql(comparison_query)
+            self.write_result(
+                df=comparison_df,
+                result_uri=engine_contract.result_uri,
+            )
+        except Exception as error:
+            raise JobUserFacingError(
+                code="COMPARISON_RESULT_MATERIALIZATION_FAILED",
+                message=(
+                    f"Failed to materialize comparison result: engine={engine}, "
+                    f"query_uri={engine_contract.query_uri}, result_uri={engine_contract.result_uri}"
+                ),
+            ) from error
 
         logger.info(
             f"Comparison query execution completed: engine={engine}, run_id={self.run_id}, "
@@ -62,14 +70,8 @@ class ComparisonResultMaterializer:
         )
 
     @staticmethod
-    def write_result(df: DataFrame, result_uri: str, engine: str) -> None:
-        try:
-            df.write.mode("overwrite").parquet(result_uri)
-        except Exception as error:
-            raise RuntimeError(
-                f"Failed to write comparison parquet: engine={engine}, "
-                f"result_uri={result_uri}"
-            ) from error
+    def write_result(df: DataFrame, result_uri: str) -> None:
+        df.write.mode("overwrite").parquet(result_uri)
 
 
 class BaseSynthLoader(ABC):
@@ -147,27 +149,54 @@ class BaseSynthLoader(ABC):
     def table_exists(self, table_name: str) -> bool:
         return bool(self.spark.catalog.tableExists(table_name))
 
-    def ensure_partitioned_table(self, table: LoaderTableContract) -> None:
+    def ensure_partitioned_table(self, table_contract: LoaderTableContract) -> None:
         """Проверяет только факт partitioning, не протаскивая partition columns в общий load flow."""
-        if not self.is_partitioned_table(table.target_table_name):
-            raise RuntimeError(
-                f"write_mode={table.write_mode} requires a partitioned target table: {table.target_table_name}"
+        if not self.is_partitioned_table(table_contract.target_table_name):
+            raise JobUserFacingError(
+                code="PARTITIONED_TARGET_REQUIRED",
+                message=(
+                    f"write_mode={table_contract.write_mode} requires a partitioned target table: "
+                    f"{table_contract.target_table_name}"
+                ),
             )
 
     @staticmethod
-    def select_load_columns(source_df: DataFrame, table: LoaderTableContract) -> DataFrame:
+    def build_case_insensitive_column_map(columns: list[str]) -> dict[str, str]:
+        columns_by_key: dict[str, str] = {}
+        for column_name in columns:
+            column_key = column_name.lower()
+            existing_column = columns_by_key.get(column_key)
+            if existing_column is None:
+                columns_by_key[column_key] = column_name
+                continue
+
+            raise JobUserFacingError(
+                code="LOAD_COLUMNS_AMBIGUOUS_BY_CASE",
+                message=f"Ambiguous columns differing only by case: {existing_column}, {column_name}",
+            )
+        return columns_by_key
+
+    def select_load_columns(self, source_df: DataFrame, table_contract: LoaderTableContract) -> DataFrame:
         """Проверяет, что parquet содержит колонки контракта загрузки, и выбирает их в заданном порядке."""
-        load_columns = table.columns
-        available_columns = set(source_df.columns)
-        missing_columns = [column_name for column_name in load_columns if column_name not in available_columns]
+        load_columns = table_contract.columns
+        available_columns_by_key = self.build_case_insensitive_column_map(source_df.columns)
+        missing_columns = [
+            column_name for column_name in load_columns if column_name.lower() not in available_columns_by_key
+        ]
         if missing_columns:
             missing_columns_text = ", ".join(missing_columns)
-            raise RuntimeError(
-                f"Parquet is missing load contract columns for table={table.target_table_name}: "
-                f"{missing_columns_text}"
+            raise JobUserFacingError(
+                code="LOAD_COLUMNS_MISSING_IN_PARQUET",
+                message=(
+                    f"Parquet is missing load contract columns for table={table_contract.target_table_name}: "
+                    f"{missing_columns_text}"
+                ),
             )
 
-        return source_df.select(*table.columns)
+        expressions = [
+            f.col(available_columns_by_key[column_name.lower()]).alias(column_name) for column_name in load_columns
+        ]
+        return source_df.select(*expressions)
 
     def technical_filler_expression(self, field: StructField, table_name: str):
         """Строит техническое значение для отсутствующей non-nullable target-колонки."""
@@ -178,9 +207,12 @@ class BaseSynthLoader(ABC):
             filler_value = self.TECHNICAL_FILLER_VALUES_BY_TYPE[data_type_class]
             return f.lit(filler_value).cast(data_type).alias(field.name)
 
-        raise RuntimeError(
-            f"Parquet is missing non-nullable target column for table={table_name}: "
-            f"{field.name}. Technical filler is not supported for type={self.format_type(data_type)}"
+        raise JobUserFacingError(
+            code="LOAD_NON_NULLABLE_TARGET_COLUMN_MISSING",
+            message=(
+                f"Parquet is missing non-nullable target column for table={table_name}: "
+                f"{field.name}. Technical filler is not supported for type={self.format_type(data_type)}"
+            ),
         )
 
     @staticmethod
@@ -190,7 +222,7 @@ class BaseSynthLoader(ABC):
     def align_to_target_schema(
         self,
         load_df: DataFrame,
-        table: LoaderTableContract,
+        table_contract: LoaderTableContract,
         target_schema: StructType,
     ) -> DataFrame:
         """Приводит DataFrame к target schema.
@@ -198,22 +230,36 @@ class BaseSynthLoader(ABC):
         Отсутствующие nullable-колонки заполняются NULL.
         Отсутствующие non-nullable-колонки заполняются техническими filler-значениями по target-типу.
         """
-        target_columns = {field.name for field in target_schema.fields}
-        source_columns = set(load_df.columns)
+        target_columns_by_key = self.build_case_insensitive_column_map(
+            [field.name for field in target_schema.fields],
+        )
+        source_columns_by_key = self.build_case_insensitive_column_map(load_df.columns)
 
-        unexpected_columns = sorted(source_columns - target_columns)
+        unexpected_columns = sorted(
+            source_columns_by_key[column_key]
+            for column_key in source_columns_by_key
+            if column_key not in target_columns_by_key
+        )
         if unexpected_columns:
             unexpected_columns_text = ", ".join(unexpected_columns)
-            raise RuntimeError(
-                f"Load contract contains columns absent in target table={table.target_table_name}: "
-                f"{unexpected_columns_text}"
+            raise JobUserFacingError(
+                code="LOAD_COLUMNS_ABSENT_IN_TARGET",
+                message=(
+                    f"Load contract contains columns absent in target table={table_contract.target_table_name}: "
+                    f"{unexpected_columns_text}"
+                ),
             )
 
         expressions = []
         technical_filler_columns = []
+        normalized_columns = []
         for field in target_schema.fields:
-            if field.name in source_columns:
-                expressions.append(f.col(field.name).cast(field.dataType).alias(field.name))
+            field_key = field.name.lower()
+            source_column_name = source_columns_by_key.get(field_key)
+            if source_column_name is not None:
+                expressions.append(f.col(source_column_name).cast(field.dataType).alias(field.name))
+                if source_column_name != field.name:
+                    normalized_columns.append(f"{source_column_name}->{field.name}")
                 continue
 
             if field.nullable:
@@ -223,7 +269,7 @@ class BaseSynthLoader(ABC):
             expressions.append(
                 self.technical_filler_expression(
                     field=field,
-                    table_name=table.target_table_name,
+                    table_name=table_contract.target_table_name,
                 )
             )
             technical_filler_columns.append(
@@ -234,7 +280,7 @@ class BaseSynthLoader(ABC):
             technical_filler_columns_text = ", ".join(technical_filler_columns)
             logger.info(
                 f"Filled missing non-nullable target columns with technical values: "
-                f"table={table.target_table_name}, columns={technical_filler_columns_text}"
+                f"table={table_contract.target_table_name}, columns={technical_filler_columns_text}"
             )
 
         return load_df.select(*expressions)
@@ -242,52 +288,61 @@ class BaseSynthLoader(ABC):
     def write_table(
         self,
         df: DataFrame,
-        table: LoaderTableContract,
+        table_contract: LoaderTableContract,
     ) -> None:
         """Маршрутизирует уже выровненный DataFrame в engine-specific стратегию записи по write_mode."""
-        if table.write_mode == "APPEND":
-            self.append_to_table(df, table.target_table_name)
+        if table_contract.write_mode == "APPEND":
+            self.append_to_table(df, table_contract.target_table_name)
             return
 
-        if table.write_mode == "OVERWRITE_TABLE":
-            self.overwrite_table(df, table.target_table_name)
+        if table_contract.write_mode == "OVERWRITE_TABLE":
+            self.overwrite_table(df, table_contract.target_table_name)
             return
 
-        if table.write_mode == "OVERWRITE_PARTITIONS":
-            self.ensure_partitioned_table(table)
-            self.overwrite_partitions(df, table.target_table_name)
+        if table_contract.write_mode == "OVERWRITE_PARTITIONS":
+            self.ensure_partitioned_table(table_contract)
+            self.overwrite_partitions(df, table_contract.target_table_name)
             return
 
-        raise RuntimeError(f"Unsupported write_mode={table.write_mode} for table={table.target_table_name}")
-
-    def load_table(self, table: LoaderTableContract) -> None:
-        logger.info(
-            f"Table load started: table={table.target_table_name}, run_id={self.run_id}, "
-            f"write_mode={table.write_mode}"
+        raise JobUserFacingError(
+            code="UNSUPPORTED_WRITE_MODE",
+            message=f"Unsupported write_mode={table_contract.write_mode} for table={table_contract.target_table_name}",
         )
-        if not self.table_exists(table.target_table_name):
-            raise RuntimeError(f"Target table does not exist: {table.target_table_name}")
 
-        source_df = self.spark.read.parquet(table.data_uri)
-        load_columns_df = self.select_load_columns(source_df=source_df, table=table)
-        target_schema = self.spark.table(table.target_table_name).schema
+    def load_table(self, table_contract: LoaderTableContract) -> None:
+        logger.info(
+            f"Table load started: table={table_contract.target_table_name}, run_id={self.run_id}, "
+            f"write_mode={table_contract.write_mode}"
+        )
+        if not self.table_exists(table_contract.target_table_name):
+            raise JobUserFacingError(
+                code="TARGET_TABLE_NOT_FOUND",
+                message=f"Target table does not exist: {table_contract.target_table_name}",
+            )
+
+        source_df = self.spark.read.parquet(table_contract.data_uri)
+        load_columns_df = self.select_load_columns(
+            source_df=source_df,
+            table_contract=table_contract,
+        )
+        target_schema = self.spark.table(table_contract.target_table_name).schema
 
         with self.strict_cast_mode():
             aligned_df = self.align_to_target_schema(
                 load_df=load_columns_df,
-                table=table,
+                table_contract=table_contract,
                 target_schema=target_schema,
             )
             self.write_table(
                 df=aligned_df,
-                table=table,
+                table_contract=table_contract,
             )
-        logger.info(f"Table load completed: table={table.target_table_name}, run_id={self.run_id}")
+        logger.info(f"Table load completed: table={table_contract.target_table_name}, run_id={self.run_id}")
 
     def publish_tables(self, tables: list[LoaderTableContract]) -> None:
         logger.info(f"Table load batch started: run_id={self.run_id}, tables_count={len(tables)}")
-        for table in tables:
-            self.load_table(table)
+        for table_contract in tables:
+            self.load_table(table_contract)
         logger.info(f"Table load batch completed: run_id={self.run_id}, tables_count={len(tables)}")
 
     def materialize_comparison_result(self, comparison_contract: ComparisonContract, engine: str) -> None:

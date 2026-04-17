@@ -3,11 +3,15 @@ import time
 from app.application.dto.execution_result import PipelineExecutionResult
 from app.application.dto.pipeline import PipelineExecutionSpec
 from app.application.layouts.storage_layout import RunArtifactKeyLayout
+from app.application.ports.diagnostic_repository_port import ExecutionDiagnosticRepositoryPort
 from app.application.ports.execution_runner_port import ExecutionRunnerPort
 from app.application.services.comparison_service import ComparisonReportService
+from app.application.services.comparison_report_formatter import format_report_summary
+from app.application.services.execution_result_formatter import format_failed_execution_summary
 from app.application.services.generation_service import DataGenerationService
 from app.application.services.publication_service import ArtifactPublicationService
 from app.domain.entities import GenerationRun
+from app.domain.validation_errors import DomainError
 from app.shared.logger import pipeline_logger
 
 logger = pipeline_logger
@@ -28,6 +32,7 @@ class ExecutePipelineUseCase:
         generation_service: DataGenerationService,
         artifact_publication_service: ArtifactPublicationService,
         comparison_report_service: ComparisonReportService,
+        diagnostic_repository: ExecutionDiagnosticRepositoryPort,
         execution_runner: ExecutionRunnerPort,
         execution_timeout_seconds: int,
         min_retained_runs: int,
@@ -35,6 +40,7 @@ class ExecutePipelineUseCase:
         self.generation_service = generation_service
         self.artifact_publication_service = artifact_publication_service
         self.comparison_report_service = comparison_report_service
+        self.diagnostic_repository = diagnostic_repository
         self.execution_runner = execution_runner
         self.execution_timeout_seconds = execution_timeout_seconds
         self.min_retained_runs = min_retained_runs
@@ -69,6 +75,10 @@ class ExecutePipelineUseCase:
                 artifact_layout=artifact_layout,
                 comparison_spec=pipeline_spec.comparison,
             )
+        except DomainError as exc:
+            logger.error(f"Pipeline artifact staging failed: run_id={run_id}, error={exc}")
+            self.artifact_publication_service.cleanup_run_artifacts(artifact_layout=artifact_layout)
+            raise
         except Exception:
             logger.exception(f"Pipeline artifact staging failed: run_id={run_id}")
             self.artifact_publication_service.cleanup_run_artifacts(artifact_layout=artifact_layout)
@@ -92,18 +102,34 @@ class ExecutePipelineUseCase:
                     f"total={total}s{execution_url_text}"
                 )
                 return PipelineExecutionResult(run_id=run_id, execution_result=execution_result)
-            logger.error(
-                f"Pipeline failed: run_id={run_id}, "
-                f"status={execution_result.status.value}, total={total}s"
+            diagnostics = []
+            try:
+                diagnostics = self.diagnostic_repository.load_diagnostics(
+                    diagnostics_prefix=artifact_layout.diagnostics_prefix,
+                    expected_run_id=artifact_layout.run_id,
+                )
+            except Exception:
+                logger.exception(f"Failed to load execution diagnostics: run_id={run_id}")
+
+            failed_summary = format_failed_execution_summary(
+                run_id=run_id,
+                execution_result=execution_result,
+                total_seconds=total,
+                diagnostics=diagnostics,
             )
-            return PipelineExecutionResult(run_id=run_id, execution_result=execution_result)
+            logger.error(failed_summary)
+            return PipelineExecutionResult(
+                run_id=run_id,
+                execution_result=execution_result,
+                diagnostics=diagnostics,
+            )
 
         self.artifact_publication_service.commit_pointers(table_publications)
         comparison_report = self.comparison_report_service.load_report(
             report_key=artifact_layout.comparison_report_key,
             run_id=run_id,
         )
-        comparison_summary = self.comparison_report_service.format_report_summary(comparison_report)
+        comparison_summary = format_report_summary(comparison_report)
 
         if comparison_report.is_match():
             logger.info(
